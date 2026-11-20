@@ -19,7 +19,13 @@
   var FONT = "font-family:system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;";
 
   function plazaHome() {
-    var u = new URL("/", location.href);
+    // 광장은 back.js가 든 games 폴더의 한 칸 위(깃허브 페이지처럼 사이트가 하위 폴더에 있어도 맞게: .../class-plaza/)
+    var u;
+    try {
+      u = new URL("../", me && me.src ? me.src : location.href);
+    } catch (e) {
+      u = new URL("/", location.href);
+    }
     if (ROOM) u.searchParams.set("room", ROOM);
     return u.toString();
   }
