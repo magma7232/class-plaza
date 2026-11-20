@@ -1,0 +1,2 @@
+// 광장 캐릭터 고르기 목록 (pipeline/char_publish.py가 만든다)
+window.CHAR_LIST=[{"id":"bear","name":"아기 곰","emoji":"🐻","n":0,"v":1795145908},{"id":"rabbit","name":"토끼","emoji":"🐰","n":1,"v":1795145931},{"id":"cat","name":"고양이","emoji":"🐱","n":2,"v":1795145914},{"id":"dino","name":"아기 공룡","emoji":"🦖","n":3,"v":1795145920},{"id":"penguin","name":"펭귄","emoji":"🐧","n":4,"v":1795145925}];

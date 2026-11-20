@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>우리 반 게임 음악</title>
+<link rel="icon" href="data:,">
+<style>
+  :root{--bg:#fff8ec;--card:#fff;--ink:#2b3a4f;--sub:#5a6b80;--line:#f0e2c8;--acc:#2f8cff;--on:#e8f3ff}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif}
+  main{max-width:760px;margin:0 auto;padding:18px 16px 60px}
+  h1{font-size:26px;margin:6px 0 2px}
+  .lead{color:var(--sub);margin:0 0 14px;font-weight:600}
+  .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0 16px}
+  .bar button{border:0;border-radius:999px;padding:10px 16px;font:800 16px/1 inherit;background:var(--acc);color:#fff;cursor:pointer}
+  .bar button.off{background:#9aa6b6}
+  .bar span{color:var(--sub);font-weight:700}
+  ul{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+  li{background:var(--card);border:2px solid var(--line);border-radius:16px;padding:12px 14px;display:flex;gap:12px;align-items:center;cursor:pointer}
+  li.now{border-color:var(--acc);background:var(--on)}
+  li .ic{font-size:26px;width:36px;text-align:center;flex:none}
+  li .tx{flex:1;min-width:0}
+  li .pl{font-weight:900}
+  li .ti{color:var(--sub);font-size:14px;word-break:break-word}
+  li .ti a{color:inherit}
+  li .lic{flex:none;font-size:12px;font-weight:900;color:#2b8a3e;background:#e6fcf5;border-radius:999px;padding:3px 9px}
+  .note{color:var(--sub);font-size:14px;margin-top:18px}
+</style>
+</head>
+<body>
+<main>
+  <h1>🎵 우리 반 게임 음악</h1>
+  <p class="lead">광장과 게임마다 다른 배경 음악이에요. 누르면 들어 볼 수 있어요.</p>
+  <div class="bar"><button id="onoff" type="button"></button><span id="st"></span></div>
+  <ul id="list"></ul>
+  <p class="note">모두 <b>CC0(공공 영역)</b> 곡이라 돈을 내거나 허락을 받지 않아도 학교 게임에 쓸 수 있어요. 자세한 출처는 같은 폴더의 <code>CREDITS.md</code>.<br>
+  음악 끄기는 이 기기의 광장과 모든 게임에 같이 기억돼요(게임 안의 🎵 단추와 같아요).</p>
+</main>
+<script src="music.js" data-btn="none"></script>
+<script>
+(function () {
+  var L = [
+    ["plaza", "🏡", "광장 마을", "Apple Cider — Zane Little Music", "https://opengameart.org/content/apple-cider"],
+    ["home", "🛋️", "광장 · 나의 집 안", "Chillin' Poupi — Komiku", "https://opengameart.org/content/poupis-incredible-adventures-full-album"],
+    ["stars", "⭐", "광장 · 별 모으기 놀이", "Bicycle — Komiku", "https://opengameart.org/content/poupis-incredible-adventures-full-album"],
+    ["jangteo", "🍙", "뚝딱 장터 3D", "The weekly fair — Komiku", "https://opengameart.org/content/poupis-incredible-adventures-full-album"],
+    ["sea", "🐠", "모험 주방 · 바닷속", "Surfing — Komiku", "https://opengameart.org/content/poupis-incredible-adventures-full-album"],
+    ["sky", "☁️", "모험 주방 · 하늘", "Sky Blue Street — MintoDog", "https://opengameart.org/content/sky-blue-street"],
+    ["space", "🚀", "모험 주방 · 우주", "Time to go to space now !! — Komiku", "https://opengameart.org/content/poupis-incredible-adventures-full-album"],
+    ["heart_title", "💖", "하트 특공대 · 첫 화면", "Title Screen — Juhani Junkala", "https://opengameart.org/content/5-chiptunes-action"],
+    ["heart", "🛡️", "하트 특공대 · 마을 지키기", "Level 1 — Juhani Junkala", "https://opengameart.org/content/5-chiptunes-action"],
+    ["heart_boss", "👑", "하트 특공대 · 보스", "Level 3 — Juhani Junkala", "https://opengameart.org/content/5-chiptunes-action"],
+    ["sarang_town", "🎈", "사랑둥이 대모험 · 마을", "Time for the walk of the day — Komiku", "https://opengameart.org/content/poupis-incredible-adventures-full-album"],
+    ["sarang_field", "🌼", "사랑둥이 대모험 · 들판·숲", "Flowerbed Fields — Zane Little Music", "https://opengameart.org/content/flowerbed-fields-loop"],
+    ["sarang_mystery", "🪞", "사랑둥이 대모험 · 심술 마을·거울 미로", "Treasure finding — Komiku", "https://opengameart.org/content/poupis-incredible-adventures-full-album"],
+    ["sarang_boss", "⚔️", "사랑둥이 대모험 · 보스", "Level 2 — Juhani Junkala", "https://opengameart.org/content/5-chiptunes-action"],
+    ["sarang_happy", "🎉", "사랑둥이 대모험 · 축하·미니게임", "Ending — Juhani Junkala", "https://opengameart.org/content/5-chiptunes-action"],
+    ["castle", "🏰", "꿈빛 성 탐정단 · 1·2층", "8-Bit Curious Theme — emanresU", "https://opengameart.org/content/8-bit-curious-theme"],
+    ["castle2", "🕯️", "꿈빛 성 탐정단 · 3층·다락방", "Intensive puzzle resolution — Komiku", "https://opengameart.org/content/poupis-incredible-adventures-full-album"]
+  ];
+  var ul = document.getElementById("list");
+  L.forEach(function (r) {
+    var li = document.createElement("li");
+    li.dataset.id = r[0];
+    li.innerHTML = '<div class="ic"></div><div class="tx"><div class="pl"></div><div class="ti"><span></span> · <a target="_blank" rel="noopener">출처</a></div></div><div class="lic">CC0</div>';
+    li.querySelector(".ic").textContent = r[1];
+    li.querySelector(".pl").textContent = r[2];
+    li.querySelector(".ti span").textContent = r[3];
+    li.querySelector("a").href = r[4];
+    li.querySelector("a").addEventListener("click", function (e) { e.stopPropagation(); });
+    li.addEventListener("click", function () {
+      if (!BGM.isOn()) BGM.setOn(true);
+      BGM.play(r[0], 0.8);
+      paint();
+    });
+    ul.appendChild(li);
+  });
+  var onoff = document.getElementById("onoff"), st = document.getElementById("st");
+  onoff.addEventListener("click", function () { BGM.toggle(); });
+  function paint() {
+    var s = BGM.state();
+    onoff.textContent = s.on ? "🎵 음악 켬" : "🔇 음악 끔";
+    onoff.classList.toggle("off", !s.on);
+    st.textContent = s.want ? (s.on ? "지금: " : "꺼짐 · 고른 곡: ") + s.want : "곡을 눌러 보세요";
+    [].forEach.call(ul.children, function (li) { li.classList.toggle("now", li.dataset.id === s.want); });
+  }
+  window.addEventListener("bgmchange", paint);
+  paint();
+})();
+</script>
+</body>
+</html>
