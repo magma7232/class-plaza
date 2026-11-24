@@ -413,12 +413,44 @@
   } catch (e) {}
 })();
 
-/* 7) 이야기 장면(story/story.js): 광장에서 게임에 들어오면 먼저 우리 반 이야기(하트 왕국 이야기 몇 화) 한 장면을 보여 줘요.
- * 손그림 배경 + 말하는 친구 얼굴·이름·대사 + 학생이 고른 동물. 그동안 게임은 멈춤, 건너뛰기 단추(2026-11-24). 원본은 이야기장면/src, 대본은 scenes.js */
+/* 7) 이야기 영상(story/story.js, 원본 이야기장면/src): 광장에서 게임에 들어오면 먼저 '하트 왕국 이야기' 3D 영상(이 게임을 왜 하는지),
+ * 게임을 깨면 마무리 영상. 처음 하는 학생은 건너뛰기 없이, 한 번 깬 학생은 건너뛰기(2026-11-24 선생님).
+ * 여기서는 깬 게임을 이 기기에 적어 두고(plaza.cleared), 광장에서 왔을 때만 story.js를 불러와요 */
 (function () {
   try {
     var me = document.currentScript;
+    var q = new URLSearchParams(location.search);
+    var parts = location.pathname.split("/").filter(Boolean);
+    var key = (parts[parts.length - 1] || "").replace(/\.html?$/i, "");
+    if (!key || key === "index") key = parts[parts.length - 2] || "";
+    // '끝까지 깼다'의 뜻(게임마다): 중간 단계를 깼다는 신호는 세지 않아요. 마무리 이야기(story.js)도 이것을 물어봐요
+    var FINAL = {
+      sarang: function (d) { return !d.boss || d.boss === "devil"; }, // 사랑둥이 대모험: 마지막 악마둥이
+      heart: function (d) { return (d.level | 0) >= 2; },              // 하트 특공대: LEVEL 2 악마둥이(LEVEL 1은 시계왕, 그 뒤는 더 센 되풀이)
+      jangteo3d: function (d) { return !!d.final; },                  // 뚝딱 장터 3D: 모험 주방 바닷속·하늘·우주를 끝까지
+      jelly: function (d) { return !!d.final; }, giant: function (d) { return !!d.final; }, magnet: function (d) { return !!d.final; }, pyramid_run: function (d) { return !!d.final; }
+    };
+    window.PLAZA_IS_FINAL = function (d) { d = d || {}; if (d.show || d.practice) return false; var f = FINAL[key]; return f ? !!f(d) : true; };
+    var memCleared = false; // 저장소가 가득 차서 못 적었을 때도 이 판에서는 깬 것으로
+    window.addEventListener("minigame-clear", function (e) {
+      var d = (e && e.detail) || {};
+      if (!window.PLAZA_IS_FINAL(d)) return;
+      memCleared = true;
+      try {
+        var c = JSON.parse(localStorage.getItem("plaza.cleared") || "{}");
+        if (!c[key]) { c[key] = new Date().toISOString().slice(0, 10); localStorage.setItem("plaza.cleared", JSON.stringify(c)); }
+      } catch (er) {}
+    });
+    // 게임 속 이야기(대사) 건너뛰기도 같은 규칙: 광장에서 온 학생은 그 게임을 한 번 끝까지 깬 뒤에만(선생님 기기·광장 밖에서 연 것은 언제나)
+    window.PLAZA_CAN_SKIP = function () {
+      try {
+        if (q.get("from") !== "plaza" || q.get("teacher") === "1" || q.get("story") === "skip" || memCleared) return true;
+        return !!JSON.parse(localStorage.getItem("plaza.cleared") || "{}")[key];
+      } catch (er) { return true; }
+    };
     if (window.PLAZA_STORY || !me || !me.src) return;
+    var st = q.get("story");
+    if (st === "0" || (q.get("from") !== "plaza" && st !== "1" && st !== "skip")) return;
     var s = document.createElement("script");
     s.src = new URL("../story/story.js", me.src).href;
     (document.head || document.documentElement).appendChild(s);

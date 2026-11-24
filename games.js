@@ -427,6 +427,8 @@
       u.searchParams.set("back", backUrl());
       if (T.params) for (var pk in T.params) u.searchParams.set(pk, T.params[pk]); // 예: 피라미드 ?play(처음 화면 없이 떨어지는 장면부터)
       if (window.NET && NET.online && NET.name) u.searchParams.set("name", NET.name);
+      // 선생님 기기: 이야기 건너뛰기 언제나. 서버 반(선생님으로 들어옴) 또는 광장 주소 끝에 ?teacher(공개 주소처럼 서버가 없을 때)
+      if ((window.NET && NET.online && NET.role === "teacher") || new URLSearchParams(location.search).has("teacher")) u.searchParams.set("teacher", "1");
       // 시험판: 내 캐릭터·입은 아이템을 게임에 넘기고(게임 캐릭터에 반영), 들어간 시각을 적어 둔다(1분 넘게 놀고 오면 선물 상자 뽑기)
       try {
         var ch = localStorage.getItem("plaza.char"), wr = JSON.parse(localStorage.getItem("plaza.wear") || "{}"), wl = [];

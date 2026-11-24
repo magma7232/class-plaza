@@ -147,8 +147,8 @@
       window.cancelAnimationFrame = function (id) {
         if (typeof id === 'number' && id < 0) {
           if (held) for (var i = 0; i < held.length; i++) if (held[i][0] === id) { held.splice(i, 1); return }
-          if (fakeMap[id]) { cafO.call(window, fakeMap[id]); delete fakeMap[id] }
-          return;
+          if (fakeMap[id]) { cafO.call(window, fakeMap[id]); delete fakeMap[id]; return }
+          // 퀴즈 것이 아닌 음수 번호(이야기 영상 story.js가 멈춘 동안 준 번호)는 아래로 넘겨요(2026-11-24 검토)
         }
         return cafO.call(window, id);
       };
@@ -402,7 +402,7 @@
     guard(ov);
     var card = el('div'); card.id = 'pqCard';
     var top = el('div', 'pq-top');
-    top.appendChild(el('span', 'pq-tag', '❓ 퀴즈 · ' + g + '학년'));
+    top.appendChild(el('span', 'pq-tag', '✨ 반짝이 퀴즈 · ' + g + '학년'));   // 꿈 요정 반짝이(사랑둥이 대모험)가 내는 문제 — 이야기·게임·퀴즈가 한 세계로(2026-11-24)
     top.appendChild(el('span', 'pq-tag s', it.s));
     var x = el('button', 'pq-x', '나중에 ✕'); x.type = 'button';
     x.addEventListener('click', function () { closeQuiz() });

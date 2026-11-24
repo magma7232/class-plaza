@@ -898,6 +898,8 @@
     const dc = player.dashCd > 0;
     if (dc !== lastDash && dashBtn) { lastDash = dc; dashBtn.classList.toggle('cool', dc); }
   }
+  // 처음 하는 학생은 대사 건너뛰기 없이(마지막 악마둥이까지 한 번 깨면 생김 — back.js PLAZA_CAN_SKIP, 2026-11-24 선생님)
+  function canSkip() { try { return !window.PLAZA_CAN_SKIP || window.PLAZA_CAN_SKIP(); } catch (e) { return true; } }
   function skipDialog() {
     const d = dialog; if (!d) return;
     dialog = null; if (!locked) padEl.classList.remove('talking'); actCool = 0.35; Sound.play('click');
@@ -905,7 +907,7 @@
   }
   function updateDialog(dt) {
     const d = dialog, line = d.lines[d.i];
-    if (input.skipP) { skipDialog(); input.actP = false; return; }
+    if (input.skipP && canSkip()) { skipDialog(); input.actP = false; return; }
     if (d.skipRect) for (const tp of input.taps) { const r = d.skipRect; if (tp.x >= r.x && tp.x <= r.x + r.w && tp.y >= r.y - 6 && tp.y <= r.y + r.h + 6) { skipDialog(); input.actP = false; return; } }
     const prev = Math.floor(d.shown);
     d.shown = Math.min(line.text.length, d.shown + dt * (input.act ? 120 : 55));
@@ -1504,7 +1506,7 @@
       ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(name, tx + 8, y - 0.5);
     }
     // 건너뛰기
-    if (d.lines.length - d.i > 1) {
+    if (d.lines.length - d.i > 1 && canSkip()) {
       const sw = 112, sh = 30, sxr = x + w - sw - 12, syr = y - 15;
       Art.roundRect(ctx, sxr, syr, sw, sh, 15); ctx.fillStyle = 'rgba(90,60,130,0.92)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
       ctx.font = F(14); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(touchUI ? '건너뛰기 ▶▶' : 'Esc 건너뛰기', sxr + sw / 2, syr + sh / 2 + 1);
