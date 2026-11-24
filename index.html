@@ -829,6 +829,13 @@ window.makeChar3D = function (K, D, opt) {
       }
       C[o + TL] = Math.min(tl, (0.5 - C[o + MO]) * 0.2);
     }
+    // 꼬리 상자(2026-11-24 여우): 꼬리가 몸통만큼 넓고 가슴·목 높이까지 올라오면 위 어림이 꼬리 뒤를 '등'으로 잡아 옷이 꼬리를 감쌌다.
+    // 묶음 anchors.tail_box = [[y0, y1, z], ...]: 높이 y0~y1에서 z보다 뒤(더 작은 z)는 꼬리 (chars.json anchors_override로 넣음, bodyFromPack이 tailBox로 넘김)
+    var tb = B.tailBox;
+    if (tb) for (v = 0; v < nv; v++) {
+      o = v * NCH;
+      for (var bq = 0; bq < tb.length; bq++) if (C[o + 1] >= tb[bq][0] && C[o + 1] <= tb[bq][1]) C[o + TL] = Math.min(C[o + TL], C[o + 2] - tb[bq][2]);
+    }
     // 자주 쓰는 자리(키 1 기준): 엉덩이 관절·허리·손목(둘레 굵기)·발
     var hip = (R('thigh_L', [0, 0.17, 0])[1] + R('thigh_R', [0, 0.17, 0])[1]) / 2, pel = R('pelvis', [0, hip + 0.02, 0])[1], spn = R('spine', [0, pel + 0.1, 0])[1];
     S.hipY = hip; S.waistY = (pel + spn) / 2 + 0.01; S.chestY = chY; S.neckY = R('neck', [0, chY + 0.1, 0])[1];
@@ -1019,7 +1026,7 @@ window.makeChar3D = function (K, D, opt) {
       var t = 0; for (c = 0; c < 4; c++) t += Wq[v * 4 + c];
       for (c = 0; c < 4; c++) w[v * 4 + c] = Wq[v * 4 + c] / (t || 1);
     }
-    var body = { pos: pos, nrm: nrm, j: Jq, w: w, idx: dec(D.idx, D.idx32 ? Uint32Array : Uint16Array), bones: D.bones.map(function (b) { return { name: b.name, rest: restOf(b.ibm) }; }) };
+    var body = { pos: pos, nrm: nrm, j: Jq, w: w, idx: dec(D.idx, D.idx32 ? Uint32Array : Uint16Array), bones: D.bones.map(function (b) { return { name: b.name, rest: restOf(b.ibm) }; }), tailBox: D.anchors && D.anchors.tail_box };
     try { Object.defineProperty(D, '_body', { value: body, enumerable: false, configurable: true }); } catch (e) { D._body = body; }
     return body;
   }
@@ -1098,6 +1105,7 @@ window.makeChar3D = function (K, D, opt) {
     var C2 = S.ch, best = dir > 0 ? -1 : 1, t = tol || 0.012;
     for (var v = 0; v < S.nv; v++) {
       var o = v * NCH; if (Math.abs(C2[o] - x) > t || Math.abs(C2[o + 1] - y) > t || C2[o + MA] > 0.5 || C2[o + MH] > 0.5) continue;
+      if (dir < 0 && S.B.tailBox && C2[o + TL] < 0) continue;   // 꼬리 상자가 있는 동물(여우): 꼬리 뒤가 아니라 등 표면에(후드 등)
       if (dir > 0 ? C2[o + 2] > best : C2[o + 2] < best) best = C2[o + 2];
     }
     return Math.abs(best) === 1 ? (dir > 0 ? 0.15 : -0.15) : best;
@@ -2007,7 +2015,7 @@ window.makeChar3D = function (K, D, opt) {
         var y = I[CY], ax = Math.abs(I[CX]), front = I[CNZ] - 0.15, hd = Math.hypot(I[CX] - S.H.c[0], I[CY] - S.H.c[1], I[CZ] - S.H.c[2]) - S.H.r;
         var bib = Math.min(bt - y, bw - ax, front * 0.2, y - (wy - 0.03));
         var strap = Math.min(0.014 - Math.abs(ax - sx), y - (I[CZ] > 0 ? bt - 0.01 : wy - 0.02), hd);
-        return Math.min(Math.max(bib, strap), (0.5 - I[MA]) * 0.15, (0.6 - I[MH]) * 0.15);
+        return Math.min(Math.max(bib, strap), (0.5 - I[MA]) * 0.15, (0.6 - I[MH]) * 0.15, I[TL]);   // 멜빵이 꼬리 위로 가지 않게
       }, off: 0.016, cuts: [pk], paint: function (I) { return pk(I) >= 0 && I[CNZ] > 0.2 ? DEN2 : DEN; }, rim: DEN2, layer2: function () { return true; } });
       m.layer2 = true;
       for (var s = -1; s <= 1; s += 2) (function (s) { var y = bt - 0.008, x = s * sx, z = frontZ(S, x, y) + 0.022; m.part([x, y, z - 0.022], function () { m.ell(0.011, 0.011, 0.006, Y, X([x, y, z]), { nu: 10, nv: 6 }); }); })(s);
