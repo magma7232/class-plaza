@@ -302,6 +302,35 @@
   });
   onBody(function () {
     b && document.body.appendChild(b);
+    dodge();
+  });
+  // 게임의 다른 단추를 가리면 그 단추들 바로 아래(아래쪽 자리면 바로 위)로 비켜 앉아요(2026-11-24: 꿈빛 성 세로 화면에서 💡힌트·🔊를 가렸음).
+  // 화면을 돌리거나 게임 화면이 바뀌어 단추가 생기고 없어질 때도 다시 봐요(가벼운 확인만 1초마다)
+  var up = /^bottom/.test(pos);
+  function dodge() {
+    if (!b || !b.isConnected) return;
+    var cur = parseFloat(up ? b.style.marginBottom : b.style.marginTop) || 0, r0 = b.getBoundingClientRect(), base = { l: r0.left, r: r0.right, t: r0.top + (up ? cur : -cur), b: r0.bottom + (up ? cur : -cur) };
+    var els = document.querySelectorAll("button,a,[role=button],input,select"), shift = 0;
+    for (var tries = 0; tries < 6; tries++) {
+      var t = base.t + (up ? -shift : shift), bt = base.b + (up ? -shift : shift), hit = null;
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        if (el === b || !el.getClientRects().length) continue;
+        var q = el.getBoundingClientRect();
+        if (q.width < 4 || q.height < 4 || q.width > innerWidth * 0.6) continue;   // 화면 전체를 덮는 층은 빼요
+        if (q.right > base.l + 2 && q.left < base.r - 2 && q.bottom > t + 2 && q.top < bt - 2) { hit = q; break; }
+      }
+      if (!hit) break;
+      shift = up ? base.b - hit.top + 6 : hit.bottom - base.t + 6;
+    }
+    if (Math.abs(shift - cur) > 1) {
+      if (up) b.style.marginBottom = shift ? shift + "px" : "";
+      else b.style.marginTop = shift ? shift + "px" : "";
+    }
+  }
+  setInterval(dodge, 1000);
+  window.addEventListener("resize", function () {
+    setTimeout(dodge, 120);
   });
 })();
 

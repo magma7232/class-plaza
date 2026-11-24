@@ -152,6 +152,11 @@ body.panel .toast{font-size:15px;padding:4px 12px 3px;border-width:2px;box-shado
   #titleArt{max-height:28vh}
   .gStep p{font-size:14px}
 }
+/* 세로 휴대폰처럼 좁은 화면: 오른쪽 위 단추 줄(수첩·힌트·소리·음악·멈춤)이 왼쪽 위 '1층' 표시를 덮어서 → 표시를 한 줄 아래로(2026-11-24) */
+@media (max-width:560px){
+  #hud{top:calc(94px + env(safe-area-inset-top))}   /* 단추 줄(8~40) 아래, 광장에서 오면 생기는 🏠 광장으로(45~82) 아래 */
+  #topBtns{gap:5px}#topBtns button{font-size:14px;padding:3px 8px 2px}
+}
 @media (max-height:440px){
   #actBtn{width:96px;height:96px;font-size:13px;right:calc(12px + env(safe-area-inset-right));bottom:calc(12px + env(safe-area-inset-bottom))}#actBtn .ic{font-size:27px}
   #topBtns button{font-size:14px;padding:3px 8px 2px}#floorTag{font-size:15px;padding:2px 9px 1px}
