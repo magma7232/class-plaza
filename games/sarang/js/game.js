@@ -175,6 +175,20 @@
       toast(touchUI ? '사랑 폭발 준비 완료! 필살 버튼을 눌러요' : '사랑 폭발 준비 완료! F 키를 눌러요', '#ffe680');
     }
   }
+  // 광장 퀴즈(../../quiz/quiz.js, back.js가 불러옴)를 맞히면 게임 속 보너스(2026-11-24):
+  // 처음 고른 답이 정답 → 사랑 게이지 +40·체력 가득 / 힌트를 보고 맞힘 → 사랑 게이지 +15
+  addEventListener('plaza-quiz', (e) => {
+    const d = (e && e.detail) || {};
+    if (state !== 'play' || !player || player.dead || !(d.correct || d.second)) return;
+    const full = love >= 100;
+    if (d.correct) {
+      gainLove(40); player.hp = player.max; Sound.play('heal');
+      FX.burst(player.x, player.y, 70, 'star', 14, { speed: 180 });
+      toast(full ? '퀴즈 정답! 체력 가득' : '퀴즈 정답! 사랑 게이지 +40, 체력 가득', '#ffe680');
+    } else if (!full) { gainLove(15); Sound.play('ding'); toast('퀴즈를 끝까지 풀었어요! 사랑 게이지 +15', '#d9f5ff'); }
+  });
+  // '같이 하기'(서버로 친구와 연결)에서는 퀴즈를 열어도 게임을 멈추지 않아요(친구 화면에서 내가 멈춰 보이고, 돌아올 때 공격이 한꺼번에 오지 않게)
+  window.PLAZA_QUIZ_NOPAUSE = () => mode === 'multi';
 
   function save() {
     if (!Q || state !== 'play' || !player) return;

@@ -336,3 +336,16 @@
     (document.head || document.documentElement).appendChild(s);
   } catch (e) {}
 })();
+
+/* 6) 퀴즈(quiz/quiz.js): 게임을 2~3분 열심히 하면 구석에 작은 "❓ 퀴즈" 말풍선이 떠요. 누르면 학년 문제 하나(게임은 잠깐 멈춤),
+ * 맞히면 반짝·정답!(맞힌 문제 2개마다 선물 상자), 틀리면 힌트. 하루 6문제까지. 안 눌러도 돼요(2026-11-24).
+ * 모든 포털 게임이 back.js를 쓰므로 여기서 한 번만 불러와요. 자세한 규칙·끄는 법은 quiz.js 맨 위, 문제는 quiz/bank.js */
+(function () {
+  try {
+    var me = document.currentScript;
+    if (window.PLAZA_QUIZ || !me || !me.src) return;
+    var s = document.createElement("script");
+    s.src = new URL("../quiz/quiz.js", me.src).href;
+    (document.head || document.documentElement).appendChild(s);
+  } catch (e) {}
+})();

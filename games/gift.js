@@ -107,7 +107,7 @@
     if (kind === 'chance') l.c++; else { l.keys.push(key); l.g[game] = (l.g[game] || 0) + 1 }
     jput('plaza.giftLog', l);
     var nm = NAMES[game];
-    show(id, kind === 'clear' ? '🎁 ' + (nm ? nm + ' ' : '') + '깬 선물!' : '🎁 열심히 한 선물을 찾았어요!');
+    show(id, opt.title || (kind === 'clear' ? '🎁 ' + (nm ? nm + ' ' : '') + '깬 선물!' : '🎁 열심히 한 선물을 찾았어요!'));
     return id;
   }
   window.PLAZA_GIFT = {
@@ -126,7 +126,8 @@
   // 게임이 따로 보내는 선물 신호(예: 뚝딱 장터 모험 주방에서 장을 ★★ 이상으로 끝냄)
   window.addEventListener('plaza-gift', function (e) {
     var d = (e && e.detail) || {}, g = String(d.game || 'game');
-    drop(g + ':' + (d.place || 'end'), { kind: d.kind === 'chance' ? 'chance' : 'clear', game: g, chance: d.chance });
+    var title = d.title ? String(d.title).slice(0, 40).replace(/[<>&]/g, '') : '';   // 카드 제목(퀴즈 선물 등, quiz/quiz.js)
+    drop(g + ':' + (d.place || 'end'), { kind: d.kind === 'chance' ? 'chance' : 'clear', game: g, chance: d.chance, title: title });
   });
   // 게임 도중: 최근 8초 안에 화면·키를 눌렀고 화면이 보이는 동안만 시간을 센다
   var lastIn = 0, active = 0;

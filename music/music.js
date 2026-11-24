@@ -37,7 +37,12 @@
 
   var KEY = "plaza.music";
   var Q = new URLSearchParams(location.search);
-  var VOL = Math.max(0, Math.min(1, parseFloat(attr("data-vol", "0.5")) || 0.5));
+  // 기본 크기 0.9(2026-11-24 선생님: "배경음악이 안 들리는 것 같아" — 0.5는 폰·패드 스피커에서 효과음에 묻혀 거의 안 들렸다)
+  var VOL = Math.max(0, Math.min(1, parseFloat(attr("data-vol", "0.9")) || 0.9));
+  // 아이폰: 무음 스위치를 켜 두면 웹 소리(Web Audio)가 통째로 꺼진다 → 음악 재생으로 알려 무음 스위치와 상관없이 나오게(사파리 17+)
+  try {
+    if (navigator.audioSession && "type" in navigator.audioSession) navigator.audioSession.type = "playback";
+  } catch (e) {}
   var on = true;
   try {
     on = localStorage.getItem(KEY) !== "0";
