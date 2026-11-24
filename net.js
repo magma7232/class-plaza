@@ -121,7 +121,19 @@
       self.ready = false;
       if (self.ws !== ws) return;
       self.ws = null;
-      if (ev && (ev.code === 4000 || ev.code === 4001)) return; // 다른 창에서 다시 들어옴 / 수업 문 닫힘
+      if (ev && ev.code === 4000) return self.net.kicked(); // 다른 기기·창에서 같은 이름으로 들어옴
+      if (ev && ev.code === 4001) return; // 수업 문 닫힘
+      if (ev && ev.code === 1012) {
+        // 선생님이 백업을 되돌렸어요: 되돌린 집으로 다시 들어와요(옛 집으로 덮어쓰지 않게)
+        try {
+          var u = new URL(location.href);
+          u.searchParams.set("back", "1");
+          location.replace(u.href);
+        } catch (e) {
+          location.reload();
+        }
+        return;
+      }
       self.net.onCloudClosed(false);
       if (!self.wantOpen) return;
       var wait = Math.min(10, 1 + self.retry * 2);
@@ -420,7 +432,14 @@
       case "err":
         NET.cloud.close();
         if (!NET.started) NET.loginError(m.m);
-        else NET.status("⚠️ " + m.m);
+        else {
+          // 다시 붙다가 막혔으면(잠깐 문 닫힘·방이 꽉 참) 조금 뒤 다시 해 봐요(검토: 그대로 멈춰 있었음)
+          NET.status("⚠️ " + m.m);
+          clearTimeout(NET.errRetry);
+          NET.errRetry = setTimeout(function () {
+            if (!NET.cloud.ws && !NET.kickedOut) NET.cloud.open(NET.cloud.room, NET.cloud.joinMsg);
+          }, 20000);
+        }
         return;
       case "hi":
         NET.id = m.id;
@@ -505,7 +524,9 @@
         NET.setBoard(m.text || "", true);
         return;
       case "plot":
-        NET.plots[m.name] = m.k;
+        for (var pn in NET.plots) if (NET.plots[pn] === m.k && pn !== m.name) delete NET.plots[pn]; // 돌려받은 집은 옛 주인 이름을 지워요
+        if (m.k == null) delete NET.plots[m.name];
+        else NET.plots[m.name] = m.k;
         NET.relabel();
         return;
       case "recall":
@@ -520,6 +541,20 @@
         NET.onHome(m);
         return;
     }
+  };
+  // 같은 이름으로 다른 기기에서 들어오면 이 화면은 멈추고 알려 줘요(저장이 몰래 사라지지 않게)
+  NET.kicked = function () {
+    NET.kickedOut = true;
+    if (NET.cloud) NET.cloud.wantOpen = false;
+    if ($("netKicked")) return;
+    var d = document.createElement("div");
+    d.id = "netKicked";
+    d.style.cssText = "position:fixed;inset:0;z-index:70;display:flex;align-items:center;justify-content:center;background:rgba(30,45,70,.72);font-family:inherit";
+    d.innerHTML = '<div style="background:#fff;border-radius:24px;padding:26px 24px;max-width:88vw;width:420px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.3)"><div style="font-size:44px">📱</div><div style="font-size:22px;font-weight:900;margin:6px 0">다른 기기에서 같은 이름으로 들어왔어요</div><div style="font-size:16px;color:#5a6b80;font-weight:700;line-height:1.5">내 기기가 맞다면 다시 들어와요.<br>친구와 이름이 같다면 선생님께 말해요.</div><button type="button" style="margin-top:14px;border:0;border-radius:999px;padding:12px 22px;font-size:17px;font-weight:900;background:#2f8cff;color:#fff">다시 들어가기</button></div>';
+    d.querySelector("button").onclick = function () {
+      location.reload();
+    };
+    document.body.appendChild(d);
   };
   // 수업 문이 닫히면 학생 화면을 멈춰요
   NET.classClosed = function () {
@@ -573,7 +608,10 @@
     document.title = NET.room + " 광장 마을";
     var hi = NET.pendingHi;
     NET.pendingHi = null;
-    if (NET.role === "student") G.loadHome(hi.saved && hi.saved.home ? hi.saved.home : null);
+    if (NET.role === "student") {
+      G.loadHome(hi.saved && hi.saved.home ? hi.saved.home : null);
+      if (hi.saved && hi.saved.home && hi.saved.home.wall && window.HOME && HOME.adoptWall) HOME.adoptWall(hi.saved.home.wall); // 서버의 내 벽지(첫 저장이 덮어쓰지 않게)
+    }
     else {
       // 선생님 화면: '내 집' 자리에 그 집 주인의 마당을 보여 줘요
       var mi = G.D.findIndex(function (h) {
@@ -1332,6 +1370,7 @@
       return;
     }
     if (!W || m.sess !== W.sess) return;
+    if (m.k === "ast" && W.hostId && from !== W.hostId) return; // 화면 정보는 월드를 연 선생님 기기에서 온 것만
     if (m.k === "ast") {
       var G = NET.G;
       // 아직 광장에 있는데 활동이 시작됐으면 바로 들어가요
@@ -1534,7 +1573,8 @@
       // 친구 집을 구경하는 동안에는 내 방 목록을 따로 보관해 둔 것으로 저장해요
       var room = NET.visiting && NET.myRoom ? NET.myRoom : G.Wi.room.list;
       var rs = window.HOME && HOME.roomSize ? HOME.roomSize().k : undefined;
-      NET.cloud.send({ t: "save", d: { home: { yard: G.Wi.yard.list, room: room, rs: rs }, apples: G.Yf } });
+      var wall = window.HOME && HOME.myWall ? HOME.myWall() : undefined; // 벽지도 같이(친구가 놀러 오면 내 벽지로 보여요)
+      NET.cloud.send({ t: "save", d: { home: { yard: G.Wi.yard.list, room: room, rs: rs, wall: wall }, apples: G.Yf } });
     }
     if (now) send();
     else NET.saveTimer = setTimeout(send, 1500);
@@ -1706,6 +1746,7 @@
 
   // ---------------------------------------------------------------- 친구 집 구경
   NET.knock = function (k) {
+    if (!NET.online) return NET.fakeKnock(k);
     var G = NET.G,
       o = ownerOf(k);
     if (!o) {
@@ -1725,6 +1766,7 @@
     var K = NET.knocking,
       G = NET.G;
     NET.knocking = null;
+    if (NET.visiting) return; // 이미 다른 집에 들어가는 중(내 방 보관이 친구 방으로 바뀌지 않게, 검토)
     if (!K || !G || K.owner !== m.name) return;
     if (G.S.loc !== "village" || G.S.deco || (G.S.mode !== "free" && G.S.mode !== "gather")) return;
     var h = G.D[K.k];
@@ -1735,11 +1777,18 @@
     NET.visiting = { k: K.k, owner: K.owner };
     var room = m.home && Array.isArray(m.home.room) ? m.home.room : G.Wi.room.start;
     G.loadRoom(room, m.home && Array.isArray(m.home.room) ? m.home.rs : undefined); // 친구 방 크기가 다르면 내 방 크기에 맞춰 보여 줘요(plaza_home.js HOME.remap)
+    if (window.HOME && HOME.showWall) HOME.showWall(m.home && m.home.wall); // 친구 벽지(구경하는 동안만, 저장 안 함)
     G.fns.fc();
-    // 들어가지 못했으면 원래대로 돌려 둬요
-    setTimeout(function () {
-      if (NET.visiting && G.S.loc !== "room") NET.endVisit();
-    }, 1500);
+    // 들어가지 못했으면 원래대로 돌려 둬요. 낡은 패드는 문 여는 장면이 늦게 끝나서 넉넉히 기다려요(1.5초만 보면 친구 방 대신 내 방이 열렸음)
+    var V = NET.visiting,
+      t0 = now();
+    var chk = setInterval(function () {
+      if (NET.visiting !== V || G.S.loc === "room") return clearInterval(chk);
+      if (now() - t0 > 8) {
+        clearInterval(chk);
+        NET.endVisit();
+      }
+    }, 300);
   };
   NET.visitBanner = function () {
     var V = NET.visiting;
@@ -1754,6 +1803,144 @@
     NET.visiting = null;
     NET.G.loadRoom(NET.myRoom || []);
     NET.myRoom = null;
+    if (window.HOME && HOME.restoreWall) HOME.restoreWall();
+  };
+
+  // ---------------------------------------------------------------- 서버가 없을 때(시험판): 가짜 친구 집 구경
+  // 집 이름표의 친구(하늘이네·바다네 …) 집 문 앞에서 똑똑 → 그 친구가 꾸민 방을 구경해요.
+  // 방은 친구 이름과 집 번호로 정해서(같은 친구 집은 늘 같은 방), 진짜 서버 때와 같은 화면 흐름(NET.onHome → visiting)을 써요.
+  function seeded(str) {
+    var h = hash(str) || 1;
+    return function () {
+      h ^= h << 13;
+      h ^= h >>> 17;
+      h ^= h << 5;
+      return ((h >>> 0) % 100000) / 100000;
+    };
+  }
+  NET.ownerName = function (k) {
+    var h = NET.G && NET.G.D[k];
+    if (!h) return null;
+    if (h.owner) return h.owner; // plaza_inject.py가 원래 이름(하늘·별이…)을 적어 둬요
+    return String(h.label || "").replace(/(이네|네)$/, "") || null;
+  };
+  // 방 꾸미기 주제: 침대·벽지·소품을 어울리게 골라요
+  var THEMES = [
+    { bed: "bed_princess", wall: "wp_pink", want: ["teddy", "starlamp", "plant", "gift", "clock_round", "lamp"] },
+    { bed: "bed_rocket", wall: "wp_star", want: ["clock_star", "starlamp", "tv", "shelf", "dino", "lamp"] },
+    { bed: "bed_car", wall: "wp_sky", want: ["dino", "tv", "shelf", "clock_alarm", "plant", "gift"] },
+    { bed: "bed_cloud", wall: "wp_sky", want: ["plant", "plant", "aquarium", "lamp", "clock_round", "teddy"] },
+    { bed: "bed_bunk", wall: "wp_lemon", want: ["piano", "clock_cuckoo", "shelf", "shelf", "plant", "teddy"] },
+    { bed: "bed", wall: "wp_mint", want: ["aquarium", "plant", "plant", "shelf", "clock_grand", "lamp"] },
+    { bed: "bed_bunk", wall: "wp_rainbow", want: ["gift", "dino", "teddy", "tv", "starlamp", "clock_cuckoo"] },
+    { bed: "bed", wall: "wp_default", want: ["shelf", "tv", "lamp", "plant", "clock_round", "piano"] },
+  ];
+  NET.fakeHome = function (name, k) {
+    var G = NET.G,
+      s = G.Wi.room,
+      cols = s.cols,
+      rows = s.rows,
+      defs = s.defs,
+      rnd = seeded("home:" + name + ":" + k);
+    var pick = function (a) {
+      return a[Math.floor(rnd() * a.length)];
+    };
+    var th = THEMES[Math.floor(rnd() * THEMES.length)];
+    var used = {},
+      list = [];
+    var mid = cols / 2;
+    // 문(앞줄 가운데 두 칸)에서 방 가운데까지 길은 비워 둬요
+    for (var r = rows - 3; r < rows; r++) {
+      used[mid - 1 + "," + r] = 1;
+      used[mid + "," + r] = 1;
+    }
+    (s.reserved ? Array.from(s.reserved) : []).forEach(function (key) {
+      used[key] = 1;
+    });
+    var size = function (id, rot) {
+      var d = defs[id];
+      return rot % 2 ? [d.d || 1, d.w || 1] : [d.w || 1, d.d || 1];
+    };
+    var put = function (id, c, r, rot) {
+      if (!defs[id]) return false;
+      var same = list.filter(function (it) {
+        return it.id === id;
+      }).length;
+      if (same >= (id === "plant" || id === "shelf" ? 2 : 1) && id !== th.bed) return false; // 같은 물건은 한두 개만
+
+      var sz = size(id, rot);
+      if (c < 0 || r < 0 || c + sz[0] > cols || r + sz[1] > rows) return false;
+      for (var x = c; x < c + sz[0]; x++) for (var y = r; y < r + sz[1]; y++) if (used[x + "," + y]) return false;
+      for (x = c; x < c + sz[0]; x++) for (y = r; y < r + sz[1]; y++) used[x + "," + y] = 1;
+      list.push({ id: id, c: c, r: r, rot: rot });
+      return true;
+    };
+    var tryAt = function (id, spots, rot) {
+      for (var i = 0; i < spots.length; i++) if (put(id, spots[i][0], spots[i][1], rot || 0)) return true;
+      return false;
+    };
+    var shuffled = function (a) {
+      for (var i = a.length - 1; i > 0; i--) {
+        var j = Math.floor(rnd() * (i + 1)),
+          t = a[i];
+        a[i] = a[j];
+        a[j] = t;
+      }
+      return a;
+    };
+    var left = rnd() < 0.5;
+    // 1) 침대: 뒷벽 구석
+    put(th.bed, left ? 0 : cols - 1, 0, 0);
+    // 2) 러그와 소파(또는 식탁) — 방 가운데쯤
+    var rc = Math.max(1, Math.min(cols - 3, Math.floor(mid - 1 + (rnd() - 0.5) * 3)));
+    put("rug", rc, 1, 0);
+    if (rnd() < 0.6) {
+      put("sofa", rc, 3, 2) || put("sofa", rc + 1, 3, 2);
+    }
+    var tc = left ? cols - 3 : 1;
+    if (rnd() < 0.7 && put("table", tc, 3, 0)) put("chair", tc, 4, 2) || put("chair", tc + 1, 3, 3);
+    // 3) 주제 소품: 시계는 벽에, 나머지는 뒷벽·옆벽을 따라
+    var back = [],
+      sides = [];
+    for (var c = 0; c < cols; c++) back.push([c, 0]);
+    for (r = 1; r < rows - 1; r++) {
+      sides.push([0, r]);
+      sides.push([cols - 1, r]);
+    }
+    var wants = th.want.slice();
+    if (rnd() < 0.5) wants.push(pick(["plant", "teddy", "gift", "lamp", "dino"]));
+    wants.forEach(function (id) {
+      var d = defs[id];
+      if (!d) return;
+      if (d.wall) {
+        // 벽시계: 왼쪽·오른쪽 벽(옆벽 줄) 중 하나
+        var wr = 1 + Math.floor(rnd() * (rows - 2));
+        list.push(rnd() < 0.5 ? { id: id, c: 0, r: wr, rot: 3 } : { id: id, c: cols - 1, r: wr, rot: 1 });
+        return;
+      }
+      if (!tryAt(id, shuffled(back.slice()), 0)) tryAt(id, shuffled(sides.slice()), 0);
+    });
+    // 4) 조금 더 채우기(친구마다 개수가 달라요)
+    var extra = 1 + Math.floor(rnd() * 3);
+    for (var e = 0; e < extra; e++) tryAt(pick(["plant", "teddy", "lamp", "gift", "shelf"]), shuffled(sides.slice()), 0);
+    return { room: list, rs: G.Wi && window.HOME && HOME.roomSize ? HOME.roomSize().k : undefined, wall: th.wall };
+  };
+  NET.fakeKnock = function (k) {
+    var G = NET.G;
+    if (!G) return;
+    var name = NET.ownerName(k);
+    var h = G.D[k];
+    if (!name || !h || h.mine || NET.visiting) return;
+    if (NET.knocking && now() - NET.knocking.t < 3) return;
+    if (G.S.mode !== "free" && G.S.mode !== "gather") {
+      G.fns.Kt(G.Y, "지금은 활동 중이에요", 2);
+      return;
+    }
+    NET.knocking = { k: k, owner: name, t: now() };
+    G.fns.Kt(G.Y, "똑똑! 🚪", 1.2);
+    setTimeout(function () {
+      NET.onHome({ t: "home", name: name, home: NET.fakeHome(name, k) });
+    }, 700);
   };
 
   // ---------------------------------------------------------------- 칠판
