@@ -206,7 +206,7 @@
     ]);
     return true;
   }
-  // ---------- 명소 입구 4곳 (2026-11-20): 소원 우물·마법사 탑·버섯 집·반짝 등대 호숫가 → 새 게임 4개 + 바람 풍차 → 하트섬 원정대(2026-11-24) ----------
+  // ---------- 명소 입구 4곳 (2026-11-20): 소원 우물·마법사 탑·버섯 집·반짝 등대 호숫가 → 새 게임 4개 ----------
   // 문 모양·자리는 plaza_inject.py가 넣은 window.PLAZA_DOORS(캐릭터3D/pipeline/plaza_doors.js). 가까이 가면 소용돌이가 열리고, 문 앞에서 "들어갈까요?"
   // 게임 파일은 games/ 안(원본은 games/원본_*.html, back.js·uriban_bridge.js를 붙인 것은 캐릭터3D/pipeline/uriban_inject.py가 만듦)
   var COOP = "둘이서 해요. 각자 패드로 방 번호(숫자 4자리)를 맞춰 만나요. 한 패드로도 해 볼 수 있어요.";
@@ -215,7 +215,6 @@
     { key: "giant", name: "거인과 꼬마", emoji: "👣", goal: "거인은 무거운 것을 옮기고, 꼬마는 작은 구멍으로 들어가요. " + COOP, ext: "games/giant.html", color: 0xb197fc },
     { key: "jelly", name: "젤리와 팡", emoji: "🍯", goal: "꿀젤리와 불꽃 친구가 힘을 합쳐 꿀나무 마을을 지나가요. " + COOP, ext: "games/jelly.html", color: 0xffc94d },
     { key: "magnet", name: "자석 친구", emoji: "🧲", goal: "빨강 N과 파랑 S 자석이 서로 당기고 밀며 얼음 성까지 가요. " + COOP, ext: "games/magnet.html", color: 0x8ec5ff },
-    { key: "island", name: "하트섬 원정대", emoji: "😈", goal: "풍차 바람을 타고 하트섬으로! 신전 세 곳에서 사랑의 불꽃을 찾아 그림자 악마둥이를 만나요. 혼자도, 친구 6명까지 같이도 해요.", ext: "games/island.html", color: 0xff7ab8 },   // 마지막 보스(2026-11-24, 하트섬원정대/)
   ];
   // 광장 옷 → 피라미드 꾸미기(피라미드는 자기 꾸미기 14가지만 입힘). 거꾸로(피라미드 → 광장)는 games/uriban_bridge.js
   var PYR_ACC = { bow: "ribbon", flower_crown: "flower", sunglasses: "glasses", cat_ears: "cat", magician_hat: "magic", grad_cap: "grad", star_antenna: "antenna", egg_hat: "egg", pharaoh_nemes: "nemes", halo: "halo", kinball_hat: "minikin", backpack_mint: "backpack", cape_red: "cape", butterfly_wings: "butterfly" };

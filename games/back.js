@@ -412,15 +412,3 @@
     (document.head || document.documentElement).appendChild(s);
   } catch (e) {}
 })();
-
-/* 7) 이야기 장면(story/story.js): 광장에서 게임에 들어오면 먼저 우리 반 이야기(하트 왕국 이야기 몇 화) 한 장면을 보여 줘요.
- * 손그림 배경 + 말하는 친구 얼굴·이름·대사 + 학생이 고른 동물. 그동안 게임은 멈춤, 건너뛰기 단추(2026-11-24). 원본은 이야기장면/src, 대본은 scenes.js */
-(function () {
-  try {
-    var me = document.currentScript;
-    if (window.PLAZA_STORY || !me || !me.src) return;
-    var s = document.createElement("script");
-    s.src = new URL("../story/story.js", me.src).href;
-    (document.head || document.documentElement).appendChild(s);
-  } catch (e) {}
-})();
