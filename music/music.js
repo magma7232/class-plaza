@@ -8,7 +8,7 @@
  *                 "fixed:top-right:12,70"  화면 구석에 띄움(top-left·top-right·bottom-left·bottom-right, 가로,세로 px)
  *                 "none"  단추 없음(페이지가 BGM.toggle()을 부르는 자기 단추를 씀)
  *   data-label  "icon"(🎵, 끄면 빗금) 또는 "text"(음악 켬 / 음악 끔)
- *   data-vol    음악 크기 0~1 (기본 0.5)
+ *   data-vol    음악 크기 0~1 (기본 0.9, 2026-11-24)
  *   data-mute   "1"이면 페이지가 BGM.mute(false)를 부를 때까지 조용히 기다림
  *
  * 지키는 것

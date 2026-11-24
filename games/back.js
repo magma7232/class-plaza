@@ -300,16 +300,34 @@
       e.stopPropagation();
     }, { passive: true });
   });
-  onBody(function () {
-    b && document.body.appendChild(b);
-    dodge();
-  });
   // 게임의 다른 단추를 가리면 그 단추들 바로 아래(아래쪽 자리면 바로 위)로 비켜 앉아요(2026-11-24: 꿈빛 성 세로 화면에서 💡힌트·🔊를 가렸음).
   // 화면을 돌리거나 게임 화면이 바뀌어 단추가 생기고 없어질 때도 다시 봐요(가벼운 확인만 1초마다)
+  // 같은 날 검토에서 고침: 아이가 진짜로 누를 수 있는 단추만 피함(숨김·투명·다른 판에 가려진 것은 빼요), 화면 밖으로는 안 나감,
+  // '한 번 더 누르면 광장으로'로 글이 길어진 동안은 움직이지 않음(두 번째 누를 때 단추가 도망가지 않게)
   var up = /^bottom/.test(pos);
+  function tappable(el, q) {
+    for (var e = el; e && e.nodeType === 1; e = e.parentElement) {
+      var cs = getComputedStyle(e);
+      if (cs.visibility === "hidden" || +cs.opacity < 0.05) return false;
+    }
+    if (!document.elementsFromPoint) return true;
+    var x = Math.min(Math.max(q.left + q.width / 2, 0), innerWidth - 1), y = Math.min(Math.max(q.top + q.height / 2, 0), innerHeight - 1);
+    var list = document.elementsFromPoint(x, y);
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] === b || b.contains(list[i])) continue;   // '광장으로' 단추 자신은 건너뛰고 그 밑에서 가장 위에 있는 것
+      return list[i] === el || el.contains(list[i]);
+    }
+    return false;
+  }
   function dodge() {
-    if (!b || !b.isConnected) return;
-    var cur = parseFloat(up ? b.style.marginBottom : b.style.marginTop) || 0, r0 = b.getBoundingClientRect(), base = { l: r0.left, r: r0.right, t: r0.top + (up ? cur : -cur), b: r0.bottom + (up ? cur : -cur) };
+    if (!b || !b.isConnected || armed) return;
+    var r0 = b.getBoundingClientRect();
+    // 퀴즈 카드처럼 이 단추보다 위에 덮인 판이 있으면 그동안은 자리를 그대로 둬요(덮인 동안 게임 단추가 '안 보임'으로 재져서 단추 위로 돌아오던 것)
+    if (document.elementFromPoint) {
+      var top = document.elementFromPoint(Math.min(Math.max(r0.left + r0.width / 2, 0), innerWidth - 1), Math.min(Math.max(r0.top + r0.height / 2, 0), innerHeight - 1));
+      if (top && top !== b && !b.contains(top)) return;
+    }
+    var cur = parseFloat(up ? b.style.marginBottom : b.style.marginTop) || 0, base = { l: r0.left, r: r0.right, t: r0.top + (up ? cur : -cur), b: r0.bottom + (up ? cur : -cur) };
     var els = document.querySelectorAll("button,a,[role=button],input,select"), shift = 0;
     for (var tries = 0; tries < 6; tries++) {
       var t = base.t + (up ? -shift : shift), bt = base.b + (up ? -shift : shift), hit = null;
@@ -318,19 +336,35 @@
         if (el === b || !el.getClientRects().length) continue;
         var q = el.getBoundingClientRect();
         if (q.width < 4 || q.height < 4 || q.width > innerWidth * 0.6) continue;   // 화면 전체를 덮는 층은 빼요
-        if (q.right > base.l + 2 && q.left < base.r - 2 && q.bottom > t + 2 && q.top < bt - 2) { hit = q; break; }
+        if (q.right > base.l + 2 && q.left < base.r - 2 && q.bottom > t + 2 && q.top < bt - 2 && tappable(el, q)) { hit = q; break; }
       }
       if (!hit) break;
       shift = up ? base.b - hit.top + 6 : hit.bottom - base.t + 6;
     }
+    // 화면 밖으로는 안 나가요(자리가 모자라면 갈 수 있는 데까지만)
+    shift = Math.max(0, Math.min(shift, up ? base.t - 4 : innerHeight - 4 - base.b));
     if (Math.abs(shift - cur) > 1) {
       if (up) b.style.marginBottom = shift ? shift + "px" : "";
       else b.style.marginTop = shift ? shift + "px" : "";
+      try {
+        window.dispatchEvent(new Event("plaza-back-moved"));   // 게임이 알림 글 같은 것을 함께 옮길 수 있게(꿈빛 성)
+      } catch (e) {}
     }
   }
+  onBody(function () {
+    b && document.body.appendChild(b);
+    dodge();
+  });
   setInterval(dodge, 1000);
   window.addEventListener("resize", function () {
     setTimeout(dodge, 120);
+  });
+  // 퀴즈 카드가 닫히면 바로 다시 봐요(1초를 기다리지 않게). '나중에 ✕'로 닫을 때는 plaza-quiz가 없어서 plaza-pause(paused:false)도 들어요
+  window.addEventListener("plaza-quiz", function () {
+    setTimeout(dodge, 60);
+  });
+  window.addEventListener("plaza-pause", function (e) {
+    if (e && e.detail && !e.detail.paused) setTimeout(dodge, 60);
   });
 })();
 

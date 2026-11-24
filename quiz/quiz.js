@@ -53,7 +53,7 @@
     heart: { land: R('62%'), port: R('62%') },          // 친구 칸과 '웃게 만든 투덜이' 사이
     sarang: { land: 'top:38%;left:calc(10px + env(safe-area-inset-left,0px))', port: 'top:38%;left:calc(10px + env(safe-area-inset-left,0px))' },   // 고정 조이스틱(왼쪽 아래) 위
     castle: { land: R('38%'), port: R('38%') },
-    jelly: { land: R('calc(70px + env(safe-area-inset-top,0px))'), port: R('calc(70px + env(safe-area-inset-top,0px))') },   // 🔊☰ 줄 아래
+    jelly: { land: R('calc(80px + env(safe-area-inset-top,0px))'), port: R('calc(80px + env(safe-area-inset-top,0px))') },   // 🔊☰ 줄 아래(70px이면 둥둥 뜰 때 🔊와 10px까지 붙어서 2026-11-24 80px로)
     giant: { land: R('53%'), port: R('64%') },          // 세로는 1번 친구 단추, 가로는 오른쪽 단추를 피해서
     magnet: { land: R('53%'), port: R('64%') },
     pyramid_run: { land: R('48%'), port: R('48%') },    // 왼쪽은 아이템 알약이 쌓임
@@ -73,8 +73,8 @@
 
   // 기기 저장소가 막힌 브라우저(시크릿 창 등)에서는 이 페이지 동안만 기억해요(하루 한도·선물이 그래도 지켜지게)
   var MEM = {}, LS = (function () { try { localStorage.setItem('__pq', '1'); localStorage.removeItem('__pq'); return localStorage } catch (e) { return null } })();
-  function jget(k, d) { try { var v = JSON.parse(LS ? LS.getItem(k) : MEM[k]); return v == null ? d : v } catch (e) { return d } }
-  function jput(k, v) { var s = JSON.stringify(v); if (LS) { try { LS.setItem(k, s); return } catch (e) { } } MEM[k] = s }
+  function jget(k, d) { try { var v = JSON.parse(k in MEM || !LS ? MEM[k] : LS.getItem(k)); return v == null ? d : v } catch (e) { return d } }   // 저장소가 가득 차 못 쓴 것(MEM)을 먼저
+  function jput(k, v) { var s = JSON.stringify(v); if (LS) { try { LS.setItem(k, s); delete MEM[k]; return } catch (e) { } } MEM[k] = s }
   function jdel(k) { delete MEM[k]; try { LS && LS.removeItem(k) } catch (e) { } }
   function today() { return new Date().toDateString() }
   function grade() {
@@ -312,7 +312,7 @@
     var hidden = bub.style.visibility; bub.style.visibility = 'hidden';
     var bs = buttonsNow(), W = window.innerWidth, H = window.innerHeight;
     var sig = W + 'x' + H + ':' + bs.map(function (q) { return Math.round(q.left / 8) + ',' + Math.round(q.top / 8) + ',' + Math.round(q.width / 8) + ',' + Math.round(q.height / 8) }).join(';');
-    if (!force && sig === lastSig) { bub.style.visibility = hidden; return }
+    if (!force && sig === lastSig && bub._pos) { bub.style.visibility = hidden; return }   // 아직 자리를 안 받은 새 말풍선은 꼭 자리를 정해요
     lastSig = sig;
     var first = posCss(), opts = [first];
     SPARE.forEach(function (c) { if (c !== first.css) opts.push({ css: c, mid: false }) });
@@ -343,7 +343,7 @@
     bub.addEventListener('click', function (e) { e.preventDefault(); if (!busy()) openQuiz() });
     bub.style.visibility = 'hidden';
     document.body.appendChild(bub);
-    placeBubble();
+    placeBubble(true);   // 새 말풍선은 늘 자리를 다시 골라요(2026-11-24 검토: 단추 배치가 그대로면 두 번째 말풍선부터 숨김 상태로 남아 안 보였음)
     phase = 'bubble';
     bubLeft = BUBBLE_SEC;
   }
@@ -380,6 +380,7 @@
     if (bub) { var b = busy(); if (bub.hidden !== b) bub.hidden = b }   // 게임 카드가 뜨면 말풍선을 숨기고, 닫히면 다시
     tick(1);
     if (bub && !bub.hidden && ++chk % 2 === 0) placeBubble();
+    if (ov && pausedBy === 'hold' && coop()) { release(); pausedBy = 'coop'; }   // 퀴즈를 보는 사이 친구가 들어오면 게임을 다시 돌려요(친구 화면이 멈추지 않게)
   }, 1000);
 
   // ---------- 퀴즈 카드 ----------
@@ -396,7 +397,7 @@
     hideBubble(false);
     style();
     var it = pk.item, order = shuffle(4);
-    cur = { g: g, i: pk.i, s: it.s, item: it, order: order, tries: 0, done: false, correct: false, second: false, gift: '' };
+    cur = { g: g, i: pk.i, s: it.s, item: it, order: order, tries: 0, done: false, correct: false, second: false, gift: '', t0: Date.now() };
     ov = el('div'); ov.id = 'pqOv';
     guard(ov);
     var card = el('div'); card.id = 'pqCard';
@@ -416,7 +417,7 @@
       b.appendChild(el('i', '', marks[k]));
       b.appendChild(document.createTextNode(it.c[ci]));
       b.setAttribute('data-c', ci);
-      b.addEventListener('click', function () { choose(k) });
+      b.addEventListener('click', function () { if (Date.now() - cur.t0 >= 350) choose(k) });   // 말풍선을 두 번 톡톡 누른 손가락이 바로 보기를 고르지 않게(말풍선이 오른쪽 보기 위에 있을 때가 있음)
       cs.appendChild(b);
     });
     card.appendChild(cs);
