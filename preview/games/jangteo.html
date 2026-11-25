@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>뚝딱 장터 데모</title>
+<title>오늘은 내가 요리사!</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
 <style>
@@ -41,6 +41,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#3a2516;touch-action:n
 #netBody .note{font-size:17px;color:#7a5236;margin:4px 0 12px}
 #netBody .msg{min-height:24px;color:#d9412b;margin-top:12px;font-size:17px}
 .ov .card{max-height:96vh;overflow:auto;box-sizing:border-box}
+.tLine{font-size:22px;margin:4px 0 18px;color:#3a2414;word-break:keep-all}
 .gradeTag{display:inline-block;background:#fff3c4;border:3px solid #3a2414;border-radius:12px;padding:1px 12px 0;font-size:16px;color:#7a5236;margin:-4px 0 10px}
 .gradeTag.big{font-size:22px;color:#d9412b}
 #mathQ{background:#eef7ff;border:3px solid #3a2414;border-radius:16px;padding:8px 12px 8px;margin:0 auto 14px;max-width:560px}
@@ -56,6 +57,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#3a2516;touch-action:n
   .card ul{font-size:14px;line-height:1.35;margin:4px auto 8px}
   .card button{font-size:17px;padding:7px 14px;border-width:3px}.card button small{font-size:12px}
   .gradeTag{font-size:13px;margin:-2px 0 5px;border-width:2px}.gradeTag.big{font-size:17px}
+  .tLine{font-size:16px;margin:2px 0 8px}
   #mathQ{padding:4px 10px;margin:0 auto 8px;border-width:2px}#mathQ p{font-size:15px;margin:0 0 4px}#mathQ.big p{font-size:17px}
   .card #mathQ button,.card #mathQ.big button{font-size:16px;padding:3px 10px;min-width:70px}#mathQ .res{font-size:13px;margin-top:3px;min-height:16px}
   .stats{margin:6px 0 8px}.stat{padding:4px 10px}.stat b{font-size:24px}
@@ -69,22 +71,16 @@ html,body{margin:0;height:100%;overflow:hidden;background:#3a2516;touch-action:n
 <div class="top"><button id="muteBtn">소리 켬</button><button id="pauseBtn">멈춤</button></div>
 
 <div id="titleOv" class="ov"><div class="card">
-  <h1>뚝딱 장터</h1>
+  <h1>오늘은 내가 요리사!</h1>
   <h2>분식 가게 · 혼자 또는 친구랑 같이</h2>
   <div class="gradeTag" id="tGrade">4학년 난이도</div>
-  <ul>
-    <li>위쪽 주문 카드를 보고 메뉴를 만들어요.</li>
-    <li>왼쪽 화면을 손가락으로 끌면 움직여요.</li>
-    <li><b style="color:#e8612c">주황 버튼</b>: 집기·놓기·담기·내기</li>
-    <li><b style="color:#3fae49">초록 버튼</b>: 꾹 누르면 썰기·김밥 말기</li>
-    <li>완성한 음식은 접시에 담아 아래 손님 창구에 내요.</li>
-    <li><b style="color:#d9a400">❓ 노란 물음표</b> 손님은 음식을 받으면 문제를 내요. 맞히면 팁!</li>
-  </ul>
+  <p class="tLine">주문 카드를 보고 요리해서 손님에게 내요! 🍙🍢</p>
   <div class="row">
-    <button class="b1" data-mode="peace">평화 모드<small>시간 압박 없음</small></button>
-    <button class="b2" data-mode="normal">보통 모드<small>손님이 기다려요</small></button>
+    <button class="b1" data-mode="peace">🌈 시간 제한 없이<small>천천히 해요</small></button>
+    <button class="b2" data-mode="normal">⏱️ 시간 제한 있게<small>손님이 기다려요</small></button>
   </div>
   <div class="row" id="multiRow" style="margin-top:12px"><button class="b4" id="multiBtn">친구랑 같이 하기<small>방 만들기 · 방 들어가기</small></button></div>
+  <div class="row" id="tutRow" style="margin-top:10px"><button class="b3" id="tutBtn" style="display:none;font-size:17px;padding:7px 16px">🎓 연습 다시 보기</button></div>
 </div></div>
 
 <div id="pauseOv" class="ov hide"><div class="card">
@@ -178,6 +174,7 @@ let target = null;
 const keys = {};
 let joy = {id:null, ox:0, oy:0, x:0, y:0, active:false};
 let holdB = false, holdBkey = false;
+let tut = null, tutPress = false, hudCard0 = null;   // 처음 하는 학생: 보여 주기 → 따라 하기(아래 createTutorial) · 보여 주기가 누르는 잡기 · 첫 주문 카드 자리
 
 function buildStations(){
   st = []; dynList = [];
@@ -206,6 +203,7 @@ function collides(x, y, r){
 }
 
 function reset(m, g){
+  roundSeq++;
   try { net.qPend = {}; } catch (e) { /* 처음 불릴 때는 net이 아직 없음 */ }   // 친구가 풀던 문제 결과는 새 판에 들어가지 않게(검토 2)
   grade = g >= 1 && g <= 6 ? g : localGrade();   // 친구 기기는 방장이 보낸 학년(start의 g)
   modeKey = m; mode = gradeMode(MODES[m], grade);
@@ -340,6 +338,7 @@ function labelA(p, s){
 function actionA(p){
   p = p || player;
   if (!running || paused) return;
+  if (tut && tut.lock && !tutPress && p === player) return;   // 보여 주기 동안은 손대지 않아도 돼요
   if (net.mode === 'guest' && p === player){
     // 친구 기기: 방장 기기에게 "이 칸을 눌렀어요"라고 알려요
     if (!target) return;
@@ -391,8 +390,9 @@ function quizTip(first, who){   // 방장·혼자 기기에서만
   toast = {text: `${by}${big ? '한 번에 정답! 손님들이 더 기다려 줘요 · ' : '문제를 풀었어요! '}팁 +${tip} 코인`, t: 3.2};
   sfx('serve'); burst(COLS / 2, ROWS / 2, 'star', big ? 12 : 6, '#ffd43b');
 }
+let quizPend = 0, roundSeq = 0;   // 이 기기에서 아직 끝나지 않은 문제 수(연습이 퀴즈를 기다리게) · 판 번호(판이 바뀐 뒤 끝난 문제는 보상 없음)
 function askServer(o, p){   // 문제 손님에게 음식을 낸 사람의 기기에서 묻기
-  if (!p || p === player || net.mode !== 'host'){ quizAsk(o.rid).then(r => { if (r && !r.skipped && r.correct) quizTip(r.first, null); }); return; }
+  if (!p || p === player || net.mode !== 'host'){ const rs = roundSeq; quizPend++; quizAsk(o.rid).then(r => { quizPend = Math.max(0, quizPend - 1); if (rs === roundSeq && r && !r.skipped && r.correct) quizTip(r.first, null); }, () => { quizPend = Math.max(0, quizPend - 1); }); return; }
   const c = net.conns[p.id]; if (!c || !c.open) return;
   const k = 'q' + (++net.qSeq || (net.qSeq = 1)); (net.qPend = net.qPend || {})[k] = p.id;
   try { c.send({t: 'ask', k, rid: o.rid}); } catch (e){}
@@ -415,7 +415,7 @@ function update(dt){
   if (toast){ toast.t -= dt; if (toast.t <= 0) toast = null; }
   if (!running || paused) { updateFx(dt); return; }
   const isGuest = net.mode === 'guest';
-  timeLeft -= dt;
+  if (!(tut && tut.active)) timeLeft -= dt;   // 연습 동안은 시계 멈춤
   if (timeLeft <= 0){ timeLeft = 0; if (!isGuest){ endRound(); return; } }
 
   // 이동
@@ -425,6 +425,7 @@ function update(dt){
   if (keys.ArrowUp || keys.KeyW) my -= 1;
   if (keys.ArrowDown || keys.KeyS) my += 1;
   if (joy.active){ mx += joy.x; my += joy.y; }
+  if (tut && tut.lock){ mx = my = 0; holdB = holdBkey = false; }   // 보여 주기: 내 요리사는 연습 대본이 움직여요
   const len = Math.hypot(mx, my);
   player.moving = len > 0.18;
   if (player.moving){
@@ -439,6 +440,7 @@ function update(dt){
   }
   player.pop = Math.max(0, player.pop - dt);
   target = findTarget(player);
+  if (tut && tut.active){ tut.tick(); if (!running) return; target = findTarget(player); }   // 보여 주기·따라 하기
 
   // 친구 요리사는 받은 위치로 부드럽게 따라가요
   for (const p of players){
@@ -510,7 +512,7 @@ function update(dt){
   }
 
   // 주문
-  spawnT -= dt;
+  if (!(tut && tut.active)) spawnT -= dt;   // 연습 동안은 연습 주문만
   const active = orders.filter(o => !o.leaving && !o.served);
   if (spawnT <= 0 || (active.length === 0 && spawnT > 2.5)){
     spawnOrder(false); spawnT = mode.spawn / (1 + .35 * (players.length - 1));
@@ -518,7 +520,7 @@ function update(dt){
   for (const o of orders){
     o.anim = Math.min(1, o.anim + dt * 2.2);
     if (o.served || o.leaving){ o.out += dt; continue; }
-    o.t += dt;
+    if (!(tut && tut.active)) o.t += dt;
     if (o.t > mode.patience){ o.leaving = true; missed++; addFloat('아쉬워요', o.col + .5, 7, '#7a5236'); }
   }
   orders = orders.filter(o => o.out < 1.1);
@@ -853,6 +855,7 @@ function draw(){
     ctx.restore();
   }
   drawHud();
+  if (tut) tut.draw(ctx, performance.now() / 1000);   // 연습 화살표·반짝이
   drawJoy();
   if (toast){
     ctx.save(); ctx.globalAlpha = Math.min(1, toast.t);
@@ -993,9 +996,10 @@ function lantern(c, x, y, s){
 function drawHud(){
   const pad = 10, ch = topH - 22, cw = Math.min(250, (W - 230) / 3 - pad);
   const list = orders.filter(o => !o.served && !o.leaving).sort((a, b) => a.id - b.id);
-  ctx.textBaseline = 'middle';
+  ctx.textBaseline = 'middle'; hudCard0 = null;
   list.forEach((o, i) => {
     const x = pad + i * (cw + pad), y = 8, rc = RECIPES[o.rid];
+    if (!i) hudCard0 = {x, y, w: cw, h: ch};
     const slide = 1 - Math.pow(1 - o.anim, 3);
     ctx.save(); ctx.translate(0, -(1 - slide) * 60);
     ctx.lineWidth = 3; ctx.strokeStyle = OUT; rr(ctx, x, y, cw, ch, 14); fs(ctx, '#fff8ea');
@@ -1031,7 +1035,7 @@ function drawHud(){
   ctx.fillStyle = OUT; ctx.fillText(String(served), bx + 112, by + 23);
 }
 function drawJoy(){
-  if (!running) return;
+  if (!running || (tut && tut.lock)) return;   // 보여 주기 동안은 조이스틱도 숨김
   const r = Math.min(70, W * .07);
   let bx, by, kx, ky, a;
   if (joy.active){ bx = joy.ox; by = joy.oy; kx = bx + joy.x * r; ky = by + joy.y * r; a = .9; }
@@ -1113,7 +1117,7 @@ addEventListener('blur', () => { for (const k in keys) keys[k] = false; holdB = 
 addEventListener('resize', layout);
 document.addEventListener('contextmenu', e => e.preventDefault());
 
-function show(id){ document.getElementById(id).classList.remove('hide'); if (id === 'titleOv') gradeTags(); }
+function show(id){ document.getElementById(id).classList.remove('hide'); if (id === 'titleOv'){ gradeTags(); if (tut) tutBtnSync(); } }
 function hide(id){ document.getElementById(id).classList.add('hide'); }
 function start(m){
   initAudio();
@@ -1124,11 +1128,13 @@ function start(m){
   document.getElementById('againBtn').style.display = '';
 }
 function togglePause(){ if (!running || net.mode !== 'solo') return; paused = !paused; paused ? show('pauseOv') : hide('pauseOv'); }
-document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => start(b.dataset.mode)));
+// 처음 하는 학생은 보여 주기 → 따라 하기 뒤에 시작(2026-11-25 선생님: "규칙 설명 글이 너무 많다"), 해 본 학생은 바로
+const tutAuto = () => tut && !tut.isDone() && new URLSearchParams(location.search).get('tut') !== '0';   // ?tut=0: 점검용(연습 없이)
+document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => { const m = b.dataset.mode; if (tutAuto()) tut.begin(() => start(m)); else start(m); }));
 document.getElementById('againBtn').onclick = () => start(modeKey);
 document.getElementById('homeBtn').onclick = () => { hide('endOv'); if (net.mode === 'host'){ hostSend({t:'wait'}); renderHostLobby(); } else if (net.mode === 'guest'){ netLeave(); show('titleOv'); } else show('titleOv'); };
 document.getElementById('resumeBtn').onclick = togglePause;
-document.getElementById('quitBtn').onclick = () => { running = false; paused = false; hide('pauseOv'); show('titleOv'); };
+document.getElementById('quitBtn').onclick = () => { if (tut && tut.active){ tut.abort(); tutClean(); } running = false; paused = false; hide('pauseOv'); show('titleOv'); };
 document.getElementById('pauseBtn').onclick = togglePause;
 document.getElementById('muteBtn').onclick = e => { muted = !muted; e.target.textContent = muted ? '소리 끔' : '소리 켬'; };
 document.addEventListener('visibilitychange', () => { if (document.hidden && running && !paused) togglePause(); });
@@ -1367,7 +1373,7 @@ function renderHostLobby(){
   netBody.innerHTML = `<h1>방 코드</h1><div class="code">${esc(net.code)}</div>
     <div class="note">친구들은 '방 들어가기'에서 이 코드를 적어요 · 방장 화면은 게임 내내 켜 두어요</div>
     ${chefChips(list)}<div class="note">${list.length}/${MAX_CHEFS}명${list.length === 1 ? ' · 혼자서도 시작할 수 있어요' : ''}</div>
-    <div class="row"><button class="b1" data-go="peace">평화 모드로 시작<small>시간 압박 없음</small></button><button class="b2" data-go="normal">보통 모드로 시작<small>손님이 기다려요</small></button></div>
+    <div class="row"><button class="b2" data-go="normal">⏱️ 시간 제한 있게<small>손님이 기다려요</small></button><button class="b1" data-go="peace">🌈 시간 제한 없이<small>천천히 해요</small></button></div>
     <div class="row"><button class="b3" id="nClose">방 닫기</button></div><div class="msg" id="nMsg"></div>`;
   netBody.querySelectorAll('[data-go]').forEach(b => b.onclick = () => start(b.dataset.go));
   document.getElementById('nClose').onclick = () => { netLeave(); show('titleOv'); };
@@ -1540,7 +1546,7 @@ setInterval(() => {
     toast = {text:'방장 기기를 기다리는 중이에요… (방장 화면이 켜져 있어야 해요)', t:1.3};
 }, 1000);
 if (typeof Peer !== 'function' || typeof RTCPeerConnection !== 'function') document.getElementById('multiRow').classList.add('hide');
-document.getElementById('multiBtn').onclick = () => { initAudio(); hide('titleOv'); renderMenu(); };
+document.getElementById('multiBtn').onclick = () => { initAudio(); hide('titleOv'); if (tutAuto()) tut.begin(() => renderMenu()); else renderMenu(); };   // 친구랑 하기 전에 각자 자기 화면에서 연습
 
 // 점검용 도구
 window.__dd = {
@@ -1554,8 +1560,421 @@ window.__dd = {
   qorder(rid){ orderSeq = 4; spawnOrder(true); const o = orders[orders.length - 1]; o.rid = rid; return o.q; },   // 문제 손님 주문 하나(점검용)
   serveQ(i){ const o = orders.find(q => q.q && !q.served && !q.leaving); if (o) serveOrder(o, players[i || 0] || player); return !!o; },   // 문제 손님에게 바로 내기(점검용, i: 낸 요리사)
   get gr(){ return {grade, mode: Object.assign({}, mode), local: localGrade()}; },   // 학년 난이도(점검용)
-  get os(){ return orders.filter(o => !o.served && !o.leaving).map(o => o.id + ':' + o.rid); }
+  get os(){ return orders.filter(o => !o.served && !o.leaving).map(o => o.id + ':' + o.rid); },
+  get mapStr(){ return MAP.map(r => typeof r === 'string' ? r : r.join('')).join('/'); }
 };
+
+// ---------- 보여 주기 → 따라 하기 ----------
+// 처음 하는 학생을 위한 '보여 주기 → 따라 하기' (2026-11-25 선생님: "규칙 설명 글이 너무 많다.
+//   ① 처음에 우리 캐릭터가 진짜 주방에서 밥을 꺼내고 김을 꺼내 접시에 담아 손님에게 주는 걸 저절로 보여 주고(짧은 말),
+//   ② 그다음 연습: '이걸 집으세요', '메뉴판을 보면 이게 필요하죠' 하고 한 단계씩, 화살표와 반짝이로 짚어 주고 맞게 하면 다음으로")
+//
+// ① 보여 주기(demo): 내 요리사(고른 동물 + 옷)가 주먹밥을 만들어 냄. 카메라가 요리사를 따라감. 손대지 않아도 됨(조이스틱·단추 잠금).
+//    걸음은 '진짜 시간'으로 계산 → 느린 패드(초당 6장)에서도 같은 빠르기로 끝남. 누르기(A)가 안 되면 두 번 더 해 보고, 그래도 안 되면 손에 쥐여 줌(멈추지 않게).
+// ② 따라 하기(practice): 떡볶이(❓ 문제 손님) → 설거지 → 김밥(1학년은 김밥 주문이 없어 빼요). 단계마다 '지금 상태'를 보고 할 일을 정함
+//    (순서를 바꿔 해도, 재료를 버려도 다시 그 자리부터 안내 → 막히지 않음). 손에 쓸데없는 것을 들면 "쓰레기통에 버려요".
+// (2D판: 뚝딱장터3D/src/tutorial.js를 그대로 붙여 넣은 것 — 고칠 때는 그 파일을 고치고 다시 붙여 넣어요)
+function createTutorial(api){
+  const KEY = api.key || 'jangteo.tutorial';   // 기기에 '연습 함' 기억(3D판은 따로)
+  let doneMem = false;   // 기기 저장이 막힌 브라우저(시크릿 창 등)에서도 이 페이지 동안은 기억(같은 판을 또 시작할 때 연습을 되풀이하지 않게)
+  const done = () => { if (doneMem) return true; try { return localStorage.getItem(KEY) === '1'; } catch (e){ return false; } };
+  const setDone = () => { doneMem = true; try { localStorage.setItem(KEY, '1'); } catch (e){} };
+  const canSkip = () => { if (done()) return true; try { return !window.PLAZA_CAN_SKIP || !!window.PLAZA_CAN_SKIP(); } catch (e){ return true; } };
+  const small = () => api.grade() <= 2;   // 1~2학년: 글은 더 짧게, 그림·화살표 먼저
+  const esc = s => String(s).replace(/[<>&]/g, c => ({'<': '&lt;', '>': '&gt;', '&': '&amp;'})[c]);
+  const josa = (w, a, b) => { const c = w.charCodeAt(w.length - 1) - 0xAC00; return w + (c >= 0 && c < 11172 && c % 28 ? a : b); };   // 받침 있으면 '을', 없으면 '를'
+  const eul = w => josa(w, '을', '를');
+
+  // ---------- 화면(2026-11-25 선생님이 보여 준 그림처럼): 화면을 어둡게 하고 할 곳만 동그랗게 밝게 + 왼쪽 아래 안내 친구 + 아래쪽 큰 흰 말풍선(파란 띠) + 파란 ▶ ----------
+  const css = document.createElement('style');
+  css.textContent = `
+#tutOv{position:fixed;left:12px;right:12px;bottom:10px;z-index:9;display:flex;align-items:flex-end;gap:6px;pointer-events:none;font-family:Jua,sans-serif}
+#tutOv.hide{display:none}
+#tutOv .guy{flex:0 0 auto;width:clamp(78px,21vh,150px);height:clamp(78px,21vh,150px);filter:drop-shadow(0 5px 0 rgba(0,0,0,.25));transition:transform .2s}
+#tutOv.slim .guy{width:clamp(56px,13vh,96px);height:clamp(56px,13vh,96px)}
+#tutOv .tb{position:relative;flex:1;min-width:0;background:#fff;color:#22160c;border-radius:22px;border-bottom:10px solid #3f8fe0;padding:12px 74px 12px 20px;box-shadow:0 6px 18px rgba(0,0,0,.35);margin-bottom:6px;transition:transform .18s}
+#tutOv.nonx .tb{padding-right:20px}
+#tutOv .tb.pop{transform:scale(1.04)}
+#tutOv .tl{font-size:clamp(12px,2.2vh,16px);color:#3f8fe0}
+#tutOv .tx{font-size:clamp(18px,4.4vh,32px);font-weight:bold;line-height:1.3;word-break:keep-all}
+#tutOv.big .tx{font-size:clamp(21px,5vh,36px)}
+#tutOv .dots{display:flex;gap:5px;margin-top:4px}#tutOv .dots i{width:9px;height:9px;border-radius:50%;background:#d6e6f7}#tutOv .dots i.on{background:#3f8fe0}
+#tutOv .nx{position:absolute;right:12px;bottom:8px;width:54px;height:54px;border-radius:50%;background:#3f8fe0;color:#fff;border:0;font-size:26px;line-height:54px;padding:0;pointer-events:auto;box-shadow:0 4px 0 #2a6fb8;font-family:inherit}
+#tutOv.nonx .nx{display:none}
+#tutBar{position:fixed;top:max(64px,13vh);left:50%;transform:translateX(-50%);z-index:9;display:flex;gap:8px;align-items:center;font-family:Jua,sans-serif;pointer-events:none}
+#tutBar.hide{display:none}
+#tutBar span{background:#3f8fe0;color:#fff;border:3px solid #22160c;border-radius:999px;padding:2px 14px;font-size:clamp(13px,2.5vh,18px);box-shadow:0 3px 0 #22160c}
+#tutBar button{pointer-events:auto;font-family:inherit;font-size:clamp(13px,2.5vh,18px);background:#fff;color:#22160c;border:3px solid #22160c;border-radius:999px;padding:2px 14px;box-shadow:0 3px 0 #22160c}
+body.tutDemo .pad{visibility:hidden}
+body.tutPractice .pad{opacity:.4}
+body.tutPractice .pad.tutLit{opacity:1;animation:tutPulse .7s ease-in-out infinite alternate}
+@keyframes tutPulse{from{box-shadow:0 6px 0 #3a2414,0 0 0 0 rgba(255,212,59,.95)}to{box-shadow:0 6px 0 #3a2414,0 0 0 18px rgba(255,212,59,0)}}
+@media (max-height:520px){#tutOv .tb{padding:8px 64px 8px 14px;border-bottom-width:7px}#tutOv.nonx .tb{padding-right:14px}#tutOv .nx{width:44px;height:44px;line-height:44px;font-size:21px;bottom:6px;right:8px}}
+`;
+  document.head.appendChild(css);
+  const ov = document.createElement('div'); ov.id = 'tutOv'; ov.className = 'hide';
+  ov.innerHTML = '<canvas class="guy" width="160" height="160"></canvas><div class="tb"><div class="tl"></div><div class="tx"></div><div class="dots"></div><button class="nx" id="tutGo" aria-label="다음">▶</button></div>';
+  const bar = document.createElement('div'); bar.id = 'tutBar'; bar.className = 'hide';
+  bar.innerHTML = '<span></span><button id="tutNext">다음 연습으로 ▶</button><button id="tutSkip">건너뛰기 ▶▶</button>';
+  document.body.appendChild(ov); document.body.appendChild(bar);
+  const tb = ov.querySelector('.tb'), fc = ov.querySelector('.guy'), fg = fc.getContext('2d'), tl = ov.querySelector('.tl'), tx = ov.querySelector('.tx'), dots = ov.querySelector('.dots'), goB = ov.querySelector('.nx');
+  const tag = bar.querySelector('span'), skipB = bar.querySelector('#tutSkip'), nextB = bar.querySelector('#tutNext');
+  nextB.style.display = 'none';
+  nextB.onclick = () => { if (T && T.phase === 'practice'){ api.clearOrders(); nextSection(); } };   // 한 연습에서 오래(45초) 막히면 생기는 단추
+  goB.onclick = () => { if (!T || T.phase !== 'demo') return; if (T.sub === 1) T.fast = true; else T.at = 0; };   // 보여 주기 ▶: 다음 줄로(걷는 중이면 빨리)
+  let lastText = '', lastWho = '';
+  function say(who, text, label, dotN, dotI){
+    ov.classList.toggle('big', small());
+    ov.classList.toggle('nonx', !T || T.phase !== 'demo');   // ▶는 보여 주기에서만. 따라 하기는 해야 넘어가요
+    if (text !== lastText){ tx.innerHTML = esc(text).replace(/\{name\}/g, esc(api.name())); lastText = text; tb.classList.add('pop'); setTimeout(() => tb.classList.remove('pop'), 180); }
+    if (tl.textContent !== (label || '')) tl.textContent = label || '';
+    if (who !== lastWho){ lastWho = who; fg.clearRect(0, 0, 160, 160); const c = api.face && api.face(who); if (c) fg.drawImage(c, 0, 0, 160, 160); else { fg.font = '110px sans-serif'; fg.textAlign = 'center'; fg.textBaseline = 'middle'; fg.fillText(who === 'kong' ? '💙' : '❤️', 80, 88); } }
+    const dk = dotN + ':' + dotI; if (dots.dataset.k !== dk){ dots.dataset.k = dk; dots.innerHTML = dotN ? Array.from({length: dotN}, (_, i) => `<i class="${i <= dotI ? 'on' : ''}"></i>`).join('') : ''; }
+    ov.classList.remove('hide');
+  }
+  // 말풍선 자리: 보여 주기는 화면 아래 전체(단추가 숨어 있음). 따라 하기는 조이스틱과 오른쪽 단추 사이, 그 틈이 좁거나 짚는 칸이 아래쪽이면 화면 위로
+  let placeK = '';
+  function place(tgY){
+    const Wd = innerWidth, Hd = innerHeight, demo = T && T.phase === 'demo';
+    let L = 12, Rr = 12, top = false;
+    if (!demo){
+      const pads = ['btnA', 'btnB', 'btnD'].map(id => document.getElementById(id)).filter(e => e && e.getClientRects().length).map(e => e.getBoundingClientRect());
+      const jr = api.joyBox ? api.joyBox() : null;
+      L = Math.max(12, (jr ? jr.x1 : 0) + 10); Rr = Math.max(12, pads.length ? Wd - Math.min(...pads.map(r => r.left)) + 10 : 12);
+      if (Wd - L - Rr < Math.min(420, Wd * .42)) top = true;   // 단추 사이가 좁으면(휴대폰 가로) 위로
+    }
+    const bh = ov.offsetHeight || 120, topEnd = Math.max(64, Hd * .13) + 40 + bh + 30;
+    if (!top && tgY != null && tgY > Hd - bh - 40) top = true;   // 짚는 칸이 아래쪽이면 위로(칸을 가리지 않게)
+    if (top && tgY != null && tgY - 90 < topEnd && !(tgY > Hd - bh - 40)) top = false;   // 짚는 칸이 위쪽(창구 등)이면 아래 단추 사이 좁은 자리라도 아래에
+    if (top){ L = 12; Rr = 12; }
+    const k = [L, Rr, top, demo].join();
+    if (k === placeK) return; placeK = k;
+    ov.style.left = L + 'px'; ov.style.right = Rr + 'px';
+    if (top){ ov.style.top = `calc(max(64px,13vh) + 40px)`; ov.style.bottom = 'auto'; } else { ov.style.top = 'auto'; ov.style.bottom = '10px'; }
+    ov.classList.toggle('slim', !demo);
+  }
+  function lit(b){   // 따라 하기: 그 단계에 누를 단추만 밝게(작업 단추 = 썰기·말기·설거지, 아니면 잡기 단추)
+    const A = document.getElementById('btnA'), B = document.getElementById('btnB');
+    if (A) A.classList.toggle('tutLit', T && T.phase === 'practice' && !b);
+    if (B) B.classList.toggle('tutLit', T && T.phase === 'practice' && !!b);
+  }
+  skipB.onclick = () => { if (T && canSkip()) finish(true); };
+
+  // ---------- 상태 보는 도우미 ----------
+  const P = () => api.player(), H = () => P().hold;
+  const S = () => api.stations().filter(s => !s.hid);
+  const one = t => S().find(s => s.type === t);
+  const all = t => S().filter(s => s.type === t);
+  const isIng = (h, id, cut) => !!h && h.t === 'ing' && h.id === id && (cut === undefined || !!h.cut === cut);
+  const box = ing => S().find(s => s.type === 'box' && s.ing === ing);
+  const plateWith = (h, rid) => !!h && h.t === 'plate' && h.c.length === 1 && h.c[0].t === 'dish' && h.c[0].id === rid;
+  const emptyPlate = h => !!h && h.t === 'plate' && !h.c.length;
+  const orderOf = rid => api.orders().find(o => o.rid === rid && !o.served && !o.leaving);
+  const serveFor = rid => { const o = orderOf(rid); return o ? S().find(s => s.type === 'serve' && s.x === o.col) : null; };
+  const boardWith = f => all('board').find(b => b.items.some(f));
+  const emptyBoard = () => all('board').find(b => !b.items.length);
+  const usedPot = () => { const L = all('stove'); return L.find(s => s.pot.items.length || s.pot.state !== 'idle') || L[0]; };
+  function plateSrc(){   // 빈 접시를 가져올 곳: 거치대 → 개수대의 깨끗한 접시 → 조리대에 놓아 둔 빈 접시
+    const P = one('plates'); if (P && P.n > 0) return P;
+    const sk = one('sink'); if (sk && sk.c > 0) return sk;
+    return all('counter').find(c => c.item && c.item.t === 'plate' && !c.item.c.length) || P;
+  }
+  const potHas = id => { const p = usedPot(); return !!p && (p.pot.state !== 'idle' || p.pot.items.some(i => i.id === id)); };
+
+  // 지금 할 일 고르기: {t: 글, s: 짧은 글(1~2학년), tgt: 짚을 칸, b: 작업 단추(썰기·말기·설거지) 깜빡, key}
+  const step = (key, t, s, tgt, b) => ({key, t, s: s || t, tgt, b: !!b});
+  function junk(useful){   // 쓸모없는 것을 들었으면 내려놓게
+    const h = H(); if (!h || useful(h)) return null;
+    if (h.t === 'dirty') return step('junk-dirty', '더러운 접시는 개수대에 넣어요', '개수대에!', one('sink'));
+    if (emptyPlate(h)) return step('junk-plate', '접시는 접시 거치대에 다시 놓아요', '접시 제자리에!', one('plates'));
+    return step('junk', '지금 필요 없는 거예요. 쓰레기통에 버려요', '쓰레기통에 버려요', one('trash'));
+  }
+  // 떡볶이 냄비: 썬 어묵 · 떡 · 소스
+  function potStep(){
+    const pot = usedPot();
+    if (!potHas('eomuk')){
+      const h = H();
+      if (isIng(h, 'eomuk', true)) return step('pot-eomuk', '썬 어묵을 냄비에 넣어요', '냄비에 쏙!', pot);
+      const cutB = boardWith(i => isIng(i, 'eomuk', true)); if (cutB) return step('take-eomuk', '썬 어묵을 집어요', '어묵 집기', cutB);
+      const rawB = boardWith(i => isIng(i, 'eomuk', false)); if (rawB) return step('chop-eomuk', '어묵을 썰어요', '썰어요', rawB, true);
+      if (isIng(h, 'eomuk', false)) return step('board-eomuk', '어묵은 도마에 올려요', '도마에 올려요', emptyBoard() || all('board')[0]);
+      return step('get-eomuk', '떡볶이에는 어묵이 필요해요. 어묵을 집어요!', '어묵을 집어요', box('eomuk'));
+    }
+    for (const [id, nm] of [['tteok', '떡'], ['sauce', '소스']]){
+      if (potHas(id)) continue;
+      if (isIng(H(), id)) return step('pot-' + id, eul(nm) + ' 냄비에 넣어요', '냄비에 쏙!', pot);
+      return step('get-' + id, '이번엔 ' + nm + '! ' + nm + ' 상자에서 집어요', eul(nm) + ' 집어요', box(id));
+    }
+    return null;
+  }
+  function tteokStep(){
+    const o = orderOf('tteokbokki'); if (!o) return null;
+    const h = H();
+    if (plateWith(h, 'tteokbokki')) return step('serve-tteok', '❓ 손님은 문제를 내요! 떡볶이를 손님에게 서빙해요', '주문한 손님에게!', serveFor('tteokbokki'));
+    const j = junk(x => isIng(x, 'eomuk') || isIng(x, 'tteok') || isIng(x, 'sauce') || emptyPlate(x)); if (j) return j;
+    const pot = usedPot();
+    if (pot.pot.state === 'cooking' || pot.pot.state === 'done'){
+      if (!emptyPlate(h)) return step('plate-tteok', '보글보글 끓는 동안 접시를 가져와요', '접시 가져오기', plateSrc());
+      return pot.pot.state === 'done' ? step('dish-tteok', '다 끓었어요! 접시에 떡볶이를 담아요', '접시에 담아요', pot) : step('wait-tteok', '보글보글… 다 끓을 때까지 기다려요', '조금만 기다려요', pot);
+    }
+    return potStep();
+  }
+  function washStep(){
+    const r = one('ret'), sk = one('sink'), h = H();
+    if (h && h.t === 'dirty') return step('sink', '개수대에 넣어요', '개수대에!', sk);
+    const j = junk(x => emptyPlate(x)); if (j) return j;
+    if (emptyPlate(h)) return step('rack', '깨끗한 접시! 거치대에 놓아요(바로 써도 돼요)', '접시 거치대에!', one('plates'));
+    if (sk && sk.n > 0) return step('wash', '설거지해요', '설거지해요', sk, true);
+    if (sk && sk.c > 0) return step('clean', '반짝반짝! 깨끗한 접시를 들어요', '깨끗한 접시 들기', sk);
+    if (r && r.n > 0) return step('dirty', '더러운 접시를 들어요', '더러운 접시 들기', r);
+    if (api.platesComing()) return step('coming', '손님이 다 먹으면 접시가 이리로 돌아와요', '접시가 와요', r);
+    return null;
+  }
+  // 김밥: 도마 하나(A)에 썬 단무지·썬 시금치·김·밥 → 말기 → 접시에 담아 내기
+  function kimbapStep(){
+    const o = orderOf('kimbap'); if (!o) return null;
+    const h = H();
+    if (plateWith(h, 'kimbap')) return step('serve-kimbap', '김밥을 손님에게 서빙해요!', '주문한 손님에게!', serveFor('kimbap'));
+    const dishB = boardWith(i => i.t === 'dish' && i.id === 'kimbap');
+    if (dishB){
+      if (emptyPlate(h)) return step('dish-kimbap', '접시에 김밥을 담아요', '접시에 담아요', dishB);
+      const j = junk(() => false); if (j) return j;
+      return step('plate-kimbap', '김밥 완성! 접시를 가져와요', '접시 가져오기', plateSrc());
+    }
+    const boards = all('board');
+    const A = boards.find(b => b.items.some(i => i.t === 'ing' && i.cut && (i.id === 'danmuji' || i.id === 'spinach')) && b.items.length > 1) || boardWith(i => isIng(i, 'danmuji', true)) || boardWith(i => isIng(i, 'danmuji')) || boards[0];
+    const B = boards.find(b => b !== A) || A;
+    const onA = (id, cut) => A.items.some(i => isIng(i, id, cut));
+    // 김밥 도마에 안 들어가는 것(어묵·떡·접시…), 같은 재료 두 개, 썰어야 하는데 다른 재료와 같이 놓인 것 → 도마를 비우고 다시
+    const kinds = {}, badA = A.items.some(i => { if (i.t !== 'ing' || !['danmuji', 'spinach', 'gim', 'rice'].includes(i.id)) return true; if (kinds[i.id]) return true; kinds[i.id] = 1; return (i.id === 'danmuji' || i.id === 'spinach') && !i.cut && A.items.length > 1; });
+    if (badA){
+      if (h) return step('clearA-trash', '이건 김밥에 안 맞아요. 쓰레기통에 버려요', '쓰레기통에 버려요', one('trash'));
+      return step('clearA', '이건 김밥에 안 들어가요. 도마 위의 것을 집어요', '도마 비우기', A);
+    }
+    const need = [['danmuji', true, '단무지'], ['spinach', true, '시금치'], ['gim', false, '김'], ['rice', false, '밥']].filter(([id, cut]) => !onA(id, cut));
+    if (!need.length) return step('roll', '재료가 다 모였어요! 김밥을 말아요', '김밥을 말아요', A, true);
+    const [id, cut, nm] = need[0];
+    const j = junk(x => (x.t === 'ing' && need.some(n => n[0] === x.id)) || isIng(x, 'danmuji', true) || isIng(x, 'spinach', true)); if (j) return j;
+    if (h && h.t === 'ing'){
+      if (isIng(h, id, cut) || (!cut && h.id === id)) return step('putA-' + id, eul(nm) + ' 김밥 도마에 올려요', '이 도마에!', A);
+      if (h.cut) return step('putA-' + h.id, '썬 것은 김밥 도마에 올려요', '이 도마에!', A);
+      // 썰 재료: 김밥 도마가 비었으면 거기서, 아니면 옆 도마에서 썰기
+      return step('onboard-' + h.id, '도마에 올리고 썰어요', '도마에 올려요', !A.items.length ? A : (!B.items.length ? B : A));
+    }
+    if (cut){
+      const raw = boards.find(b => b.items.length === 1 && isIng(b.items[0], id, false)); if (raw) return step('chop-' + id, eul(nm) + ' 썰어요', '썰어요', raw, true);
+      const cutB = boards.find(b => b !== A && b.items.some(i => isIng(i, id, true))); if (cutB) return step('move-' + id, '썬 ' + eul(nm) + ' 집어서 김밥 도마로 옮겨요', '집어서 옮겨요', cutB);
+    }
+    return step('get-' + id, (id === 'danmuji' ? '김밥에는 단무지·시금치·김·밥! ' : '') + eul(nm) + ' 집어요', eul(nm) + ' 집어요', box(id));
+  }
+
+  // ---------- 진행 ----------
+  let T = null;   // 지금 하는 연습 {phase:'demo'|'practice'|'end', ...}
+  const now = () => performance.now() / 1000;
+  function begin(after){
+    T = {phase: 'demo', after, t0: now(), i: -1, sub: 0, at: 0, path: null, tries: 0, last: now()};
+    api.setup('demo'); api.focus(true);
+    document.body.classList.add('tutDemo');
+    bar.classList.remove('hide'); skipB.style.display = canSkip() ? '' : 'none';
+    tag.textContent = small() ? '👀 보기' : '👀 먼저 보기 · 손대지 않아도 돼요';
+  }
+  // 보여 주기 대본: go = 걸어가서 누를 칸, say = 말(짧은 말은 s)
+  const DEMO = [
+    {who: 'sarang', t: '주문 카드를 봐요. 주먹밥이에요!', s: '주먹밥 주문!', card: true, wait: 3.0},
+    {who: 'sarang', t: '먼저 접시를 들어요', s: '접시 들기', go: () => one('plates'), check: () => !!H() && H().t === 'plate'},
+    {who: 'sarang', t: '밥을 담아요', s: '밥 담기', go: () => box('rice'), check: () => H() && H().c && H().c.some(i => i.id === 'rice')},
+    {who: 'sarang', t: '김을 담아요', s: '김 담기', go: () => box('gim'), check: () => H() && H().c && H().c.some(i => i.id === 'gim')},
+    {who: 'sarang', t: '참치도 담아요', s: '참치 담기', go: () => box('tuna'), check: () => H() && H().c && H().c.some(i => i.id === 'tuna')},
+    {who: 'sarang', t: '손님에게 서빙해요', s: '손님에게!', go: () => serveFor('jumeokbap'), check: () => !orderOf('jumeokbap')},
+    {who: 'kong', t: '맛있대요! 이제 {name} 차례예요', s: '이제 해 봐요!', wait: 2.8}
+  ];
+  function standFor(s){   // 칸 옆 빈자리 중 요리사에게서 가장 가까운 곳(걸음 수로)
+    const p = P(), sx = Math.floor(p.x), sy = Math.floor(p.y), key = (x, y) => x + ',' + y;
+    const goals = [[1,0],[-1,0],[0,1],[0,-1]].map(([dx, dy]) => [s.x + dx, s.y + dy]).filter(([x, y]) => api.free(x, y));
+    const prev = new Map([[key(sx, sy), null]]), q = [[sx, sy]];
+    while (q.length){
+      const [x, y] = q.shift();
+      if (goals.some(([a, b]) => a === x && b === y)){ const path = []; let k = key(x, y), c = [x, y]; while (c){ path.unshift([c[0] + .5, c[1] + .5]); c = prev.get(k); k = c ? key(c[0], c[1]) : null; } return {path, x, y}; }
+      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]){ const nx = x + dx, ny = y + dy; if (!api.free(nx, ny) || prev.has(key(nx, ny))) continue; prev.set(key(nx, ny), [x, y]); q.push([nx, ny]); }
+    }
+    return goals.length ? {path: [[goals[0][0] + .5, goals[0][1] + .5]], x: goals[0][0], y: goals[0][1]} : null;
+  }
+  function demoTick(){
+    const p = P(), t = now(), rdt = Math.min(0.25, t - T.last); T.last = t;
+    const D = DEMO[T.i];
+    if (!D || (T.sub === 0 && t >= T.at)){   // 다음 줄
+      T.i++; const N = DEMO[T.i];
+      if (!N){ startPractice(); return; }
+      T.sub = N.go ? 1 : 0; T.at = t + (N.wait || 0); T.tries = 0; T.path = null; T.goT = t; T.tgt = null; T.fast = false;   // 새 줄: 옛 칸 화살표 지우기
+      say(N.who, small() ? N.s : N.t, small() ? '' : '보기', DEMO.length, T.i);
+      return;
+    }
+    if (T.sub === 1){   // 걸어가기(진짜 시간: 1초에 2.6칸)
+      const s = D.go(); if (!s){ T.sub = 0; T.at = t + 0.5; return; }
+      if (!T.path){ const r = standFor(s); T.path = r ? r.path : [[p.x, p.y]]; T.tgt = s; api.focus(true, {x: s.x + .5, y: s.y + .5}); if (t - T.goT < 0.9){ p.moving = false; T.path = null; return; } }
+      let move = 2.6 * rdt * (T.fast ? 2.5 : 1);
+      while (move > 0 && T.path.length){
+        const [wx, wy] = T.path[0], dx = wx - p.x, dy = wy - p.y, d = Math.hypot(dx, dy);
+        if (d < 1e-3){ T.path.shift(); continue; }
+        const m = Math.min(d, move); p.x += dx / d * m; p.y += dy / d * m; move -= m; p.dir = {x: dx / d, y: dy / d};
+        if (m >= d) T.path.shift();
+      }
+      p.moving = T.path.length > 0; p.walkT = (p.walkT || 0) + rdt * (p.moving ? 1 : 0); p.tx = p.x; p.ty = p.y;
+      if (!T.path.length){ p.dir = {x: Math.sign(s.x + .5 - p.x) * (Math.abs(s.x + .5 - p.x) > .5 ? 1 : 0), y: Math.sign(s.y + .5 - p.y) * (Math.abs(s.y + .5 - p.y) > .5 ? 1 : 0)}; T.sub = 2; T.at = t + 0.45; }
+      return;
+    }
+    if (T.sub === 2 && t >= T.at){   // 누르기 → 됐는지 보기(안 되면 두 번 더, 그래도 안 되면 쥐여 줌)
+      api.pressA();
+      if (D.check()){ T.sub = 0; T.at = t + 0.9; return; }
+      if (++T.tries >= 3){ api.force(T.i); T.sub = 0; T.at = t + 0.9; return; }
+      T.path = null; T.sub = 1; T.goT = t - 1;
+    }
+  }
+  // 연습: 마당(section)마다 할 일. 1학년은 김밥 주문이 없어서 김밥 연습도 빼요
+  function sections(){
+    const L = [{key: 'tteok', label: '🍢 떡볶이', setup: () => api.addOrder('tteokbokki', true), step: tteokStep, done: () => !orderOf('tteokbokki') && !api.quizBusy()}];
+    if (one('sink') && one('ret')) L.push({key: 'wash', label: '🧽 설거지', setup: () => api.hurryPlates(), step: washStep, done: () => !washStep() && !api.platesComing()});   // 2D판은 접시가 끝없이 있어 설거지가 없어요
+    if (api.grade() >= 2) L.push({key: 'kimbap', label: '🍙 김밥', setup: () => api.addOrder('kimbap', false), step: kimbapStep, done: () => !orderOf('kimbap') && !api.quizBusy()});
+    return L;
+  }
+  function startPractice(){
+    api.focus(false); document.body.classList.remove('tutDemo'); document.body.classList.add('tutPractice');
+    T.phase = 'practice'; T.secs = sections(); T.si = -1; T.key = ''; T.keyT = now(); T.cheer = 0;
+    tag.textContent = small() ? '✋ 해 보기' : '✋ 따라 하기 연습';
+    api.setup('practice'); nextSection();
+  }
+  function nextSection(){
+    T.si++; const sec = T.secs[T.si];
+    if (!sec){ T.phase = 'end'; T.at = now() + 2.4; T.cur = null; lit(false); say('kong', small() ? '최고예요! 이제 진짜 장사!' : '최고예요! 연습 끝. 이제 진짜 장사를 해요!', '', 0, 0); api.cheer(); return; }
+    api.tidy(); sec.setup(); T.key = ''; T.cur = null; nextB.style.display = 'none';   // tidy: 도마·냄비·조리대를 비우고 접시는 제자리로(앞 연습의 남은 것이 섞이지 않게)
+    tag.textContent = (small() ? '✋ ' : '✋ 따라 하기 ') + (T.si + 1) + '/' + T.secs.length + ' ' + sec.label;
+  }
+  function practiceTick(){
+    const sec = T.secs[T.si]; if (!sec) return;
+    if (sec.done()){ if (!T.doneAt){ T.doneAt = now(); T.cur = null; lit(false); } if (now() - T.doneAt < 1.2 || api.quizBusy()) return; T.doneAt = 0; api.cheer(); nextSection(); return; }   // 문제 손님 카드가 뜰 틈을 두고, 카드가 닫힌 뒤 다음 연습
+    T.doneAt = 0;
+    const c = sec.step();
+    if (!c){ T.cur = null; return; }
+    if (c.key !== T.key){ if (T.key) api.ding(); T.key = c.key; T.keyT = now(); }
+    const stuck = now() - T.keyT > 45; if ((nextB.style.display !== 'none') !== stuck) nextB.style.display = stuck ? '' : 'none';
+    T.cur = c;
+    const slow = now() - T.keyT > 9;   // 오래 못 찾으면 한 번 더 크게
+    say('sarang', (small() ? c.s : c.t) + (slow && !small() ? ' (반짝이는 곳!)' : ''), small() ? '' : sec.label, T.secs.length, T.si);
+    lit(c.b);
+  }
+  function finish(skipped){
+    if (!T) return;
+    const after = T.after; T = null;
+    setDone(); api.focus(false); lit(false); nextB.style.display = 'none';
+    document.body.classList.remove('tutDemo', 'tutPractice'); ov.classList.add('hide'); bar.classList.add('hide'); lastText = ''; lastWho = '';
+    api.teardown(skipped);
+    if (after) after();
+  }
+  function abort(){   // '처음으로'로 나감: 끝낸 것으로 치지 않음
+    if (!T) return;
+    T = null; api.focus(false); lit(false); nextB.style.display = 'none';
+    document.body.classList.remove('tutDemo', 'tutPractice'); ov.classList.add('hide'); bar.classList.add('hide'); lastText = ''; lastWho = '';
+  }
+  function tick(){
+    if (!T) return;
+    if (T.phase === 'demo') demoTick();
+    else if (T.phase === 'practice') practiceTick();
+    else if (T.phase === 'end' && now() >= T.at) finish(false);
+  }
+  // 화살표·반짝이(게임의 2D 그림판 위에): 짚는 칸 위에서 통통 튀는 화살표 + 바닥 빛 고리
+  function draw(ctx, t){
+    if (!T) return;
+    const tg = T.phase === 'demo' ? (T.sub ? T.tgt : null) : T.cur && T.cur.tgt;
+    const D = T.phase === 'demo' ? DEMO[T.i] : null;
+    const card = D && D.card ? api.cardRect() : null;
+    // 화면을 어둡게 하고 할 곳만 동그랗게 밝게(2026-11-25 선생님 그림처럼) — 흐림 효과 없이 가볍게
+    const tc = tg ? api.toScreen(tg.x + .5, tg.y + .5, 0.8) : null;
+    if (card || tg){
+      const Wd = innerWidth, Hd = innerHeight, p = P(), me = api.toScreen(p.x, p.y, 0.6), RU = Math.max(24, api.unit() * .95) * (small() ? 1.15 : 1);
+      // 한 겹만(낡은 패드: 화면 전체 반투명을 한 번만 칠함). 구멍마다 '그 구멍 바깥'으로 잘라 두고(잘라 낸 곳이 겹쳐 쌓임) 한 번 칠함 → 구멍끼리 겹쳐도 밝게 합쳐짐
+      ctx.save(); ctx.fillStyle = `rgba(0,0,0,${T.phase === 'demo' ? .5 : .58})`;
+      const hole = f => { ctx.beginPath(); ctx.rect(0, 0, Wd, Hd); f(); ctx.clip('evenodd'); };
+      if (card){ const m = 7; hole(() => ctx.rect(card.x - m, card.y - m, card.w + m * 2, card.h + m * 2)); }
+      if (tc) hole(() => { ctx.moveTo(tc.x + RU * 1.6, tc.y); ctx.arc(tc.x, tc.y, RU * 1.6, 0, Math.PI * 2); });
+      hole(() => { ctx.moveTo(me.x + RU * 1.05, me.y); ctx.arc(me.x, me.y, RU * 1.05, 0, Math.PI * 2); });   // 내 요리사도 보이게
+      ctx.fillRect(0, 0, Wd, Hd); ctx.restore(); ctx.save();
+      // 구멍 가장자리: 얇은 금빛 테(흐림 대신 가볍게 '여기!'를 보여 줌)
+      if (tc){ ctx.strokeStyle = 'rgba(255,224,120,.85)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(tc.x, tc.y, RU * 1.6, 0, Math.PI * 2); ctx.stroke(); }
+      ctx.restore();
+    }
+    place(tc ? tc.y + Math.max(24, api.unit()) * 1.6 : (card ? null : null));
+    if (card) arrow(ctx, card.x + card.w / 2, card.y + card.h + 14 + Math.abs(Math.sin(t * 5)) * 10, true, t);
+    if (!tg) return;
+    const g = api.toScreen(tg.x + .5, tg.y + .5, 1.0), top = api.toScreen(tg.x + .5, tg.y + .5, 1.75);
+    const R = Math.max(18, api.unit() * .62) * (small() ? 1.2 : 1);
+    ctx.save();
+    ctx.globalAlpha = .55 + Math.sin(t * 6) * .25; ctx.strokeStyle = '#ffd43b'; ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.ellipse(g.x, g.y, R, R * .55, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 1;
+    for (let i = 0; i < 4; i++){ const a = t * 2.2 + i * Math.PI / 2, sx = g.x + Math.cos(a) * R * 1.15, sy = g.y + Math.sin(a) * R * .65; star(ctx, sx, sy, 6 + Math.sin(t * 8 + i) * 2.5); }
+    ctx.restore();
+    arrow(ctx, top.x, top.y - Math.abs(Math.sin(t * 5)) * 12, false, t, small() ? 1.3 : 1);
+  }
+  function star(ctx, x, y, r){ ctx.fillStyle = '#fff6b0'; ctx.beginPath(); for (let i = 0; i < 8; i++){ const a = i * Math.PI / 4, rr = i % 2 ? r * .38 : r; ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } ctx.closePath(); ctx.fill(); }
+  function arrow(ctx, x, y, up, t, k = 1){   // 끝이 (x, y)를 가리키는 굵은 화살표(up: 위를 가리킴)
+    const s = 26 * k, d = up ? -1 : 1;
+    ctx.save(); ctx.lineJoin = 'round'; ctx.lineWidth = 5; ctx.strokeStyle = '#3a2414'; ctx.fillStyle = '#ff8a3d';
+    ctx.beginPath();
+    ctx.moveTo(x, y); ctx.lineTo(x - s * .8, y - d * s * .9); ctx.lineTo(x - s * .32, y - d * s * .9); ctx.lineTo(x - s * .32, y - d * s * 1.8);
+    ctx.lineTo(x + s * .32, y - d * s * 1.8); ctx.lineTo(x + s * .32, y - d * s * .9); ctx.lineTo(x + s * .8, y - d * s * .9); ctx.closePath();
+    ctx.fill(); ctx.stroke(); ctx.restore();
+  }
+  return {
+    begin, tick, draw, finish, abort, isDone: done, canSkip,
+    section(i){ if (T && T.phase === 'practice'){ api.clearOrders(); T.si = i - 1; nextSection(); } },   // 점검용: 그 연습으로 바로
+    get active(){ return !!T; },
+    get lock(){ return !!T && T.phase === 'demo'; },   // 보여 주는 동안 조이스틱·단추 잠금
+    get state(){ return T && {phase: T.phase, i: T.i, sub: T.sub, sec: T.secs ? T.secs[T.si] && T.secs[T.si].key : null, si: T.si, key: T.cur ? T.cur.key : '', text: lastText, tgt: T.cur && T.cur.tgt ? [T.cur.tgt.type, T.cur.tgt.x, T.cur.tgt.y] : null, skip: skipB.style.display !== 'none'}; }
+  };
+}
+function tutClean(){ running = false; orders = []; holdB = holdBkey = false; reset('peace'); running = false; }
+function tutAddOrder(rid, q){
+  const free = SLOTS.filter(c => !orders.some(o => o.col === c)), col = free.includes(4) ? 4 : free[0] || SLOTS[0];
+  orders.push({id: ++orderSeq, rid, col, t: 0, anim: 0, leaving: false, served: false, out: 0, q: !!q, animal: ANIMALS[(orderSeq * 5 + col) % ANIMALS.length]});
+  sfx('ding');
+}
+tut = createTutorial({
+  player: () => player, stations: () => dynList, orders: () => orders,
+  free: (x, y) => x >= 0 && y >= 0 && x < COLS && y < ROWS && MAP[y][x] === '.',
+  grade: () => grade, name: () => net.name && net.name !== '요리사' ? net.name : '요리사님', face: () => null,
+  setup(ph){
+    if (ph === 'demo'){
+      initAudio(); reset('peace'); buildBg(); running = true; paused = false; toast = null;
+      hide('titleOv'); hide('endOv'); hide('pauseOv'); hide('netOv');
+      document.getElementById('pauseBtn').style.display = '';
+      orders = []; tutAddOrder('jumeokbap', false);
+    } else {
+      orders = []; player.hold = null; toast = null;
+      for (const s of dynList){ if (s.type === 'counter') s.item = null; else if (s.type === 'board'){ s.items = []; s.progress = 0; } else if (s.type === 'stove') resetPot(s.pot); }
+    }
+  },
+  addOrder: tutAddOrder, clearOrders(){ orders = []; },
+  pressA(){ tutPress = true; try { target = findTarget(player); actionA(); } finally { tutPress = false; } },
+  force(i){
+    const h = player.hold;
+    if (i === 1 && !h) player.hold = {t: 'plate', c: []};
+    else if (i >= 2 && i <= 4 && h && h.t === 'plate') h.c.push({t: 'ing', id: ['rice', 'gim', 'tuna'][i - 2], cut: false});
+    else if (i === 5){ const o = orders.find(q => q.rid === 'jumeokbap' && !q.served); if (o){ serveOrder(o, player); player.hold = null; } }
+  },
+  toScreen: (x, y, h) => ({x: ox + x * T, y: oy + y * T - h * T * .45}), unit: () => T, cardRect: () => hudCard0,
+  joyBox: () => ({x1: Math.min(70, W * .07) * 2 + 30}),   // 조이스틱 오른쪽 끝: 말풍선이 가리지 않게
+  focus(){}, platesComing: () => false, hurryPlates(){},
+  quizBusy(){ if (quizPend > 0) return true; try { return !!(window.PLAZA_QUIZ && window.PLAZA_QUIZ.asking && window.PLAZA_QUIZ.asking()); } catch (e){ return false; } },
+  tidy(){ for (const s of dynList){ if (s.type === 'counter') s.item = null; else if (s.type === 'board'){ s.items = []; s.progress = 0; } else if (s.type === 'stove') resetPot(s.pot); } },   // 다음 연습 전에 주방 정리
+  cheer(){ if (net.mode !== 'host') sfx('serve'); burst(player.x, player.y, 'star', 12, '#ffd43b'); },
+  ding(){ if (net.mode !== 'host') sfx('pick'); },
+  pulseB(on){ btnB.classList.toggle('tutPulse', !!on); },
+  teardown(){ tutClean(); }
+});
+window.__dd.tut = tut;
+function tutBtnSync(){ const b = document.getElementById('tutBtn'); if (b) b.style.display = tut.isDone() ? '' : 'none'; }
+document.getElementById('tutBtn').onclick = () => { hide('titleOv'); tut.begin(() => { show('titleOv'); }); };
+tutBtnSync();
 
 reset('peace'); running = false;
 layout();
