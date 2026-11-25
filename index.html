@@ -256,7 +256,7 @@ body.hm-deco #jumpBtn{display:none}
 <button id="homeArrow" class="ui" hidden><span>🏠 나의 집</span><i id="haAr"></i></button>
 <div id="decoBar" class="card ui" hidden><div id="decoItems"></div><div id="decoTools"><button id="dRemove">🗑️ 치우기</button><button id="dDone" class="main">✔ 다 했어요</button></div></div>
 <div id="joy" hidden><div id="knob"></div></div>
-<div id="help" class="card ui" hidden>왼쪽을 끌어서 걷기 · <b>⬆️ 점프</b> · <b>두 손가락 벌리면 확대</b> · 오른쪽 위 <b>👩‍🏫 선생님</b>으로 활동 시작</div><button id="zoomReset" class="card ui" hidden style="position:fixed;left:50%;top:calc(64px + env(safe-area-inset-top));transform:translateX(-50%);padding:9px 16px;border-radius:999px;font-size:15px;font-weight:900;color:#2f8cff;z-index:12">🔍 원래대로</button>
+<div id="help" class="card ui" hidden>왼쪽을 끌어서 걷기 · <b>⬆️ 점프</b> · 오른쪽 위 <b>👩‍🏫 선생님</b>으로 활동 시작</div>
 <div id="measure" class="card ui" hidden></div>
 <div id="card" class="ui" hidden><div id="cTop"></div><div id="cBig"></div><div id="cBody"></div><div class="cBtns" id="cBtns"></div></div>
 <div id="fade"></div>
@@ -856,7 +856,7 @@ window.makeChar3D = function (K, D, opt) {
   // 동물마다 몸 모양이 달라서(새 동물이 매일 옴) 옷을 따로 만들지 않고, 그 동물의 몸 세모에서 옷 자리만 골라 바깥으로 조금 띄운다.
   // 몸과 같은 뼈 가중치를 쓰니 걷기·손 흔들기·앉기에 몸과 똑같이 휘고, 겨드랑이·엉덩이에서 찢어지지 않는다.
   // body = {pos, nrm(Float32 3개씩, 쉬는 자세), j(뼈 번호 4개씩), w(가중치 4개씩), idx(세모), bones:[{name, rest:[x,y,z]}]} — bodyFromPack(캐릭터 묶음)
-  var NCH = 16, CX = 0, CY = 1, CZ = 2, CNX = 3, CNY = 4, CNZ = 5, MT = 6, MN = 7, MH = 8, MA = 9, ML = 10, MF = 11, MO = 12, AT = 13, LT = 14, TL = 15;
+  var NCH = 17, CX = 0, CY = 1, CZ = 2, CNX = 3, CNY = 4, CNZ = 5, MT = 6, MN = 7, MH = 8, MA = 9, ML = 10, MF = 11, MO = 12, AT = 13, LT = 14, TL = 15, MS = 16;   // MS: 팔 가중치를 몸 겉면을 따라 고르게 편 값(소매 끝 자르기)
   function v3(a) { return [a[0], a[1], a[2]]; }
   function sub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
   function dot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
@@ -915,6 +915,19 @@ window.makeChar3D = function (K, D, opt) {
       var sa = m[3] > m[4] ? 0 : m[4] > m[3] ? 1 : p[0] >= 0 ? 0 : 1, sl = (m[5] + m[7]) > (m[6] + m[8]) ? 0 : (m[6] + m[8]) > (m[5] + m[7]) ? 1 : p[0] >= 0 ? 0 : 1;
       C[o + AT] = chainT(p, arm[sa]); C[o + LT] = chainT(p, leg[sl]);
     }
+    // MS: 팔 가중치(MA)를 이웃 꼭짓점과 여러 번 평균(그림 이음매로 갈라진 같은 자리 꼭짓점은 하나로) — 꼭짓점마다 들쭉날쭉한 가중치로 소매 끝을 가르면 톱니가 됐다
+    (function () {
+      var wl = new Int32Array(nv), mp = {}, IX = B.idx, a = new Float32Array(nv), nb = [], q, k2;
+      for (q = 0; q < nv; q++) { var key = Math.round(P[q * 3] * 2e4) + ',' + Math.round(P[q * 3 + 1] * 2e4) + ',' + Math.round(P[q * 3 + 2] * 2e4); if (mp[key] === undefined) mp[key] = q; wl[q] = mp[key]; nb.push(null); }
+      for (q = 0; q < IX.length; q += 3) for (k2 = 0; k2 < 3; k2++) { var u = wl[IX[q + k2]], w = wl[IX[q + (k2 + 1) % 3]]; if (u === w) continue; (nb[u] = nb[u] || []).push(w); (nb[w] = nb[w] || []).push(u); }
+      for (q = 0; q < nv; q++) a[q] = C[q * NCH + MA];
+      for (var it = 0; it < 8; it++) {
+        var b2 = new Float32Array(nv);
+        for (q = 0; q < nv; q++) { if (wl[q] !== q) continue; var L = nb[q], t = a[q]; if (L) { for (k2 = 0; k2 < L.length; k2++) t += a[L[k2]]; t /= L.length + 1; } b2[q] = t; }
+        for (q = 0; q < nv; q++) a[q] = b2[wl[q]];
+      }
+      for (q = 0; q < nv; q++) C[q * NCH + MS] = a[q];
+    })();
     // 꼬리: 몸통 가중치인데 등 가운데에서 뒤로 튀어나온 곳(공룡 꼬리·등 판, 토끼·고양이·펭귄 꼬리는 골반 뼈만 따라감).
     // 높이마다 너비의 40~60% 자리의 등 깊이보다 3cm 넘게 뒤로 나온 가운데 부분. (몸통 너비만 보거나 타원으로 어림하면 곰 엉덩이·등이 꼬리로 잡혀 옷 뒤가 뚫렸다)
     var hw = new Float32Array(120), zm = new Float32Array(120), chY = R('chest', [0, 0.4, 0])[1];
@@ -992,6 +1005,14 @@ window.makeChar3D = function (K, D, opt) {
     var S = this.S; if (!S) return this;
     var B = S.B, P = B.pos, N = B.nrm, J = B.j, W = B.w, IX = B.idx, C = S.ch, nt = IX.length / 3, self = this;
     var keys = {}, rimAcc = [], cuts = g.cuts || [], clips = g.clip || [], off = typeof g.off === 'function' ? g.off : function () { return g.off || 0.008; };
+    // 소매 끝 평면(coverTop의 clips)·접은 단(cuffD < 0.016: 색을 조금 어둡게, 2.5mm 더 띄움)
+    if (g.cover.clips) {
+      clips = clips.concat(g.cover.clips);
+      var cuffD = g.cover.cuffD, off0 = off, paint0 = g.paint, CU = 0.016;
+      cuts = cuts.concat([function (I) { return cuffD(I) - CU; }]);
+      off = function (I) { return off0(I) + (cuffD(I) < CU ? 0.0025 : 0); };
+      g = Object.assign({}, g, { paint: function (I) { var c = paint0 ? paint0(I) : [0.8, 0.8, 0.8]; return cuffD(I) < CU ? dk(c, 0.88) : c; } });
+    }
     var fv = new Float32Array(S.nv), I0 = function (v) { return C.subarray(v * NCH, v * NCH + NCH); }, WJ = new Int32Array(12), WW = new Float64Array(12);
     for (var v = 0; v < S.nv; v++) fv[v] = g.cover(I0(v));
     function emitVert(tri, a, b, c, p, col, rim, I) {
@@ -1162,8 +1183,79 @@ window.makeChar3D = function (K, D, opt) {
         return f1 + Math.min(0.03, (ch - y) * 0.2);
       },
       // 손: 오른손 손목(hand_r)에서 손끝 쪽(hand_r_dir)으로 조금 간 곳 = 손에 쥐는 자리
-      hand: (function () { var h = A.hand_r || [-0.3, 0.32, 0.0], d = A.hand_r_dir || [-0.8, -0.6, 0]; return [h[0] + d[0] * 0.045, h[1] + d[1] * 0.045, h[2] + d[2] * 0.045 + 0.02]; })()
+      hand: (function () { var h = A.hand_r || [-0.3, 0.32, 0.0], d = A.hand_r_dir || [-0.8, -0.6, 0]; return [h[0] + d[0] * 0.045, h[1] + d[1] * 0.045, h[2] + d[2] * 0.045 + 0.02]; })(),
+      H: headModel(A, r, top, cz)
     };
+  }
+  // ---- 머리 모양(2026-11-25): head_measure.mjs가 잰 머리 타원체(hfit)·방향마다 겉면 거리(hprof)·귀(ears) ----
+  // 선생님: "헤드폰·털 귀마개가 귀를 뚫고 지나가, 땀 머리띠는 앞에서 끊어져 있어" — 머리를 공 하나로만 보던 것을 실제 머리 겉면과 귀로.
+  // 잰 값이 없는 옛 묶음은 공(예전과 같음)
+  var HE = 13, HA = 24;
+  function headModel(A, r, top, cz) {
+    var f = A.hfit || [A.head_y || top - r, cz, r, Math.max(0.12, top - (A.head_y || top - r)), r], pr = A.hprof && A.hprof.length === HE * HA ? A.hprof : null;
+    var H = { c: [0, f[0], f[1]], rx: f[2], ry: f[3], rz: f[4], measured: !!pr, ears: [] };
+    // 방향 d(단위)로 가운데에서 겉면까지 거리
+    H.R = function (d) {
+      if (!pr) return 1 / Math.hypot(d[0] / H.rx, d[1] / H.ry, d[2] / H.rz);
+      var el = Math.asin(Math.max(-1, Math.min(1, d[1]))) * 180 / Math.PI, az = Math.atan2(d[2], d[0]) * 180 / Math.PI;
+      if (az < 0) az += 360;
+      var fi = Math.max(0, Math.min(HE - 1.0001, (el + 40) / 10)), i0 = Math.floor(fi), ti = fi - i0, fj = az / 15, j0 = Math.floor(fj) % HA, j1 = (j0 + 1) % HA, tj = fj - Math.floor(fj);
+      var a = pr[i0 * HA + j0] * (1 - tj) + pr[i0 * HA + j1] * tj, b = pr[(i0 + 1) * HA + j0] * (1 - tj) + pr[(i0 + 1) * HA + j1] * tj;
+      return a * (1 - ti) + b * ti;
+    };
+    // 높이각 el·둘레 az(라디안: 0 = 오른쪽 +x, π/2 = 앞)에서 겉면 + off
+    H.dir = function (el, az) { return [Math.cos(el) * Math.cos(az), Math.sin(el), Math.cos(el) * Math.sin(az)]; };
+    H.at = function (el, az, off) { var d = H.dir(el, az), R = H.R(d) + (off || 0); return [H.c[0] + d[0] * R, H.c[1] + d[1] * R, H.c[2] + d[2] * R]; };
+    // 겉면 바깥 방향(이웃 점으로 잰 면 방향)
+    H.nrm = function (el, az) {
+      if (Math.cos(el) < 1e-4) return H.dir(el, az);   // 머리 꼭대기 극점: 둘레 방향 차이가 0이라 바로 위 방향
+      var e = 0.03, p0 = H.at(el - e, az), p1 = H.at(el + e, az), q0 = H.at(el, az - e), q1 = H.at(el, az + e);
+      var n = nrm3(crs3(sub3(q1, q0), sub3(p1, p0))), d = H.dir(el, az);
+      return dot3(n, d) < 0 ? [-n[0], -n[1], -n[2]] : n;
+    };
+    (A.ears || []).forEach(function (E) {
+      var ax = nrm3(sub3(E.t, E.b)), e1 = nrm3(E.e1), e2 = crs3(ax, e1), L = Math.hypot(E.t[0] - E.b[0], E.t[1] - E.b[1], E.t[2] - E.b[2]);
+      H.ears.push({ b: E.b, t: E.t, ax: ax, e1: e1, e2: e2, L: L, s: E.s.map(function (q) { return { t: q[0], c: [q[1], q[2], q[3]], a: Math.max(0.008, q[4]), b: Math.max(0.008, q[5]), pg: q[6] && q[6].length === 48 ? q[6] : null }; }) });
+    });
+    // 점 p에서 가장 가까운 귀 겉면까지 어림 거리(음수 = 귀 속). 마디마다 납작한 타원체로 봄
+    H.earDist = function (p) {
+      var best = 1;
+      H.ears.forEach(function (E) {
+        var hl = E.L * 1.12 / Math.max(1, E.s.length - 1) * 0.75;
+        E.s.forEach(function (S) {
+          var d = sub3(p, S.c), x = dot3(d, E.e1) / S.a, y = dot3(d, E.e2) / S.b, z = dot3(d, E.ax) / hl, q = Math.hypot(x, y, z);
+          var dd = (q - 1) * Math.min(S.a, S.b, hl);
+          if (dd < best) best = dd;
+        });
+      });
+      return best;
+    };
+    return H;
+  }
+  // 머리 겉면을 따라 가는 띠(헤드폰 머리띠·땀 머리띠): path(u) → [el, az] (u 0..1), w 너비, th 두께, gap 띄우기, col(u, v) 또는 색
+  // 단면은 둥근 네모(v 0..1이 한 바퀴). closed: 고리
+  function strap(m, H, path, w, th, gap, col, o) {
+    o = o || {}; var nu = o.nu || 48, e = 1e-3;
+    // 겉면 거리를 길 따라 고르게(잰 값의 작은 들쭉날쭉 → 띠가 물결치지 않게): 이웃 중 큰 값 → 평균
+    var NR = 96, RR = [], RS = [];
+    for (var k0 = 0; k0 <= NR; k0++) { var q0 = path(k0 / NR); RR.push(H.R(H.dir(q0[0], q0[1]))); }
+    for (k0 = 0; k0 <= NR; k0++) { var a = 0, c = 0; for (var d0 = -4; d0 <= 4; d0++) { var kk = k0 + d0; if (o.closed) kk = (kk + NR) % NR; else if (kk < 0 || kk > NR) continue; var mx = 0; for (var d1 = -2; d1 <= 2; d1++) { var k2 = kk + d1; if (o.closed) k2 = (k2 + NR) % NR; else k2 = Math.max(0, Math.min(NR, k2)); mx = Math.max(mx, RR[k2]); } a += mx; c++; } RS.push(a / c); }
+    function base(u) {
+      var q = path(u), x = u * NR, i = Math.min(NR - 1, Math.floor(x)), f = x - i, R = RS[i] + (RS[i + 1] - RS[i]) * f, d = H.dir(q[0], q[1]), r = R + gap + th / 2;
+      return { p: [H.c[0] + d[0] * r, H.c[1] + d[1] * r, H.c[2] + d[2] * r], n: H.nrm(q[0], q[1]) };
+    }
+    function frameAt(u) {
+      var b = base(u), a0 = base(o.closed ? (u - e + 1) % 1 : Math.max(0, u - e)), a1 = base(o.closed ? (u + e) % 1 : Math.min(1, u + e));
+      var tg = nrm3(sub3(a1.p, a0.p)), n = nrm3(sub3(b.n, [tg[0] * dot3(b.n, tg), tg[1] * dot3(b.n, tg), tg[2] * dot3(b.n, tg)])), bn = crs3(tg, n);
+      return [b.p, n, bn];
+    }
+    var cache = [];
+    for (var k = 0; k <= nu; k++) cache.push(frameAt(k / nu));
+    return m.surf(function (u, v) {
+      var k = Math.round(u * nu), F = cache[o.closed && k === nu ? 0 : k], a = v * TAU, c = Math.cos(a), s = Math.sin(a);
+      var px = (c < 0 ? -1 : 1) * Math.pow(Math.abs(c), 0.45) * w / 2, py = (s < 0 ? -1 : 1) * Math.pow(Math.abs(s), 0.6) * th / 2;
+      return [F[0][0] + F[2][0] * px + F[1][0] * py, F[0][1] + F[2][1] * px + F[1][1] * py, F[0][2] + F[2][2] * px + F[1][2] * py];
+    }, nu, o.nv || 12, col, function (P, u) { var k = Math.round(u * nu), F = cache[o.closed && k === nu ? 0 : k]; return F[0]; });
   }
   var C = {
     red: hex(0xe8464e), red2: hex(0xc7333c), white: hex(0xfaf7f2), straw: hex(0xf3d37b), straw2: hex(0xe2bb5a), pink: hex(0xff79b4), pink2: hex(0xff4f9a),
@@ -1176,15 +1268,28 @@ window.makeChar3D = function (K, D, opt) {
   function coverTop(S, o) {
     o = o || {};
     var hem = S.hipY + (o.hem === undefined ? 0.014 : o.hem), nk = S.neckY - (o.neck === undefined ? 0.012 : o.neck), sl = o.sleeve || 0, seg = S.armSeg;
-    return function (I) {
+    // 소매 끝(2026-11-25 선생님: "반팔 소매가 누더기처럼 지그재그") — 팔 마디 값(AT)은 세모 안에서 곧게 섞이지 않아 0 자리가 들쭉날쭉했다 →
+    // 소매는 조금 넉넉히 덮고(cover), 끝은 그 자리 팔 뼈에 수직인 평면으로 곧게 자른다(clips). 끝 1.6cm는 접어 올린 단(cuff: 조금 어둡고 도톰하게)
+    var sp = [0, 1].map(function (s) {
+      var ch = S.arm[s], k = Math.min(2, Math.floor(sl)), f = sl - k, a = ch[k], b = ch[k + 1], d = nrmz(sub(b, a));
+      return { p: [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f], d: d };
+    });
+    function sideD(I, s) { var q = sp[s]; return (q.p[0] - I[CX]) * q.d[0] + (q.p[1] - I[CY]) * q.d[1] + (q.p[2] - I[CZ]) * q.d[2]; }   // 어깨 쪽이 +
+    function armK(I) { return (1 - sstep(0.04, 0.18, I[MS])) * 0.3; }   // 몸통(고르게 편 팔 가중치가 작음)은 자르지 않게 크게
+    var cf = function (I) {
       var y = I[CY], ax = Math.abs(I[CX]), neckY = nk + Math.max(0, ax - 0.12) * 1.2;
       if (o.v && I[CNZ] > 0) neckY -= Math.max(0, o.v - ax * (o.vk || 2.4)) * sstep(0.05, 0.4, I[CNZ]);
-      var fT = Math.min(y - hem, neckY - y), fA = sl > 0 ? (sl - I[AT]) * seg : -0.03, wa = sstep(0.3, 0.7, I[MA]);
+      var fT = Math.min(y - hem, neckY - y), fA = sl > 0 ? (sl + 0.3 - I[AT]) * seg : -0.03, wa = sstep(0.3, 0.7, I[MA]);
       // 머리: 머리 뼈 가중치는 목 둘레에서 들쭉날쭉해서(목둘레가 톱니처럼 보임) 머리를 공으로 보고 그 밖만
       var hd = Math.hypot(I[CX] - S.H.c[0], I[CY] - S.H.c[1], I[CZ] - S.H.c[2]) - S.H.r * (o.hr || 0.92);
       // 다리 가중치로 빼면 허벅지 앞이 빠져 밑단이 V자로 가랑이까지 내려갔다 → 밑단 높이로만 자른다(발만 뺌)
       return Math.min(fT * (1 - wa) + fA * wa, hd, (0.85 - I[MH]) * 0.15, (0.5 - I[MF]) * 0.15, I[TL]);
     };
+    if (sl > 0) {
+      cf.clips = [0, 1].map(function (s) { return function (I) { return ((s ? I[CX] < 0 : I[CX] >= 0) ? sideD(I, s) : 0.3) + armK(I); }; });
+      cf.cuffD = function (I) { var s = I[CX] >= 0 ? 0 : 1; return sideD(I, s) + armK(I); };
+    }
+    return cf;
   }
   // 바지: leg 바지 끝(다리 마디 0 엉덩이 · 1 무릎 · 2 발목), waist 허리 높이 더하기
   function coverPants(S, o) {
@@ -1260,14 +1365,14 @@ window.makeChar3D = function (K, D, opt) {
   function mix(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; }
   function dk(c, k) { return [c[0] * k, c[1] * k, c[2] * k]; }
   var ITEMS = {
-    cap_red: { slot: 'head', name: '빨간 야구 모자', emoji: '🧢', rarity: 1, bone: 'head', make: function (m, D) {
+    cap_red: { slot: 'head', name: '빨간 야구 모자', emoji: '🧢', rarity: 1, bone: 'head', holes: true, make: function (m, D) {
       var y0 = D.top - D.r * 0.5;
       m.ell(D.r * 0.96, D.r * 0.64, D.r * 0.98, C.red, X([0, y0, D.cz - 0.01]), { v1: Math.PI / 2 });
       m.ell(D.r * 0.64, 0.014, D.r * 0.52, C.red2, X([0, y0 + 0.012, D.cz + D.r * 0.9], [0.12, 0, 0]));   // 챙
       m.ell(0.02, 0.016, 0.02, C.white, X([0, y0 + D.r * 0.64, D.cz - 0.01]));                             // 꼭지 단추
       m.ring(D.r * 0.965, D.r * 0.985, 0.012, C.white, X([0, y0 + 0.004, D.cz - 0.01]));                    // 흰 띠
     } },
-    straw_hat: { slot: 'head', name: '밀짚모자', emoji: '👒', rarity: 1, bone: 'head', make: function (m, D) {
+    straw_hat: { slot: 'head', name: '밀짚모자', emoji: '👒', rarity: 1, bone: 'head', holes: true, make: function (m, D) {
       var y0 = D.top - D.r * 0.42, weave = function (u, v, P) { var k = 0.93 + 0.07 * Math.sin(P[0] * 160) * Math.sin(P[2] * 160); return [C.straw[0] * k, C.straw[1] * k, C.straw[2] * k]; };
       m.ell(D.r * 1.6, 0.016, D.r * 1.6, weave, X([0, y0, D.cz]), { nu: 28, nv: 10 });
       m.frus(D.r * 0.8, D.r * 0.72, D.r * 0.42, weave, X([0, y0, D.cz]), { cap: false });
@@ -1283,19 +1388,23 @@ window.makeChar3D = function (K, D, opt) {
       m.ell(D.r * 0.12, D.r * 0.26, D.r * 0.06, C.pink2, X([c[0] - D.r * 0.08, c[1] - D.r * 0.24, c[2] + 0.005], [0.25, 0, tilt + 0.25]));   // 늘어진 끈
     } },
     flower_crown: { slot: 'head', name: '꽃 화관', emoji: '🌸', rarity: 2, bone: 'head', make: function (m, D) {
-      var y0 = D.top - D.r * 0.42, R1 = D.r * 0.86, R2 = D.r * 0.9, tilt = -0.15, T = X([0, y0, D.cz], [tilt, 0, 0]);
-      m.ring(R1, R2, 0.016, C.green, T);
+      // 2026-11-25: 머리 겉면을 따라 도는 넝쿨(귀를 피해 뒤가 내려감), 꽃은 앞쪽 — 귀에 닿는 자리 꽃은 뺌
+      var H = D.H, y0 = D.top - D.r * 0.27, Rf = H.R([0, 0, 1]), elf = Math.asin(Math.max(-0.9, Math.min(0.95, (y0 - H.c[1]) / Rf)));
+      var path = aroundPath(D, elf, 0.016, 0.014, [0.15, 0.3, 0, 0.45, 0.6, 0.75]);
+      strap(m, H, path, 0.03, 0.026, 0.006, C.green, { closed: true, nu: 64, nv: 10 });
       var cols = [C.pink, C.white, C.yellow, C.pink, C.white, C.yellow, C.pink];
       for (var k = 0; k < 7; k++) {
-        var a = Math.PI / 2 + (k - 3) * 0.48, p = T([R1 * Math.cos(a), 0.01, R2 * Math.sin(a)]);
+        var u = ((k - 3) * 0.48 / TAU + 1) % 1, ea = path(u), p = H.at(ea[0], ea[1], 0.026), n = H.nrm(ea[0], ea[1]);
+        if (H.earDist(p) < 0.03) continue;
+        var e1 = nrm3(crs3(n, Math.abs(n[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0])), e2 = crs3(n, e1);
         for (var q = 0; q < 5; q++) {
-          var b = q / 5 * TAU;
-          m.ell(0.022, 0.012, 0.022, cols[k], X([p[0] + Math.cos(b) * 0.022, p[1] + 0.006, p[2] + Math.sin(b) * 0.022]), { nu: 8, nv: 5 });
+          var b = q / 5 * TAU, c = [p[0] + (e1[0] * Math.cos(b) + e2[0] * Math.sin(b)) * 0.022, p[1] + (e1[1] * Math.cos(b) + e2[1] * Math.sin(b)) * 0.022, p[2] + (e1[2] * Math.cos(b) + e2[2] * Math.sin(b)) * 0.022];
+          m.ell(0.022, 0.022, 0.012, cols[k], (function (c, n) { var a1 = nrm3(crs3(n, [0, 1, 0.001])), a2 = crs3(n, a1); return function (v) { return [c[0] + a1[0] * v[0] + a2[0] * v[1] + n[0] * v[2], c[1] + a1[1] * v[0] + a2[1] * v[1] + n[1] * v[2], c[2] + a1[2] * v[0] + a2[2] * v[1] + n[2] * v[2]]; }; })(c, n), { nu: 8, nv: 5 });
         }
-        m.ell(0.014, 0.014, 0.014, k % 3 === 2 ? C.flame : C.yellow, X([p[0], p[1] + 0.014, p[2]]), { nu: 8, nv: 5 });
+        m.ell(0.014, 0.014, 0.014, k % 3 === 2 ? C.flame : C.yellow, X([p[0] + n[0] * 0.01, p[1] + n[1] * 0.01, p[2] + n[2] * 0.01]), { nu: 8, nv: 5 });
       }
     } },
-    wizard_hat: { slot: 'head', name: '마법사 모자', emoji: '🧙', rarity: 2, bone: 'head', make: function (m, D) {
+    wizard_hat: { slot: 'head', name: '마법사 모자', emoji: '🧙', rarity: 2, bone: 'head', holes: true, make: function (m, D) {
       var y0 = D.top - D.r * 0.4;
       m.ell(D.r * 1.32, 0.016, D.r * 1.32, C.purple, X([0, y0, D.cz]), { nu: 28 });
       m.frus(D.r * 0.82, D.r * 0.46, D.r * 1.0, C.purple, X([0, y0, D.cz]), { cap: false });
@@ -1414,25 +1523,25 @@ window.makeChar3D = function (K, D, opt) {
 
     // ======== 2026-11-18 더한 24가지 (모두 40가지) ========
     // ---- 머리 ----
-    party_hat: { slot: 'head', name: '파티 고깔모자', emoji: '🥳', rarity: 1, bone: 'head', make: function (m, D) {
+    party_hat: { slot: 'head', name: '파티 고깔모자', emoji: '🥳', rarity: 1, bone: 'head', holes: true, make: function (m, D) {
       var p = [D.r * 0.12, D.top - D.r * 0.14, D.cz], h = D.r * 1.1, st = function (u, v, P) { var k = Math.floor((v * 5 + u * 2) % 3); return [hex(0xff6fa8), hex(0xffd84f), hex(0x5fb8ff)][k]; };
       m.frus(D.r * 0.42, 0.012, h, st, X(p, [0, 0, -0.2]), { nu: 18, nv: 8 });
       m.ell(0.035, 0.035, 0.035, C.white, X([p[0] + Math.sin(0.2) * h, p[1] + Math.cos(0.2) * h, p[2]]), { nu: 10, nv: 6 });
       m.ring(D.r * 0.42, D.r * 0.42, 0.012, C.yellow, X(p, [0, 0, -0.2]));
     } },
-    beanie: { slot: 'head', name: '털모자', emoji: '🧶', rarity: 1, bone: 'head', make: function (m, D) {
+    beanie: { slot: 'head', name: '털모자', emoji: '🧶', rarity: 1, bone: 'head', holes: true, make: function (m, D) {
       var y0 = D.top - D.r * 0.52, rib = function (u, v, P) { var k = 0.9 + 0.1 * Math.sin(u * 2 * Math.PI * 22); return [0.95 * k, 0.45 * k, 0.32 * k]; };
       m.ell(D.r * 1.0, D.r * 0.72, D.r * 1.0, rib, X([0, y0, D.cz]), { v1: Math.PI / 2, nu: 24 });
       m.frus(D.r * 1.03, D.r * 1.02, D.r * 0.24, hex(0xc94f3a), X([0, y0 - D.r * 0.06, D.cz]), { cap: false, nu: 24 });
       m.ell(D.r * 0.24, D.r * 0.24, D.r * 0.24, hex(0xfff3e0), X([0, y0 + D.r * 0.78, D.cz]), { nu: 12, nv: 8 });
     } },
-    hard_hat: { slot: 'head', name: '노란 안전모', emoji: '⛑️', rarity: 1, bone: 'head', make: function (m, D) {
+    hard_hat: { slot: 'head', name: '노란 안전모', emoji: '⛑️', rarity: 1, bone: 'head', holes: true, make: function (m, D) {
       var y0 = D.top - D.r * 0.5, Y = hex(0xffcf2e);
       m.ell(D.r * 0.98, D.r * 0.68, D.r * 1.0, Y, X([0, y0, D.cz]), { v1: Math.PI / 2, nu: 22 });
       m.ell(D.r * 1.18, 0.016, D.r * 1.3, hex(0xf2b705), X([0, y0, D.cz + D.r * 0.12]), { nu: 24 });
       m.box(D.r * 0.12, D.r * 0.1, D.r * 0.9, 0.5, hex(0xf2b705), X([0, y0 + D.r * 0.62, D.cz]));
     } },
-    pirate_hat: { slot: 'head', name: '해적 모자', emoji: '🏴‍☠️', rarity: 2, bone: 'head', make: function (m, D) {
+    pirate_hat: { slot: 'head', name: '해적 모자', emoji: '🏴‍☠️', rarity: 2, bone: 'head', holes: true, make: function (m, D) {
       var y0 = D.top - D.r * 0.42, B = hex(0x2a2530);
       m.ell(D.r * 0.86, D.r * 0.5, D.r * 0.82, B, X([0, y0, D.cz]), { v1: Math.PI / 2 });
       m.ell(D.r * 1.45, D.r * 0.6, 0.05, B, X([0, y0 + D.r * 0.22, D.cz + 0.01]), { nu: 26, nv: 10, v1: Math.PI / 2 });
@@ -1440,13 +1549,15 @@ window.makeChar3D = function (K, D, opt) {
       m.ell(0.035, 0.032, 0.012, C.white, X([0, y0 + D.r * 0.45, D.cz + 0.065]), { nu: 10, nv: 6 });                    // 해골
       m.ell(0.009, 0.009, 0.005, B, X([-0.012, y0 + D.r * 0.46, D.cz + 0.076]), { nu: 6, nv: 4 }); m.ell(0.009, 0.009, 0.005, B, X([0.012, y0 + D.r * 0.46, D.cz + 0.076]), { nu: 6, nv: 4 });
     } },
-    santa_hat: { slot: 'head', name: '산타 모자', emoji: '🎅', rarity: 2, bone: 'head', make: function (m, D) {
-      var y0 = D.top - D.r * 0.45;
-      m.frus(D.r * 0.92, D.r * 0.45, D.r * 0.62, C.red, X([0, y0, D.cz]), { cap: false });
-      m.frus(D.r * 0.45, 0.02, D.r * 0.75, C.red, X([0, y0 + D.r * 0.6, D.cz], [-0.5, 0, 0.55]), { cap: false });
-      var tip = X([0, y0 + D.r * 0.6, D.cz], [-0.5, 0, 0.55])([0, D.r * 0.75, 0]);
-      m.ell(0.04, 0.04, 0.04, C.white, X(tip), { nu: 10, nv: 6 });
-      m.ring(D.r * 0.94, D.r * 0.94, 0.035, C.white, X([0, y0 + 0.01, D.cz]), { nu: 30, nv: 8 });
+    santa_hat: { slot: 'head', name: '산타 모자', emoji: '🎅', rarity: 2, bone: 'head', holes: hex(0xfaf7f2), make: function (m, D) {
+      // 2026-11-25 선생님: "산타 모자 오류" — 원뿔 두 개를 꺾어 붙여 고깔이 딴 조각처럼 꺾여 보였다 → 한 줄기로 부드럽게 휘어 늘어진 고깔
+      var y0 = D.top - D.r * 0.45, b = [0, y0, D.cz], R0 = D.r * 0.92;
+      var P1 = [0, y0 + D.r * 1.05, D.cz - D.r * 0.05], P2 = [D.r * 0.62, y0 + D.r * 0.78, D.cz - D.r * 0.32];
+      var cv = function (t) { var a = (1 - t) * (1 - t), bb = 2 * t * (1 - t), c = t * t; return [a * b[0] + bb * P1[0] + c * P2[0], a * b[1] + bb * P1[1] + c * P2[1], a * b[2] + bb * P1[2] + c * P2[2]]; };
+      m.tube(cv, function (t) { return 0.022 + (R0 - 0.022) * Math.pow(1 - t, 1.25); }, C.red, { nu: 24, nv: 26, up: [0, 0, 1] });
+      var tip = cv(1);
+      m.ell(0.042, 0.042, 0.042, C.white, X(tip), { nu: 12, nv: 8 });
+      m.ring(D.r * 0.94, D.r * 0.94, 0.038, C.white, X([0, y0 + 0.012, D.cz]), { nu: 34, nv: 10 });
     } },
     sprout: { slot: 'head', name: '새싹', emoji: '🌱', rarity: 1, bone: 'head', make: function (m, D) {
       var b = [D.r * 0.04, D.top - 0.01, D.cz + D.r * 0.15], t = [b[0], b[1] + D.r * 0.42, b[2]];
@@ -1559,7 +1670,7 @@ window.makeChar3D = function (K, D, opt) {
       m.surf(function (u, v) { var c = star(u); return [top[0] + c[0] * v, top[1] + c[1] * v + 0.03, top[2]]; }, 40, 2, Y, [top[0], top[1] + 0.03, top[2] - 0.05]);
       m.surf(function (u, v) { var c = star(u); return [top[0] + c[0] * v, top[1] + c[1] * v + 0.03, top[2] - 0.012]; }, 40, 2, Y, [top[0], top[1] + 0.03, top[2] + 0.05]);
     } },
-    balloon: { slot: 'hand', name: '풍선', emoji: '🎈', rarity: 1, bone: 'hand_R', make: function (m, D) {
+    balloon: { slot: 'hand', name: '풍선', emoji: '🎈', rarity: 1, bone: 'hand_R', hs: 1.1, make: function (m, D) {
       var h = D.hand, b = [h[0] - 0.05, D.top + 0.2, h[2] - 0.05];
       m.seg([h[0], h[1], h[2]], [b[0], b[1] - 0.12, b[2]], 0.003, hex(0xf4f4f4), { nu: 4 });
       m.ell(0.1, 0.12, 0.1, hex(0xff4f6e), X(b), { nu: 18, nv: 12 });
@@ -1600,6 +1711,171 @@ window.makeChar3D = function (K, D, opt) {
     m.loop(function (t) { var a = Math.PI * (0.06 + 0.88 * t); return [Math.cos(a) * Rx, Math.sin(a) * Ry]; }, rad, col, X([0, D.hy, z]), { nu: 34, nv: 7, open: true });
     return { x: Rx, z: z };
   }
+  // ---- 머리 감싸기(2026-11-25): 모자 꼭짓점이 머리 겉면 안에 있으면 바깥으로 민다 ----
+  // 머리 모양이 동물마다 달라(고양이는 이마가 넓고 높다) 공 모양에 맞춘 모자 앞으로 이마가 뚫고 나왔다 → 머리 가운데에서 그 방향 겉면 + gap 밖으로
+  // 꼭짓점마다 따로(또는 방향 칸마다) 밀면 모자 몸통·띠·챙의 꼭짓점 간격이 달라 겹친 띠가 들쭉날쭉 깜빡였다 →
+  // 모자 전체를 머리 가운데 기준으로 같은 비율로 키운다. 방향 칸마다 '모자의 가장 바깥 겹'이 머리 겉보다 안이면 머리가 보이는 곳(테두리 끝 칸은 빼려고 위쪽 칸·가운데값)
+  function wrapHead(m, D, v0, gap) {
+    var H = D.H, P = m.p, n = P.length / 3, g = gap || 0.006, NE = 26, NA = 36, mxL = new Float32Array(NE * NA), cnt = new Int32Array(NE * NA);
+    if (!H.measured) return 1;
+    for (var v = v0; v < n; v++) {
+      var d = [P[v * 3] - H.c[0], P[v * 3 + 1] - H.c[1], P[v * 3 + 2] - H.c[2]], L = Math.hypot(d[0], d[1], d[2]);
+      if (L < 1e-6) continue;
+      var el = Math.asin(Math.max(-1, Math.min(1, d[1] / L))) * 180 / Math.PI, az = Math.atan2(d[2], d[0]) * 180 / Math.PI; if (az < 0) az += 360;
+      var k = Math.max(0, Math.min(NE - 1, Math.round((el + 60) / 6))) * NA + Math.round(az / 10) % NA;
+      if (L > mxL[k]) mxL[k] = L; cnt[k]++;
+    }
+    var ks = [];
+    for (var i = 0; i < NE; i++) for (var j = 0; j < NA; j++) {
+      var q = i * NA + j; if (cnt[q] < 2) continue;
+      var e2 = (-60 + i * 6) * Math.PI / 180, a2 = j * 10 * Math.PI / 180, u = H.dir(e2, a2);
+      if (e2 < 0.5) continue;   // 높이각 29° 아래는 모자 끝(테두리) 칸이 섞여서 안 봄
+      var Rs = H.R(u); if (H.earDist([H.c[0] + u[0] * Rs, H.c[1] + u[1] * Rs, H.c[2] + u[2] * Rs]) < 0.03) continue;
+      // 이웃 칸까지 보고 가장 바깥 겹(칸 경계에 걸린 꼭짓점)
+      var best = 0; for (var a = -1; a <= 1; a++) for (var c = -1; c <= 1; c++) { var ii = i + a; if (ii < 0 || ii >= NE) continue; best = Math.max(best, mxL[ii * NA + (j + c + NA) % NA]); }
+      var R = Math.min(Rs, 1.08 / Math.hypot(u[0] / H.rx, u[1] / H.ry, u[2] / H.rz)) + g;
+      if (best < R) ks.push(R / best);
+    }
+    if (!ks.length) return 1;
+    ks.sort(function (x, y) { return x - y; });
+    var kk = Math.min(1.15, ks[Math.floor(ks.length * 0.8)]);
+    if (kk <= 1.0005) return 1;
+    for (v = v0; v < n; v++) for (c = 0; c < 3; c++) P[v * 3 + c] = H.c[c] + (P[v * 3 + c] - H.c[c]) * kk;
+    return kk;
+  }
+  // ---- 귀 구멍 테두리(2026-11-25): 모자를 뚫고 나온 귀 둘레에 고리를 둘러 '귀 구멍을 낸 모자'처럼 ----
+  // 귀 가운데 줄(마디 가운데를 이은 선)과 둘레 4줄이 모자 세모를 지나는 마지막 자리(귀 끝 쪽)에, 그 자리 귀 단면보다 조금 큰 타원 고리.
+  // 고리 면은 귀 방향과 모자 면 방향의 가운데로 눕혀 모자 겉에 붙게. col: 고리 색(없으면 맞은 자리 모자 색을 조금 어둡게)
+  function earHoles(m, D, i0, col) {
+    var H = D.H, P = m.p, I = m.i, holes = 0;
+    if (!H.ears.length) return 0;
+    var cand = null, cbb = null;   // 이 귀 둘레 상자에 걸친 모자 세모만(낡은 패드에서 모자 하나에 1초 넘게 걸리지 않게)
+    function hit(a, b) {   // 선분 a→b가 모자 세모와 만나는 곳들 [t, 세모 첫 꼭짓점, 면 방향]
+      var d = sub3(b, a), out = [], s0 = Math.min(a[0], b[0]), s1 = Math.max(a[0], b[0]), t0 = Math.min(a[1], b[1]), t1 = Math.max(a[1], b[1]), u0 = Math.min(a[2], b[2]), u1 = Math.max(a[2], b[2]);
+      for (var qi = 0; qi < cand.length; qi++) { var q = cand[qi], bb = qi * 6;
+        if (cbb[bb] > s1 || cbb[bb + 1] < s0 || cbb[bb + 2] > t1 || cbb[bb + 3] < t0 || cbb[bb + 4] > u1 || cbb[bb + 5] < u0) continue;
+        var A = I[q] * 3, B = I[q + 1] * 3, Cc = I[q + 2] * 3, e1 = [P[B] - P[A], P[B + 1] - P[A + 1], P[B + 2] - P[A + 2]], e2 = [P[Cc] - P[A], P[Cc + 1] - P[A + 1], P[Cc + 2] - P[A + 2]];
+        var h = crs3(d, e2), det = dot3(e1, h); if (Math.abs(det) < 1e-12) continue;
+        var f = 1 / det, sv = [a[0] - P[A], a[1] - P[A + 1], a[2] - P[A + 2]], u = f * dot3(sv, h); if (u < 0 || u > 1) continue;
+        var qv = crs3(sv, e1), v = f * dot3(d, qv); if (v < 0 || u + v > 1) continue;
+        var t = f * dot3(e2, qv); if (t < 0 || t > 1) continue;
+        out.push([t, I[q], nrm3(crs3(e1, e2))]);
+      }
+      return out;
+    }
+    H.ears.forEach(function (E) {
+      var S = E.s.slice().sort(function (x, y) { return x.t - y.t; }).filter(function (q) { return q.pg; });
+      if (S.length < 2) return;
+      var lo = [9, 9, 9], hi = [-9, -9, -9];
+      S.forEach(function (q) { for (var j = 0; j < 48; j++) { var c3 = j % 3; if (q.pg[j] < lo[c3]) lo[c3] = q.pg[j]; if (q.pg[j] > hi[c3]) hi[c3] = q.pg[j]; } });
+      cand = []; var bbs = [];
+      for (var q0 = i0; q0 < I.length; q0 += 3) {
+        var ok = true, tb = [];
+        for (var c4 = 0; c4 < 3 && ok; c4++) { var a0 = P[I[q0] * 3 + c4], a1 = P[I[q0 + 1] * 3 + c4], a2 = P[I[q0 + 2] * 3 + c4], mn = Math.min(a0, a1, a2), mx = Math.max(a0, a1, a2); if (mx < lo[c4] - 0.002 || mn > hi[c4] + 0.002) ok = false; tb.push(mn - 1e-4, mx + 1e-4); }
+        if (ok) { cand.push(q0); bbs.push.apply(bbs, tb); }
+      }
+      cbb = new Float32Array(bbs);
+      // 귀 겉면 '세로줄' 16개(단면마다 같은 번호의 점을 이은 선)가 모자 세모를 지나는 마지막 자리(귀 끝 쪽) = 귀 살갗과 모자 겉면이 만나는 선
+      var ring = [], nOk = 0, vHit = -1;
+      for (var i = 0; i < 16; i++) {
+        var bestT = -1, bp = null;
+        for (var k = 0; k < S.length - 1; k++) {
+          var a = [S[k].pg[i * 3], S[k].pg[i * 3 + 1], S[k].pg[i * 3 + 2]], b = [S[k + 1].pg[i * 3], S[k + 1].pg[i * 3 + 1], S[k + 1].pg[i * 3 + 2]];
+          hit(a, b).forEach(function (h) { var T = k + h[0]; if (T > bestT) { bestT = T; bp = [a[0] + (b[0] - a[0]) * h[0], a[1] + (b[1] - a[1]) * h[0], a[2] + (b[2] - a[2]) * h[0]]; vHit = h[1]; } });
+        }
+        ring.push(bp); if (bp) nOk++;
+      }
+      // 반 넘게 만나야(귀 옆이 모자 끝을 살짝 스치는 정도면 고리를 두르지 않음). 빈 점은 양옆 이웃 사이로 메움
+      if (nOk < 10) return;
+      for (i = 0; i < 16; i++) if (!ring[i]) {
+        var l = i, r = i; do { l = (l + 15) % 16; } while (!ring[l]); do { r = (r + 1) % 16; } while (!ring[r]);
+        var dl = (i - l + 16) % 16, dr = (r - i + 16) % 16, f = dl / (dl + dr);
+        ring[i] = [ring[l][0] + (ring[r][0] - ring[l][0]) * f, ring[l][1] + (ring[r][1] - ring[l][1]) * f, ring[l][2] + (ring[r][2] - ring[l][2]) * f];
+        ring[i].fill = 1;
+      }
+      // 귀 바깥으로 0.006(고리 가운데 → 점 방향, 축 성분은 뺌)
+      var cx = [0, 0, 0]; ring.forEach(function (q) { cx[0] += q[0] / 16; cx[1] += q[1] / 16; cx[2] += q[2] / 16; });
+      ring = ring.map(function (q) { var d = sub3(q, cx), dd = dot3(d, E.ax); d = nrm3([d[0] - E.ax[0] * dd, d[1] - E.ax[1] * dd, d[2] - E.ax[2] * dd]); return [q[0] + d[0] * 0.006, q[1] + d[1] * 0.006, q[2] + d[2] * 0.006]; });
+      var cc = col || dk([m.c[vHit * 3], m.c[vHit * 3 + 1], m.c[vHit * 3 + 2]], m.raw ? 0.86 : 0.92);
+      m.tube(function (t) {   // 닫힌 캣멀롬 곡선(16점 사이를 부드럽게)
+        var x = t * 16, i1 = Math.floor(x) % 16, u = x - Math.floor(x), P0 = ring[(i1 + 15) % 16], P1 = ring[i1], P2 = ring[(i1 + 1) % 16], P3 = ring[(i1 + 2) % 16], u2 = u * u, u3 = u2 * u;
+        return [0, 1, 2].map(function (j) { return 0.5 * (2 * P1[j] + (-P0[j] + P2[j]) * u + (2 * P0[j] - 5 * P1[j] + 4 * P2[j] - P3[j]) * u2 + (-P0[j] + 3 * P1[j] - 3 * P2[j] + P3[j]) * u3); });
+      }, 0.009, cc, { nu: 8, nv: 48 });
+      holes++;
+    });
+    return holes;
+  }
+  // ---- 헤드폰·귀마개·헤드셋(2026-11-25): 귀를 피하는 자리 고르기 ----
+  // 컵: 머리 옆(높이각·앞뒤를 조금씩 바꿔 가며) 귀에 닿지 않는 첫 자리. 머리띠: 두 컵을 잇고 머리 위로 넘어가는 활 —
+  // 뒤로(또는 앞으로) 눕히는 각 β를 바꿔 가며 귀와 띠 사이가 비는 첫 각(곰 둥근 귀·고양이 세모 귀·토끼 긴 귀는 귀 뒤로, 귀 없는 펭귄은 똑바로)
+  // o: {r 컵 반지름, h 컵 두께, w 띠 너비, th 띠 두께}
+  function headset(D, o) {
+    var H = D.H, r = o.r, h = o.h, cl = 0.006;
+    function cupAt(el, az) {
+      var p = H.at(el, az, -0.004), n = H.nrm(el, az);
+      return { el: el, az: az, p: p, n: n };
+    }
+    function cupClear(c) {
+      var n = c.n, e1 = nrm3(crs3(n, Math.abs(n[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0])), e2 = crs3(n, e1), worst = 9;
+      for (var k = 0; k < 12; k++) for (var q = 0; q <= 2; q++) {
+        var a = k / 12 * TAU, rr = r * 1.06, hh = h * q / 2, p = [c.p[0] + n[0] * hh + (e1[0] * Math.cos(a) + e2[0] * Math.sin(a)) * rr, c.p[1] + n[1] * hh + (e1[1] * Math.cos(a) + e2[1] * Math.sin(a)) * rr, c.p[2] + n[2] * hh + (e1[2] * Math.cos(a) + e2[2] * Math.sin(a)) * rr];
+        worst = Math.min(worst, H.earDist(p));
+      }
+      return worst;
+    }
+    // +x 쪽 컵 자리를 고르고 반대쪽은 거울로(좌우 귀 모양이 조금 달라도 컵은 같은 높이)
+    var tries = [[0, 0], [-0.1, 0], [0, 0.18], [-0.1, 0.18], [-0.2, 0], [0, -0.18], [-0.2, 0.18], [-0.1, -0.18], [-0.3, 0.1], [-0.3, 0.3]], best = null, bestV = -9;
+    for (var i = 0; i < tries.length; i++) {
+      var L = cupAt(tries[i][0], tries[i][1]), R = cupAt(tries[i][0], Math.PI - tries[i][1]), v = Math.min(cupClear(L), cupClear(R));
+      if (v > cl) { best = [L, R]; break; }
+      if (v > bestV) { bestV = v; best = [L, R]; }
+    }
+    var cL = best[0], cR = best[1];
+    // 머리띠 길: d(a) = k·cos a·ex + sin a·u(β) + (1 − sin a)·mid 를 겉면에 (a: 0 왼쪽 컵 → π 오른쪽 컵)
+    var dL = H.dir(cL.el, cL.az), dR = H.dir(cR.el, cR.az), ex = [1, 0, 0], k = (dL[0] - dR[0]) / 2, mid = [0, (dL[1] + dR[1]) / 2, (dL[2] + dR[2]) / 2];
+    function bandDir(a, beta) { var u = [0, Math.cos(beta), -Math.sin(beta)], sn = Math.sin(a), cs = Math.cos(a); return nrm3([k * cs * ex[0] + (1 - sn) * mid[0], sn * u[1] + (1 - sn) * mid[1], sn * u[2] + (1 - sn) * mid[2]]); }
+    function elaz(d) { return [Math.asin(Math.max(-1, Math.min(1, d[1]))), Math.atan2(d[2], d[0])]; }
+    var gap = o.gap || 0.005, need = o.w / 2 + 0.008, betas = o.betas || [0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1.05, 1.2, -0.12, -0.25], bb = 0, bv = -9;
+    for (i = 0; i < betas.length; i++) {
+      var worst = 9;
+      for (var q = 2; q <= 38; q++) {
+        var a = q / 40 * Math.PI, ea = elaz(bandDir(a, betas[i])), p = H.at(ea[0], ea[1], gap + o.th / 2);
+        // 컵 속에 들어간 띠 끝은 안 봄
+        if (Math.hypot(p[0] - cL.p[0], p[1] - cL.p[1], p[2] - cL.p[2]) < r * 1.1 || Math.hypot(p[0] - cR.p[0], p[1] - cR.p[1], p[2] - cR.p[2]) < r * 1.1) continue;
+        worst = Math.min(worst, H.earDist(p));
+      }
+      if (worst > need) { bb = betas[i]; bv = worst; break; }
+      if (worst > bv) { bv = worst; bb = betas[i]; }
+    }
+    return { L: cL, R: cR, beta: bb, path: function (u) { return elaz(bandDir(u * Math.PI, bb)); }, gap: gap };
+  }
+  // 머리 둘레를 한 바퀴 도는 길(땀 머리띠·꽃 화관): 앞 높이각 elf에서 뒤로 갈수록 tilt만큼 내려감. 귀와 띠(반폭 hw) 사이가 비는 첫 tilt
+  function aroundPath(D, elf, hw, gap, tilts) {
+    var H = D.H, Rf = H.R([0, 0, 1]), best = tilts[0], bv = -9;
+    function path(tl) { return function (u) { var az = Math.PI / 2 + u * TAU; return [elf - tl * (1 - Math.cos(az - Math.PI / 2)) / 2, az]; }; }
+    for (var i = 0; i < tilts.length; i++) {
+      var worst = 9, P = path(tilts[i]);
+      for (var q = 0; q < 48; q++) { var ea = P(q / 48); for (var dv = -1; dv <= 1; dv += 2) worst = Math.min(worst, H.earDist(H.at(ea[0] + dv * hw / Rf, ea[1], gap))); }
+      if (worst > 0.006) { best = tilts[i]; break; }
+      if (worst > bv) { bv = worst; best = tilts[i]; }
+    }
+    return path(best);
+  }
+  // 머리띠 위 자리 u(0..1)의 틀: 겉면 점(띠 위로 lift) · 위(n, 겉면 바깥) · 옆(+x 쪽) → T(지역 좌표 x 옆, y 바깥, z 앞)
+  function onBand(D, hs, u, lift, rz) {
+    var q = hs.path(u), n = D.H.nrm(q[0], q[1]), p = D.H.at(q[0], q[1], hs.gap + lift), sd = nrm3(sub3([1, 0, 0], [n[0] * n[0], n[0] * n[1], n[0] * n[2]])), fw = crs3(sd, n);
+    var cz = Math.cos(rz || 0), sz = Math.sin(rz || 0), ex = [sd[0] * cz + n[0] * sz, sd[1] * cz + n[1] * sz, sd[2] * cz + n[2] * sz], ey = [n[0] * cz - sd[0] * sz, n[1] * cz - sd[1] * sz, n[2] * cz - sd[2] * sz];
+    return function (v) { return [p[0] + ex[0] * v[0] + ey[0] * v[1] + fw[0] * v[2], p[1] + ex[1] * v[0] + ey[1] * v[1] + fw[1] * v[2], p[2] + ex[2] * v[0] + ey[2] * v[1] + fw[2] * v[2]]; };
+  }
+  // 컵 하나: 머리 겉 자리 c.p에서 바깥(c.n)으로 h 두께. faceCol: 바깥 판 색, ring: 바깥 테두리 고리 색
+  function cupOn(m, c, r0, h, col, faceCol, o) {
+    o = o || {};
+    var n = c.n, e1 = nrm3(crs3(n, Math.abs(n[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0])), e2 = crs3(n, e1);
+    var T = function (p) { return [c.p[0] + e1[0] * p[0] + n[0] * p[1] + e2[0] * p[2], c.p[1] + e1[1] * p[0] + n[1] * p[1] + e2[1] * p[2], c.p[2] + e1[2] * p[0] + n[2] * p[1] + e2[2] * p[2]]; };
+    m.frus(r0, r0 * 0.92, h, col, T, { nu: 22 });
+    if (faceCol) m.frus(r0 * 0.62, r0 * 0.5, h + 0.006, faceCol, T, { nu: 16 });
+    return T;
+  }
   function earCup(m, D, s, r0, h, col, faceCol, z) {
     var x = s * (D.r - 0.004), T = X([x, D.hy - 0.004, z], [0, 0, -s * Math.PI / 2]);
     m.frus(r0, r0 * 0.92, h, col, T, { nu: 20 });
@@ -1639,32 +1915,36 @@ window.makeChar3D = function (K, D, opt) {
   var MORE = {
     // ======== 머리 10 ========
     headphones: { slot: 'head', name: '헤드폰', emoji: '🎧', rarity: 1, bone: 'head', make: function (m, D) {
-      var B = hex(0x3c7bf0), b = headBand(m, D, 0.015, B);
-      for (var s = -1; s <= 1; s += 2) earCup(m, D, s, D.r * 0.27, 0.045, B, hex(0xf2f6ff), b.z);
-      m.loop(function (t) { var a = Math.PI * (0.3 + 0.4 * t); return [Math.cos(a) * (b.x - 0.008), Math.sin(a) * (D.top - D.hy + 0.018)]; }, 0.017, hex(0x2a2f3d), X([0, D.hy, b.z]), { nu: 12, open: true });   // 머리 위 쿠션
+      // 2026-11-25 선생님: "헤드폰 머리띠가 귀를 뚫고 지나가" → 귀를 피하는 컵 자리·머리띠 각(headset), 띠는 실제 머리 겉면을 따라(strap)
+      var B = hex(0x3c7bf0), r0 = D.r * 0.27, hs = headset(D, { r: r0, h: 0.045, w: 0.032, th: 0.015 });
+      strap(m, D.H, hs.path, 0.032, 0.015, hs.gap, B);
+      strap(m, D.H, function (u) { return hs.path(0.36 + u * 0.28); }, 0.038, 0.012, hs.gap + 0.012, hex(0x2a2f3d), { nu: 18 });   // 머리 위 쿠션
+      cupOn(m, hs.L, r0, 0.045, B, hex(0xf2f6ff)); cupOn(m, hs.R, r0, 0.045, B, hex(0xf2f6ff));
     } },
     earmuffs: { slot: 'head', name: '털 귀마개', emoji: '❄️', rarity: 1, bone: 'head', make: function (m, D) {
-      var b = headBand(m, D, 0.009, hex(0xff8fc0), { out: 0.03 }), W = hex(0xfffaf2), W2 = hex(0xffe8f1);
-      for (var s = -1; s <= 1; s += 2) {
-        var c = [s * (D.r + 0.03), D.hy - 0.004, b.z], R = D.r * 0.27;
-        m.ell(R * 0.75, R, R, W, X(c), { nu: 14, nv: 10 });
-        for (var q = 0; q < 8; q++) { var a = q / 8 * TAU; m.ell(R * 0.42, R * 0.42, R * 0.42, q % 2 ? W : W2, X([c[0] + s * 0.012, c[1] + Math.sin(a) * R * 0.78, c[2] + Math.cos(a) * R * 0.78]), { nu: 8, nv: 6 }); }
-      }
+      var W = hex(0xfffaf2), W2 = hex(0xffe8f1), R = D.r * 0.27, hs = headset(D, { r: R * 1.05, h: R * 1.5, w: 0.018, th: 0.012 });
+      strap(m, D.H, hs.path, 0.018, 0.012, hs.gap, hex(0xff8fc0));
+      [hs.L, hs.R].forEach(function (c) {
+        var n = c.n, e1 = nrm3(crs3(n, Math.abs(n[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0])), e2 = crs3(n, e1), T = function (p) { return [c.p[0] + e1[0] * p[0] + n[0] * p[1] + e2[0] * p[2], c.p[1] + e1[1] * p[0] + n[1] * p[1] + e2[1] * p[2], c.p[2] + e1[2] * p[0] + n[2] * p[1] + e2[2] * p[2]]; };
+        m.ell(R, R * 0.75, R, W, function (p) { return T([p[0], p[1] + R * 0.62, p[2]]); }, { nu: 14, nv: 10 });
+        for (var q = 0; q < 8; q++) { var a = q / 8 * TAU; (function (a, q) { m.ell(R * 0.42, R * 0.42, R * 0.42, q % 2 ? W : W2, function (p) { return T([p[0] + Math.cos(a) * R * 0.78, p[1] + R * 0.72, p[2] + Math.sin(a) * R * 0.78]); }, { nu: 8, nv: 6 }); })(a, q); }
+      });
     } },
     sweatband: { slot: 'head', name: '땀 머리띠', emoji: '🎾', rarity: 1, bone: 'head', make: function (m, D) {
-      var y0 = D.eye + D.r * 0.24, h = 0.046, ry = function (y) { return Math.sqrt(Math.max(0.0004, D.r * D.r - (y - D.hy) * (y - D.hy))) + 0.013; };
-      var R0 = ry(y0), R1 = ry(y0 + h), Rd = hex(0xe8464e);
-      m.frus(R0, R0 + (R1 - R0) * 0.36, h * 0.36, Rd, X([0, y0, D.cz]), { cap: false, nu: 30 });
-      m.frus(R0 + (R1 - R0) * 0.36 + 0.001, R0 + (R1 - R0) * 0.64 + 0.001, h * 0.28, C.white, X([0, y0 + h * 0.36, D.cz]), { cap: false, nu: 30 });
-      m.frus(R0 + (R1 - R0) * 0.64, R1, h * 0.36, Rd, X([0, y0 + h * 0.64, D.cz]), { cap: false, nu: 30 });
+      // 2026-11-25 선생님: "땀 머리띠는 앞에 보면 끊어져 있어" — 공 모양 고리라 공보다 앞으로 나온 이마에 묻혔다 → 실제 머리 겉면을 따라 이어진 띠
+      var H = D.H, w = 0.054, th = 0.015, y0 = D.eye + D.r * 0.26 + w / 2, Rf = H.R([0, 0, 1]), elf = Math.asin(Math.max(-0.9, Math.min(0.9, (y0 - H.c[1]) / Rf)));
+      var Rd = hex(0xe8464e), col = function (u, v) { var c = Math.cos(v * TAU), t = (c < 0 ? -1 : 1) * Math.pow(Math.abs(c), 0.45); return Math.abs(t) < 0.3 ? C.white : Rd; };
+      // 뒤가 내려가는 각(귀가 띠 높이에 있으면 귀 밑으로): 귀와 띠 사이가 비는 첫 값
+      var path = aroundPath(D, elf, w / 2, 0.012, [0.12, 0, 0.25, 0.4, 0.55, 0.7]);
+      strap(m, H, path, w, th, 0.009, col, { closed: true, nu: 72, nv: 16 });
     } },
-    beret: { slot: 'head', name: '베레모', emoji: '🎨', rarity: 1, bone: 'head', make: function (m, D) {
+    beret: { slot: 'head', name: '베레모', emoji: '🎨', rarity: 1, bone: 'head', holes: true, make: function (m, D) {
       var N = hex(0x34479a), T = X([D.r * 0.08, D.top - D.r * 0.18, D.cz - 0.005], [0.12, 0, -0.26]);
       m.ell(D.r * 1.0, D.r * 0.3, D.r * 0.98, N, T, { nu: 26, nv: 10 });
       m.ring(D.r * 0.86, D.r * 0.84, 0.012, hex(0x24326f), function (p) { return T([p[0], p[1] - D.r * 0.12, p[2]]); }, { nu: 30 });
       m.frus(0.007, 0.004, 0.03, hex(0x24326f), function (p) { return T([p[0], p[1] + D.r * 0.28, p[2]]); }, { nu: 8 });
     } },
-    bucket_hat: { slot: 'head', name: '벙거지 모자', emoji: '👒', rarity: 1, bone: 'head', make: function (m, D) {
+    bucket_hat: { slot: 'head', name: '벙거지 모자', emoji: '👒', rarity: 1, bone: 'head', holes: true, make: function (m, D) {
       var y0 = D.top - D.r * 0.48, G = hex(0x7cc9a0), G2 = hex(0x4fa77c);
       m.frus(D.r * 0.92, D.r * 0.8, D.r * 0.42, G, X([0, y0, D.cz]), { cap: false, nu: 26 });
       m.ell(D.r * 0.8, D.r * 0.16, D.r * 0.8, G, X([0, y0 + D.r * 0.42, D.cz]), { v1: Math.PI / 2, nu: 24 });
@@ -1672,18 +1952,19 @@ window.makeChar3D = function (K, D, opt) {
       m.frus(D.r * 0.93, D.r * 0.91, D.r * 0.12, G2, X([0, y0 + 0.004, D.cz]), { cap: false, nu: 26 });
     } },
     gaming_headset: { slot: 'head', name: '게임 헤드셋', emoji: '🎮', rarity: 2, bone: 'head', make: function (m, D) {
-      var K = hex(0x262a35), L = hex(0x44f08a), b = headBand(m, D, 0.017, K);
-      for (var s = -1; s <= 1; s += 2) {
-        earCup(m, D, s, D.r * 0.3, 0.05, K, null, b.z);
-        m.ring(D.r * 0.21, D.r * 0.21, 0.007, L, X([s * (D.r + 0.048), D.hy - 0.004, b.z], [0, 0, Math.PI / 2]), { nu: 22 });   // 초록 불빛
-        m.ell(0.006, D.r * 0.12, D.r * 0.12, L, X([s * (D.r + 0.05), D.hy - 0.004, b.z]), { nu: 10, nv: 6 });
-      }
-      // 왼쪽 컵에서 입 앞으로 오는 마이크
-      var p0 = [-(D.r + 0.02), D.hy - 0.03, b.z + 0.03], mouth = [-D.r * 0.3, D.eye - D.r * 0.5, D.eyeZ(D.r * 0.3) + 0.02];
+      var K = hex(0x262a35), L = hex(0x44f08a), r0 = D.r * 0.3, hs = headset(D, { r: r0, h: 0.05, w: 0.036, th: 0.017 });
+      strap(m, D.H, hs.path, 0.036, 0.017, hs.gap, K);
+      [hs.L, hs.R].forEach(function (c) {
+        var T = cupOn(m, c, r0, 0.05, K, null);
+        m.ring(D.r * 0.21, D.r * 0.21, 0.007, L, function (p) { return T([p[0], p[1] + 0.05, p[2]]); }, { nu: 22 });   // 초록 불빛
+        m.ell(D.r * 0.12, 0.006, D.r * 0.12, L, function (p) { return T([p[0], p[1] + 0.052, p[2]]); }, { nu: 10, nv: 6 });
+      });
+      // 오른쪽(−x) 컵에서 입 앞으로 오는 마이크
+      var c = hs.R, p0 = [c.p[0] + c.n[0] * 0.03, c.p[1] - r0 * 0.5, c.p[2] + r0 * 0.5], mouth = [-D.r * 0.3, D.eye - D.r * 0.5, D.eyeZ(D.r * 0.3) + 0.02];
       m.tube(function (t) { return [p0[0] + (mouth[0] - p0[0]) * t, p0[1] + (mouth[1] - p0[1]) * t - Math.sin(t * Math.PI) * 0.03, p0[2] + (mouth[2] - p0[2]) * t + Math.sin(t * Math.PI) * 0.02]; }, 0.007, K, { nu: 6, nv: 12 });
       m.ell(0.016, 0.016, 0.018, L, X(mouth), { nu: 10, nv: 6 });
     } },
-    aviator_cap: { slot: 'head', name: '비행사 모자', emoji: '✈️', rarity: 2, bone: 'head', make: function (m, D) {
+    aviator_cap: { slot: 'head', name: '비행사 모자', emoji: '✈️', rarity: 2, bone: 'head', holes: true, make: function (m, D) {
       var Br = hex(0x9a6238), Br2 = hex(0x7a4a28), Fur = hex(0xf3e2c4);
       // 앞을 위로 젖혀 쓴다(앞 테두리가 눈 위로 — 주둥이가 긴 공룡에서 테두리 털이 얼굴을 가로질렀다)
       var TC = X([0, D.hy + 0.01, D.cz], [-0.38, 0, 0]);
@@ -1700,7 +1981,7 @@ window.makeChar3D = function (K, D, opt) {
         m.ell(D.r * 0.13, D.r * 0.13, 0.008, hex(0x7fd4e8), function (p) { return T([p[0], p[1], p[2] + 0.021]); }, { nu: 14, nv: 6 });
       }
     } },
-    cowboy_hat: { slot: 'head', name: '카우보이 모자', emoji: '🤠', rarity: 2, bone: 'head', make: function (m, D) {
+    cowboy_hat: { slot: 'head', name: '카우보이 모자', emoji: '🤠', rarity: 2, bone: 'head', holes: true, make: function (m, D) {
       var y0 = D.top - D.r * 0.38, Br = hex(0xb07440), Bd = hex(0x5a3a22), R0 = D.r * 0.74;
       m.surf(function (u, v) {   // 챙: 양옆이 위로 말린다
         var a = u * TAU, rr = R0 + v * D.r * 0.9, cx = Math.cos(a), up = Math.pow(v, 1.6) * D.r * 0.42 * Math.pow(Math.abs(cx), 1.5) - v * D.r * 0.06 * Math.max(0, Math.sin(a));
@@ -1710,7 +1991,7 @@ window.makeChar3D = function (K, D, opt) {
       m.ell(D.r * 0.6, D.r * 0.14, D.r * 0.6, Br, X([0, y0 + D.r * 0.62, D.cz]), { v1: Math.PI / 2, nu: 22 });
       m.frus(R0 + 0.002, R0 * 0.98, D.r * 0.13, Bd, X([0, y0 + 0.004, D.cz]), { cap: false, nu: 26 });
     } },
-    viking_helmet: { slot: 'head', name: '바이킹 투구', emoji: '⚔️', rarity: 2, bone: 'head', make: function (m, D) {
+    viking_helmet: { slot: 'head', name: '바이킹 투구', emoji: '⚔️', rarity: 2, bone: 'head', holes: true, make: function (m, D) {
       var y0 = D.top - D.r * 0.6, Sv = hex(0xb8c2cf), G = C.gold, H = hex(0xf6efe0);
       m.ell(D.r * 1.02, D.r * 0.66, D.r * 1.03, Sv, X([0, y0, D.cz]), { v1: Math.PI / 2, nu: 26, nv: 10 });
       m.frus(D.r * 1.04, D.r * 1.03, D.r * 0.15, G, X([0, y0 - D.r * 0.05, D.cz]), { cap: false, nu: 28 });
@@ -1731,22 +2012,23 @@ window.makeChar3D = function (K, D, opt) {
     // ======== 피라미드 대탈출 상자에서만 나오는 7가지 (2026-11-20) ========
     // only: 'pyramid' → 광장 선물 상자·게임 선물에는 안 나오고, 피라미드 상자에서 얻으면 옷장에 들어온다(games/uriban_bridge.js의 짝표)
     cat_ears: { slot: 'head', name: '고양이 귀', emoji: '🐱', rarity: 1, only: 'pyramid', bone: 'head', make: function (m, D) {
-      var B = hex(0x4a4150), P = hex(0xffb0cc), b = headBand(m, D, 0.011, B), Ry = D.top - D.hy + 0.026;
+      // 머리띠는 헤드폰처럼 귀를 피해 가는 길(headset), 세모 귀는 띠 위 머리 꼭대기 양옆
+      var B = hex(0x4a4150), P = hex(0xffb0cc), hs = headset(D, { r: 0.012, h: 0.01, w: 0.022, th: 0.012, betas: [0, -0.12, -0.25, -0.38, -0.5, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9] });   // 머리띠 장식은 귀 앞(머리 위)으로 먼저
+      strap(m, D.H, hs.path, 0.022, 0.012, hs.gap, B);
       for (var s = -1; s <= 1; s += 2) {
-        // 동물 귀 사이 머리 위쪽에 크게(옆에 두면 곰·고양이 귀 뒤에 숨었다)
-        var a = Math.PI / 2 - s * 0.36, T = X([Math.cos(a) * b.x, D.hy + Math.sin(a) * Ry - 0.012, b.z + 0.01], [0, s * 0.35, -s * 0.3]);
-        m.frus(D.r * 0.33, 0.01, D.r * 0.56, B, T, { nu: 3 });                                                     // 세모 귀
-        m.frus(D.r * 0.19, 0.006, D.r * 0.4, P, function (p) { return T([p[0], p[1] + 0.01, p[2] + D.r * 0.1]); }, { nu: 3 });   // 귀 안쪽 분홍
+        var T = onBand(D, hs, 0.5 - s * 0.13, 0.004, -s * 0.3);
+        m.frus(D.r * 0.33, 0.01, D.r * 0.56, B, function (p) { return T([p[0], p[1], p[2] * 0.55]); }, { nu: 3 });                                                     // 세모 귀
+        m.frus(D.r * 0.19, 0.006, D.r * 0.4, P, function (p) { return T([p[0], p[1] + 0.01, p[2] * 0.4 + D.r * 0.07]); }, { nu: 3 });   // 귀 안쪽 분홍
       }
     } },
-    magician_hat: { slot: 'head', name: '마술사 모자', emoji: '🎩', rarity: 2, only: 'pyramid', bone: 'head', make: function (m, D) {
+    magician_hat: { slot: 'head', name: '마술사 모자', emoji: '🎩', rarity: 2, only: 'pyramid', bone: 'head', holes: true, make: function (m, D) {
       var y0 = D.top - D.r * 0.3, K = hex(0x2f2a3a), R = D.r * 0.54, H = D.r * 0.92;
       m.ell(D.r * 0.98, 0.016, D.r * 0.98, K, X([0, y0, D.cz]), { nu: 28 });                                       // 챙
       m.frus(R, R * 1.07, H, K, X([0, y0, D.cz]), { nu: 24 });                                                       // 높은 통
       m.frus(R * 1.015, R * 1.035, H * 0.24, hex(0xe8464e), X([0, y0 + 0.012, D.cz]), { cap: false, nu: 24 });      // 빨간 띠
       m.flat(starS(0.032, 0.42), C.yellow, X([0, y0 + H * 0.13, D.cz + R * 1.05 + 0.006]), { nu: 20 });             // 띠의 별
     } },
-    grad_cap: { slot: 'head', name: '학사모', emoji: '🎓', rarity: 2, only: 'pyramid', bone: 'head', make: function (m, D) {
+    grad_cap: { slot: 'head', name: '학사모', emoji: '🎓', rarity: 2, only: 'pyramid', bone: 'head', holes: true, make: function (m, D) {
       var y0 = D.top - D.r * 0.36, K = hex(0x2c3150), S = D.r * 0.72, ty = y0 + D.r * 0.34;
       m.ell(D.r * 0.8, D.r * 0.36, D.r * 0.82, K, X([0, y0, D.cz]), { v1: Math.PI / 2, nu: 24 });                  // 머리에 쓰는 둥근 부분
       m.box(S, 0.014, S, 0.25, K, X([0, ty, D.cz], [0, Math.PI / 4, 0]));                                           // 네모 판(마름모로)
@@ -1756,15 +2038,16 @@ window.makeChar3D = function (K, D, opt) {
       m.frus(0.02, 0.007, 0.055, C.gold, X([end[0], end[1] - 0.055, end[2]]), { nu: 10 });                           // 술
     } },
     star_antenna: { slot: 'head', name: '별 더듬이', emoji: '⭐', rarity: 2, only: 'pyramid', bone: 'head', make: function (m, D) {
-      var B = hex(0x6c4fd6), b = headBand(m, D, 0.01, B), Ry = D.top - D.hy + 0.026;
+      var B = hex(0x6c4fd6), hs = headset(D, { r: 0.012, h: 0.01, w: 0.02, th: 0.011, betas: [0, -0.12, -0.25, -0.38, -0.5, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9] });
+      strap(m, D.H, hs.path, 0.02, 0.011, hs.gap, B);
       for (var s = -1; s <= 1; s += 2) {
-        var a = Math.PI / 2 - s * 0.38, p0 = [Math.cos(a) * b.x, D.hy + Math.sin(a) * Ry, b.z], p1 = [p0[0] + s * D.r * 0.32, p0[1] + D.r * 0.62, p0[2] + 0.02];
+        var T = onBand(D, hs, 0.5 - s * 0.14, 0.004, -s * 0.45), p0 = T([0, 0, 0]), p1 = T([0, D.r * 0.72, 0.02]);
         m.seg(p0, p1, 0.007, hex(0x3a3340));
         m.flat(starS(0.066, 0.44), C.yellow, X([p1[0], p1[1] + 0.03, p1[2] + 0.008], [0, 0, s * 0.2]), { nu: 20 });
         m.flat(starS(0.066, 0.44), C.yellow, X([p1[0], p1[1] + 0.03, p1[2] - 0.004], [0, Math.PI, s * 0.2]), { nu: 20 });   // 뒤에서 봐도 별
       }
     } },
-    egg_hat: { slot: 'head', name: '계란프라이 모자', emoji: '🍳', rarity: 2, only: 'pyramid', bone: 'head', make: function (m, D) {
+    egg_hat: { slot: 'head', name: '계란프라이 모자', emoji: '🍳', rarity: 2, only: 'pyramid', bone: 'head', holes: true, make: function (m, D) {
       // 앞으로 살짝 기울여 얹는다(납작하게 두면 앞에서 볼 때 흰자 테두리만 보였다)
       var W = hex(0xfffdf6), T = X([0, D.top + D.r * 0.01, D.cz - D.r * 0.08], [0.3, 0, 0]);
       m.surf(function (u, v) {   // 흰자: 울퉁불퉁 동그란 판, 가장자리는 살짝 처짐
@@ -1774,7 +2057,7 @@ window.makeChar3D = function (K, D, opt) {
       m.ell(D.r * 0.36, D.r * 0.24, D.r * 0.36, hex(0xffb81f), function (p) { return T([p[0] + D.r * 0.06, p[1] + 0.012, p[2] + D.r * 0.08]); }, { v1: Math.PI / 2, nu: 20 });   // 노른자
       m.ell(0.022, 0.01, 0.016, hex(0xfff3c4), function (p) { return T([p[0] - D.r * 0.04, p[1] + D.r * 0.22, p[2] + D.r * 0.02]); }, { nu: 8, nv: 5 });                // 반짝
     } },
-    pharaoh_nemes: { slot: 'head', name: '파라오 두건', emoji: '🏺', rarity: 3, only: 'pyramid', bone: 'head', make: function (m, D) {
+    pharaoh_nemes: { slot: 'head', name: '파라오 두건', emoji: '🏺', rarity: 3, only: 'pyramid', bone: 'head', holes: true, make: function (m, D) {
       var Bl = hex(0x2f5fd0), Gd = C.gold, y0 = D.top - D.r * 0.55;
       var stripe = function (u, v, P) { return Math.floor((P[1] - y0) * 34 + 20) % 2 ? Gd : Bl; };
       m.ell(D.r * 1.06, D.r * 0.62, D.r * 1.04, stripe, X([0, y0, D.cz - D.r * 0.04]), { v1: Math.PI / 2, nu: 26, nv: 10 });   // 머리 덮개
@@ -1786,7 +2069,7 @@ window.makeChar3D = function (K, D, opt) {
       m.ell(0.024, 0.04, 0.02, Gd, X([0, y0 + D.r * 0.06, D.cz + D.r * 1.03]), { nu: 10, nv: 7 });                              // 이마 장식
       m.ell(0.014, 0.014, 0.01, C.ruby, X([0, y0 + D.r * 0.07, D.cz + D.r * 1.05]), { nu: 8, nv: 5 });
     } },
-    kinball_hat: { slot: 'head', name: '꼬마 킨볼 모자', emoji: '🩷', rarity: 3, only: 'pyramid', bone: 'head', make: function (m, D) {
+    kinball_hat: { slot: 'head', name: '꼬마 킨볼 모자', emoji: '🩷', rarity: 3, only: 'pyramid', bone: 'head', holes: true, make: function (m, D) {
       var y0 = D.top - D.r * 0.08, R = D.r * 0.5, Pk = hex(0xff7fb6), Pk2 = hex(0xff5c9d);
       m.ring(D.r * 0.5, D.r * 0.5, 0.014, hex(0xfff0f6), X([0, y0, D.cz]), { nu: 28 });                                         // 받침 고리
       m.ell(R, R, R, function (u, v, P) { var a = Math.atan2(P[2] - D.cz, P[0]); return Math.abs(Math.sin(a * 2)) < 0.12 ? Pk2 : Pk; }, X([0, y0 + R * 0.92, D.cz]), { nu: 28, nv: 16 });   // 분홍 큰 공
@@ -1974,6 +2257,11 @@ window.makeChar3D = function (K, D, opt) {
     });
   }
   function isArm(I) { return I[MA] > 0.5; }
+  // 팔 마디 t(0 어깨 · 1 팔꿈치 · 2 손목) 자리의 팔 뼈에 수직인 평면: 그보다 손 쪽이면 +(몸통은 −로 크게). 팔 색 경계·팔 줄무늬를 곧게(AT·MA로 가르면 톱니)
+  function armPlane(S, t) {
+    var sp = [0, 1].map(function (s) { var ch = S.arm[s], k = Math.min(2, Math.floor(t)), f = t - k, a = ch[k], b = ch[k + 1]; return { p: [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f], d: nrmz(sub(b, a)) }; });
+    return function (I) { var q = sp[I[CX] >= 0 ? 0 : 1]; return (I[CX] - q.p[0]) * q.d[0] + (I[CY] - q.p[1]) * q.d[1] + (I[CZ] - q.p[2]) * q.d[2] - (1 - sstep(0.04, 0.18, I[MS])) * 0.3; };
+  }
   var MORE2 = {
     // ======== 윗옷 10 ========
     tee_stripe: { slot: 'top', name: '줄무늬 티셔츠', emoji: '👕', rarity: 1, bone: 'chest', make: function (m, D, S) {
@@ -2035,10 +2323,11 @@ window.makeChar3D = function (K, D, opt) {
     space_suit: { slot: 'top', name: '우주복', emoji: '🚀', rarity: 2, bone: 'chest', make: function (m, D, S) {
       var W = hex(0xf2f4f8), G = hex(0x9aa6b8), B = hex(0x3a5bd8), O = hex(0xff8a2a), yc = S.chestY - 0.01;
       var px = function (I) { return 0.058 - Math.abs(I[CX]); }, py0 = function (I) { return I[CY] - (yc - 0.035); }, py1 = function (I) { return yc + 0.035 - I[CY]; }, front = function (I) { return I[CNZ] - 0.35; };
-      var belt0 = function (I) { return I[CY] - (S.hipY + 0.03); }, belt1 = function (I) { return S.hipY + 0.048 - I[CY]; }, elb0 = function (I) { return I[AT] - 0.9; }, elb1 = function (I) { return 1.08 - I[AT]; };
+      var belt0 = function (I) { return I[CY] - (S.hipY + 0.03); }, belt1 = function (I) { return S.hipY + 0.048 - I[CY]; }, elb0 = armPlane(S, 0.9), e1p = armPlane(S, 1.08), elb1 = function (I) { return -e1p(I); };
       m.shell({ cover: coverTop(S, { sleeve: 1.86 }), off: 0.012, cuts: [px, py0, py1, front, belt0, belt1, elb0, elb1], rim: G,
         paint: function (I) {
-          if (isArm(I)) return elb0(I) >= 0 && elb1(I) >= 0 ? O : W;
+          if (elb0(I) >= 0 && elb1(I) >= 0) return O;
+          if (isArm(I)) return W;
           if (front(I) >= 0 && px(I) >= 0 && py0(I) >= 0 && py1(I) >= 0) return B;
           if (belt0(I) >= 0 && belt1(I) >= 0) return G;
           return W;
@@ -2056,11 +2345,11 @@ window.makeChar3D = function (K, D, opt) {
     } },
     varsity_jacket: { slot: 'top', name: '야구 점퍼', emoji: '⚾', rarity: 2, bone: 'chest', make: function (m, D, S) {
       var N = hex(0x24356b), Cr = hex(0xf3ead6), Y = hex(0xffc934), hem = S.hipY + 0.008, sx = 0.062, sy = S.chestY + 0.005;
-      var arm = function (I) { return I[MA] - 0.5; }, at = function (I) { return I[AT] - 0.12; }, b0 = function (I) { return hem + 0.02 - I[CY]; }, b1 = function (I) { return I[CY] - (hem + 0.008); }, b2 = function (I) { return hem + 0.013 - I[CY]; };
+      var arm = armPlane(S, 0.45), b0 = function (I) { return hem + 0.02 - I[CY]; }, b1 = function (I) { return I[CY] - (hem + 0.008); }, b2 = function (I) { return hem + 0.013 - I[CY]; };
       var star = function (I) { var x = I[CX] - sx, y = I[CY] - sy, r = Math.hypot(x, y), a = Math.atan2(y, x) - Math.PI / 2, k = 0.5 + 0.5 * Math.pow(Math.abs(Math.cos(a * 2.5)), 3); return 0.03 * (0.45 + 0.55 * k) - r; };
-      m.shell({ cover: coverTop(S, { sleeve: 1.84, hem: 0.008 }), off: 0.012, cuts: [arm, at, b0, b1, b2, star], rim: N,
+      m.shell({ cover: coverTop(S, { sleeve: 1.84, hem: 0.008 }), off: 0.012, cuts: [arm, b0, b1, b2, star], rim: N,
         paint: function (I) {
-          if (arm(I) >= 0 && at(I) >= 0) return Cr;
+          if (arm(I) >= 0) return Cr;
           if (b0(I) >= 0) return b1(I) >= 0 && b2(I) >= 0 ? Cr : N;
           if (I[CNZ] > 0.3 && star(I) >= 0) return Y;
           return N;
@@ -2072,12 +2361,13 @@ window.makeChar3D = function (K, D, opt) {
       var shield = function (I) { var x = Math.abs(I[CX]), y = I[CY] - yc; return Math.min(0.04 - x, 0.04 - y, y + 0.05 - x * 0.9); }, sh2 = function (I) { var x = Math.abs(I[CX]), y = I[CY] - yc; return Math.min(0.03 - x, 0.03 - y, y + 0.038 - x * 0.9); };
       var cross = function (I) { return Math.max(0.008 - Math.abs(I[CX]), Math.min(0.008 - Math.abs(I[CY] - yc - 0.006), 0.022 - Math.abs(I[CX]))); };
       var band = function (I) { return hem + 0.016 - I[CY]; }, front = function (I) { return I[CNZ] - 0.3; }, lit = function (I) { return I[CNY] - 0.25; };
-      m.shell({ cover: coverTop(S, { sleeve: 1.8, hem: 0.006 }), off: 0.012, cuts: [shield, sh2, cross, band, front, lit], rim: G,
+      var armB = armPlane(S, 0.5);
+      m.shell({ cover: coverTop(S, { sleeve: 1.8, hem: 0.006 }), off: 0.012, cuts: [shield, sh2, cross, band, front, armB], rim: G,
         paint: function (I) {
-          if (isArm(I)) return Gm;
+          if (armB(I) >= 0) return Gm;
           if (band(I) >= 0) return G;
           if (front(I) >= 0 && shield(I) >= 0) return sh2(I) >= 0 ? (cross(I) >= 0 ? G : B) : G;
-          return lit(I) >= 0 ? Sv2 : Sv;
+          return Sv;   // (위를 보는 면을 밝게 가르던 것은 세모마다 얼룩져 보여 뺌 — 빛은 게임이 칠함)
         } });
       for (var s = 0; s < 2; s++) (function (s) {   // 어깨 보호대(위팔 뼈)
         var sh = S.arm[s][0], el = S.arm[s][1], sx = s ? -1 : 1, c = [sh[0] + (el[0] - sh[0]) * 0.3 + sx * 0.008, sh[1] + 0.03, sh[2]];
@@ -2416,10 +2706,96 @@ window.makeChar3D = function (K, D, opt) {
     })(s);
   }
   Object.keys(MORE2).forEach(function (k) { ITEMS[k] = MORE2[k]; });
+  // ======== 2026-11-25 손에 드는 것 9가지 더(선생님: "손에 들고 있는 건 좀 더 다양했으면") — 모두 15가지 ========
+  // 밝고 신나게, 남학생도 좋아하게(탐정 돋보기·손전등·과학 실험·마이크), 무섭거나 다치게 하는 물건은 없음
+  var HAND2 = {
+    magnifier: { slot: 'hand', name: '탐정 돋보기', emoji: '🔍', rarity: 1, bone: 'hand_R', make: function (m, D) {
+      var h = D.hand, c = [h[0] - 0.01, h[1] + 0.135, h[2] + 0.015], Br = hex(0x8a5a34);
+      m.seg([h[0], h[1] - 0.035, h[2]], [c[0], c[1] - 0.05, c[2]], 0.012, Br, { nu: 10 });
+      m.ring(0.052, 0.052, 0.011, C.gold, X(c, [Math.PI / 2, 0, 0]), { nu: 30, nv: 8 });
+      m.frus(0.046, 0.046, 0.008, hex(0xbfe8ff), X([c[0], c[1], c[2] - 0.004], [Math.PI / 2, 0, 0]), { nu: 26 });
+      m.ell(0.014, 0.01, 0.004, C.white, X([c[0] - 0.018, c[1] + 0.02, c[2] + 0.006], [0, 0, 0.6]), { nu: 8, nv: 4 });   // 반짝 빛
+    } },
+    flashlight: { slot: 'hand', name: '손전등', emoji: '🔦', rarity: 1, bone: 'hand_R', make: function (m, D) {
+      // 앞·바깥쪽 위로 비스듬히(앞에서 봐도 손전등 몸이 보이게)
+      var h = D.hand, O = hex(0xff8a2a), K = hex(0x3a3f4b), T = function (v) { return X([h[0], h[1] + 0.005, h[2]], [Math.PI / 2 - 0.35, 0, 0.75])([v[0], v[1] - 0.05, v[2]]); };
+      m.frus(0.021, 0.021, 0.11, O, T, { nu: 16 });
+      m.frus(0.024, 0.034, 0.04, K, function (v) { return T([v[0], v[1] + 0.1, v[2]]); }, { nu: 18 });
+      m.frus(0.03, 0.03, 0.006, hex(0xfff6b0), function (v) { return T([v[0], v[1] + 0.138, v[2]]); }, { nu: 18 });   // 유리
+      m.box(0.008, 0.014, 0.006, 0.5, K, function (v) { return T([v[0], v[1] + 0.05, v[2] - 0.022]); });             // 단추
+    } },
+    pinwheel: { slot: 'hand', name: '바람개비', emoji: '🌀', rarity: 1, bone: 'hand_R', make: function (m, D) {
+      var h = D.hand, c = [h[0] - 0.01, h[1] + 0.2, h[2] + 0.02], cols = [hex(0xff5c7a), hex(0xffd84f), hex(0x4fb6ff), hex(0x6bd36b)];
+      m.seg([h[0], h[1] - 0.035, h[2]], [c[0], c[1], c[2] - 0.01], 0.007, C.white, { nu: 8 });
+      for (var k = 0; k < 4; k++) (function (k) {
+        var a = k * Math.PI / 2, tri = function (t) { var pts = [[0, 0], [0.075, 0.012], [0.02, 0.075]], i = Math.floor(t * 3) % 3, f = t * 3 - Math.floor(t * 3), p = pts[i], q = pts[(i + 1) % 3]; return [p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f]; };
+        m.flat(tri, cols[k], X([c[0], c[1], c[2] + 0.003], [0, 0, a]), { nu: 30 });
+        m.flat(tri, dk(cols[k], 0.85), X([c[0], c[1], c[2] - 0.003], [0, Math.PI, -a]), { nu: 30 });   // 뒤에서 봐도
+      })(k);
+      m.ell(0.012, 0.012, 0.012, C.white, X([c[0], c[1], c[2] + 0.006]), { nu: 8, nv: 5 });
+    } },
+    cotton_candy: { slot: 'hand', name: '솜사탕', emoji: '🍭', rarity: 1, bone: 'hand_R', make: function (m, D) {
+      var h = D.hand, c = [h[0] - 0.005, h[1] + 0.17, h[2] + 0.01], P1 = hex(0xffa8d2), P2 = hex(0xffc8e4);
+      m.seg([h[0], h[1] - 0.035, h[2]], [c[0], c[1] - 0.04, c[2]], 0.006, hex(0xf5f0e6), { nu: 8 });
+      var puffs = [[0, 0, 0, 0.055], [0.04, 0.02, 0.01, 0.04], [-0.04, 0.015, 0.0, 0.042], [0.0, 0.05, -0.01, 0.042], [0.02, -0.03, 0.02, 0.036], [-0.02, -0.025, -0.02, 0.036], [0.0, 0.01, 0.04, 0.04], [0.01, 0.02, -0.04, 0.038]];
+      puffs.forEach(function (q, i) { m.ell(q[3], q[3] * 0.92, q[3], i % 2 ? P2 : P1, X([c[0] + q[0], c[1] + q[1], c[2] + q[2]]), { nu: 12, nv: 8 }); });
+    } },
+    microphone: { slot: 'hand', name: '노래 마이크', emoji: '🎤', rarity: 2, bone: 'hand_R', make: function (m, D) {
+      var h = D.hand, b = [h[0], h[1] - 0.04, h[2] + 0.01], K = hex(0x2c3140);
+      m.frus(0.014, 0.022, 0.11, K, X(b), { nu: 16 });
+      m.frus(0.024, 0.024, 0.012, hex(0xff5c9a), X([b[0], b[1] + 0.1, b[2]]), { nu: 18 });   // 분홍 띠
+      m.ell(0.036, 0.036, 0.036, C.silver, X([b[0], b[1] + 0.14, b[2]]), { nu: 16, nv: 10 });
+      m.ring(0.036, 0.036, 0.004, hex(0xaab3c0), X([b[0], b[1] + 0.14, b[2]]), { nu: 24, nv: 5 });
+    } },
+    umbrella: { slot: 'hand', name: '무지개 우산', emoji: '☂️', rarity: 1, bone: 'hand_R', hs: 1, make: function (m, D) {
+      // 머리(귀 끝까지) 위로 펼친 우산 — 손에서 위로 곧게
+      var h = D.hand, top = D.top; (D.H.ears || []).forEach(function (E) { top = Math.max(top, E.t[1]); });
+      var cy = top + 0.1, c = [h[0] * 0.5, cy, h[2] - 0.02], R = 0.27, cols = [hex(0xff5c7a), hex(0xffa53a), hex(0xffd84f), hex(0x6bd36b), hex(0x4fb6ff), hex(0x9a7bff)];
+      m.seg([h[0], h[1] - 0.05, h[2]], [c[0], cy + 0.11, c[2]], 0.008, hex(0x6a6f7c), { nu: 8 });
+      m.tube(function (t) { var a = Math.PI * (1 - t) * 0.9; return [h[0] + 0.02 - Math.cos(a) * 0.02 * 0, h[1] - 0.05 - Math.sin(a) * 0.035, h[2] + Math.cos(a) * 0.035 - 0.035]; }, 0.008, hex(0x8a5a34), { nu: 6, nv: 10 });   // 손잡이 고리
+      m.surf(function (u, v) { var a = u * TAU, r = R * v, y = 0.12 * (1 - v * v) - 0.025 * Math.pow(Math.abs(Math.cos(a * 4)), 2) * v; return [c[0] + Math.cos(a) * r, cy + y, c[2] + Math.sin(a) * r]; }, 48, 8,
+        function (u) { return cols[Math.floor(u * 8) % 6]; }, [c[0], cy - 0.2, c[2]]);
+      m.ell(0.014, 0.018, 0.014, hex(0x6a6f7c), X([c[0], cy + 0.125, c[2]]), { nu: 8, nv: 5 });
+    } },
+    bug_net: { slot: 'hand', name: '잠자리채', emoji: '🦋', rarity: 1, bone: 'hand_R', make: function (m, D) {
+      var h = D.hand, a = [h[0], h[1] - 0.06, h[2] - 0.01], c = [h[0] - 0.09, h[1] + 0.3, h[2] + 0.08], G = hex(0x4fbf7a);
+      m.seg(a, c, 0.008, hex(0xd9b27a), { nu: 8 });
+      var T = X(c, [0.5, 0, 0.35]);
+      m.ring(0.075, 0.075, 0.007, G, T, { nu: 28, nv: 6 });
+      m.surf(function (u, v) { var q = u * TAU, r = 0.075 * (1 - v * 0.75), y = -0.12 * v; return T([Math.cos(q) * r, y - 0.03 * Math.sin(v * Math.PI) * 0, Math.sin(q) * r]); }, 24, 6,
+        function (u, v) { return (Math.floor(u * 24) + Math.floor(v * 6)) % 2 ? hex(0xf4fbff) : hex(0xd8ecf7); }, T([0, -0.04, 0]));
+    } },
+    class_flag: { slot: 'hand', name: '우리 반 깃발', emoji: '🚩', rarity: 1, bone: 'hand_R', make: function (m, D) {
+      var h = D.hand, tp = [h[0] - 0.005, h[1] + 0.3, h[2] + 0.005], Rd = hex(0xff5c7a);
+      m.seg([h[0], h[1] - 0.04, h[2]], tp, 0.007, hex(0xe8e2d6), { nu: 8 });
+      m.ell(0.013, 0.013, 0.013, C.gold, X(tp), { nu: 8, nv: 5 });
+      // 바람에 살짝 휜 세모 깃발(앞뒤 두 장) + 가운데 노란 하트
+      var fl = function (u, v, dz) { var x = -0.15 * u, y = -0.015 - 0.11 * v * (1 - u * 0.55) - 0.028 * u, z = Math.sin(u * 3.2) * 0.012 + dz; return [tp[0] + x, tp[1] + y, tp[2] + z]; };
+      m.surf(function (u, v) { return fl(u, v, 0.003); }, 14, 4, Rd, [tp[0] - 0.06, tp[1] - 0.06, tp[2] - 0.05]);
+      m.surf(function (u, v) { return fl(u, v, -0.003); }, 14, 4, dk(Rd, 0.88), [tp[0] - 0.06, tp[1] - 0.06, tp[2] + 0.05]);
+      m.flat(heartS(0.0016), C.yellow, X([tp[0] - 0.055, tp[1] - 0.06, tp[2] + Math.sin(0.37 * 3.2) * 0.012 + 0.006]), { nu: 24 });
+      m.flat(heartS(0.0016), C.yellow, X([tp[0] - 0.055, tp[1] - 0.06, tp[2] + Math.sin(0.37 * 3.2) * 0.012 - 0.006], [0, Math.PI, 0]), { nu: 24 });
+    } },
+    science_flask: { slot: 'hand', name: '과학 실험 병', emoji: '🧪', rarity: 2, bone: 'hand_R', make: function (m, D) {
+      var h = D.hand, b = [h[0], h[1] - 0.03, h[2] + 0.02], Gl = hex(0xd9f3ff), Lq = hex(0x5cf09a);
+      m.frus(0.05, 0.016, 0.085, Gl, X(b), { nu: 20 });
+      m.frus(0.016, 0.016, 0.04, Gl, X([b[0], b[1] + 0.085, b[2]]), { nu: 14 });
+      m.frus(0.019, 0.019, 0.008, hex(0x8a5a34), X([b[0], b[1] + 0.122, b[2]]), { nu: 14 });   // 마개
+      m.frus(0.0515, 0.036, 0.035, Lq, X([b[0], b[1] + 0.002, b[2]]), { nu: 20 });            // 초록 물약(유리 겉에 붙여 보이게)
+      [[0.012, 0.16, 0.0, 0.012], [-0.01, 0.185, 0.005, 0.009], [0.006, 0.205, -0.004, 0.007]].forEach(function (q) { m.ell(q[3], q[3], q[3], hex(0xb8ffd6), X([b[0] + q[0], b[1] + q[1], b[2] + q[2]]), { nu: 8, nv: 5 }); });   // 뽀글 거품
+    } }
+  };
+  Object.keys(HAND2).forEach(function (k) { ITEMS[k] = HAND2[k]; });
+  // 점검용(옷장에 안 나옴): 잰 귀(마디마다 타원체)와 머리 겉면 점 — items3d_preview.mjs로 "_ears"
+  ITEMS._ears = { slot: 'head', name: '귀 점검', emoji: '?', rarity: 1, bone: 'head', make: function (m, D) {
+    var H = D.H;
+    H.ears.forEach(function (E, k) { E.s.forEach(function (S) { m.surf(function (u, v) { var a = u * TAU, b = v * Math.PI, x = Math.sin(b) * Math.cos(a) * S.a, y = Math.sin(b) * Math.sin(a) * S.b, z = Math.cos(b) * 0.01; return [S.c[0] + E.e1[0] * x + E.e2[0] * y + E.ax[0] * z, S.c[1] + E.e1[1] * x + E.e2[1] * y + E.ax[1] * z, S.c[2] + E.e1[2] * x + E.e2[2] * y + E.ax[2] * z]; }, 12, 6, k ? hex(0x2060ff) : hex(0xff3030), S.c); }); });
+    for (var i = 0; i < HE; i++) for (var j = 0; j < HA; j++) { var p = H.at((-40 + i * 10) * Math.PI / 180, j * 15 * Math.PI / 180, 0.004); m.ell(0.006, 0.006, 0.006, hex(0x20c020), X(p), { nu: 5, nv: 3 }); }
+  } };
 
   var BODY_SLOTS = { top: 1, pants: 1, shoes: 1, wrist: 1 };   // 몸 모양(body)이 있어야 만들 수 있는 자리
   var CATALOG = {};
-  Object.keys(ITEMS).forEach(function (id) { var t = ITEMS[id]; CATALOG[id] = { id: id, slot: t.slot, name: t.name, emoji: t.emoji, rarity: t.rarity, bone: t.bone, upright: t.slot === 'hand', skin: !!BODY_SLOTS[t.slot], only: t.only || undefined }; });   // only: 그 게임 상자에서만 나옴(예: 'pyramid')
+  Object.keys(ITEMS).forEach(function (id) { if (id.charAt(0) === '_') return; var t = ITEMS[id]; CATALOG[id] = { id: id, slot: t.slot, name: t.name, emoji: t.emoji, rarity: t.rarity, bone: t.bone, upright: t.slot === 'hand', skin: !!BODY_SLOTS[t.slot], only: t.only || undefined }; });   // only: 그 게임 상자에서만 나옴(예: 'pyramid')
   window.ITEMS3D = {
     CATALOG: CATALOG,
     // 옷장 칸 순서(2026-11-19: 9자리). 2D 그림 겹치는 순서는 LAYER2D
@@ -2440,7 +2816,12 @@ window.makeChar3D = function (K, D, opt) {
         S = prepBody(o.body); S.H = { c: [0, Dm.hy, Dm.cz], r: Dm.r }; Dm.S = S;
       }
       var m = new M(o && o.raw, S);
+      // 덮어쓰는 모자: 머리 가운데 앞뒤(cz)를 잰 머리 가운데로(예전 값 face_z − head_r는 머리가 넓은 동물에서 3~8cm 뒤라 이마가 모자 앞을 뚫었다)
+      if (t.holes && Dm.H.measured) { var Dh = {}; for (var kk in Dm) Dh[kk] = Dm[kk]; Dh.cz = Dm.H.c[2]; Dm = Dh; }
       t.make(m, Dm, S);
+      // 손에 드는 것: 쥔 자리를 가운데로 조금 크게(2026-11-25 선생님: "손에 든 것이 좀 작다, 약간씩만 키우면") — 아이템마다 hs로 바꿈
+      if (t.slot === 'hand') { var hk = t.hs === undefined ? 1.2 : t.hs, hp = Dm.hand; if (hk !== 1) for (var q = 0; q < m.p.length; q += 3) for (var c3 = 0; c3 < 3; c3++) m.p[q + c3] = hp[c3] + (m.p[q + c3] - hp[c3]) * hk; }
+      if (t.holes) { wrapHead(m, Dm, 0); earHoles(m, Dm, 0, t.holes === true ? null : t.holes); }   // 머리에 덮어쓰는 모자: 머리가 뚫고 나오지 않게 감싸고, 귀가 뚫고 나온 자리에 테두리
       return m.out(t.bone, t.slot === 'hand');
     }
   };
@@ -6762,11 +7143,11 @@ for(let[r,y]of[[2.2,.57],[.86,2.13]]){let g=Re(new ot(r,r,.03,28),7653871);let m
 varying float vFade;
 `+i.vertexShader.replace("/*WP*/","vFade = iFade;")},zu=i=>{i.fragmentShader=`varying float vFade;
 `+i.fragmentShader.replace("#include <clipping_planes_fragment>",`#include <clipping_planes_fragment>
-`+ie.replace("FADE","vFade"))},Fu=Z(new Rt({vertexColors:!0}),"leaf",i=>{i.vertexShader=i.vertexShader.replace("#include <begin_vertex>",Uu)}),Xp=Z(new Rt({vertexColors:!0}),"fade",i=>{Nu(i),zu(i)}),Ou=Z(new Rt({vertexColors:!0}),"leaffade",i=>{i.vertexShader=i.vertexShader.replace("#include <begin_vertex>",Uu),Nu(i),zu(i)}),Bu=Du([[1.12,0,2.25,0],[.86,-.62,1.95,.28],[.82,.6,2,-.12],[.7,.1,2.95,-.05]].map(([i,a,l,u])=>Re(new tt(i,9,6).translate(a,l,u),16777215,{vert:!0,ao:.32,aoH:1.3,y0:1.25}))),Hu=Du([[1.15,1.5,1.55],[.92,1.3,2.35],[.66,1.1,3.1]].map(([i,a,l])=>Re(new Ii(i,a,8).translate(0,l,0),16777215,{vert:!0,ao:.25,aoH:1.2,y0:1}))),ku=Re(new ot(.15,.22,1.6,7,1).translate(0,.8,0),16777215,{vert:!0,ao:.25,aoH:.8}),Gu=Mt.filter(i=>i.type==="round").length,qp=Mt.length-Gu,Wo=rn(ku,Mt.length),Xo=rn(Bu,Gu,16777215,Fu),qo=rn(Hu,qp,16777215,Fu);function Il(i,a,l){let u=i.clone(),m=new Xr(new Float32Array(a),1);m.setUsage(Di),u.setAttribute("iFade",m);let x=new hi(u,l,a);x.count=0,x.frustumCulled=!1,x.instanceMatrix.setUsage(Di);let E=new Se(16777215);for(let L=0;L<a;L++)x.setColorAt(L,E);return w.add(x),x}let Qr=Il(ku,10,Xp),jr=Il(Bu,10,Ou),eo=Il(Hu,10,Ou),Vu=[Wo,Xo,qo,Qr,jr,eo],Wu=[6078542,6801754,5223242,7655267],Xu=[4169059,4892780,3641687],qu=[9264698,10119747,8672559];Mt.forEach((i,a)=>{i.i=a,i.shake=0,i.vis=!1,i.ti=0,i.ci=0,i.fade=0,i.faded=!1,i.fi=0,i.fci=0,i.leaf=new Se(i.type==="round"?i.big?6012236:Wu[a%Wu.length]:Xu[a%Xu.length]),i.bark=new Se(qu[a%qu.length])});let to=new It;function Yu(i,a){let l=i.shake>0?Math.sin(i.shake*30)*.075*(i.shake/.75):0;return y.setFromEuler(g.set(l*.6,i.rot,l,"YXZ")),a.compose(_.set(i.x,0,i.z),y,M.set(i.s,i.s,i.s))}function $u(i){i.vis&&(Yu(i,to),i.faded?(Qr.setMatrixAt(i.fi,to),(i.type==="round"?jr:eo).setMatrixAt(i.fci,to)):(Wo.setMatrixAt(i.ti,to),(i.type==="round"?Xo:qo).setMatrixAt(i.ci,to)))}function Yp(i){let a=!1;if(S.loc!=="village")return!1;for(let l of D){let u=l.z-Y.z,m=l.x-Y.x,x=u>.2&&u<5.8&&Math.abs(m)<2.8?.8:0;l.fade!==x&&(l.fade+=(x-l.fade)*Math.min(1,i*7),Math.abs(l.fade-x)<.03&&(l.fade=x),l.uF.value=l.fade)}for(let l of Mt){let u=l.z-Y.z,m=l.x-Y.x,E=u>.3&&u<(3.7*l.s-1)/.69&&Math.abs(m)<.8+1.05*l.s?.8:0;l.fade!==E&&(l.fade+=(E-l.fade)*Math.min(1,i*7),Math.abs(l.fade-E)<.03&&(l.fade=E),a=!0)}return a}let Zu=1e9,Ju=1e9,Ku=null,Qu=0,Vi=!0;function $p(i){let a=Yp(i),l=Vi||Math.abs(Et.x-Zu)>=.5||Math.abs(Et.z-Ju)>=.5||Ku!==Gs||Math.abs(Et.zoom-Qu)>.03;if(!l&&!a)return;if(l){Vi=!1,Zu=Et.x,Ju=Et.z,Ku=Gs,Qu=Et.zoom,Ui(Et.x,Et.z,Gs,Et.zoom);let ne=S.loc==="village";for(let Ce of Wt)Ce.mesh.visible=ne&&Ce.x1>Jt.x0&&Ce.x0<Jt.x1&&Ce.z1>Jt.z0&&Ce.z0<Jt.z1;for(let Ce of D)Ce.mesh.visible=ne&&Sn(Ce.x,Ce.z,4)}let u=0,m=0,x=0,E=0,L=0,z=0,$=Qr.geometry.attributes.iFade,oe=jr.geometry.attributes.iFade,Q=eo.geometry.attributes.iFade;for(let ne of Mt)ne.vis=Sn(ne.x,ne.z,2.2*ne.s),ne.faded=!1,ne.vis&&(ne.fade>0&&E<10?(ne.faded=!0,ne.fi=E++,Qr.setColorAt(ne.fi,ne.bark),$.setX(ne.fi,ne.fade),ne.type==="round"?(ne.fci=L++,jr.setColorAt(ne.fci,ne.leaf),oe.setX(ne.fci,ne.fade)):(ne.fci=z++,eo.setColorAt(ne.fci,ne.leaf),Q.setX(ne.fci,ne.fade))):(ne.ti=u++,Wo.setColorAt(ne.ti,ne.bark),ne.type==="round"?(ne.ci=m++,Xo.setColorAt(ne.ci,ne.leaf)):(ne.ci=x++,qo.setColorAt(ne.ci,ne.leaf))),$u(ne));Wo.count=u,Xo.count=m,qo.count=x,Qr.count=E,jr.count=L,eo.count=z;for(let ne of Vu)ne.instanceMatrix.needsUpdate=!0,ne.instanceColor.needsUpdate=!0;$.needsUpdate=!0,oe.needsUpdate=!0,Q.needsUpdate=!0}let Zp=[[-.62,1.95,.72],[.55,2.25,.78],[.05,1.72,1]],Yo=[];for(let i of Mt)if(i.fruit){i.fruits=[];for(let a=0;a<3;a++){let l={t:i,k:a,st:"tree",x:0,y:0,z:0,vx:0,vy:0,vz:0,timer:0,grow:1};i.fruits.push(l),Yo.push(l)}}let Jp=Re(new tt(.17,7,5),16777215,{vert:!0}),no=rn(Jp,Yo.length);Yo.forEach((i,a)=>{i.i=a,i.col=new Se(i.t.fruit)});function Kp(i){let a=!1;for(let l=0;l<Hi;l++){let u=Mt[l];u.shake>0&&(u.shake=Math.max(0,u.shake-i),$u(u),a=u.vis||a)}if(a)for(let l of Vu)l.instanceMatrix.needsUpdate=!0}let ju=["\uD558\uB298","\uBC14\uB2E4","\uBCC4\uC774","\uB3C4\uD1A0\uB9AC","\uAD6C\uB984","\uC194\uC774","\uB2E4\uC628","\uB77C\uC628","\uBD04\uC774","\uC5EC\uB984","\uAC00\uC744","\uACA8\uC6B8","\uD574\uB2D8","\uB2EC\uB2D8","\uB098\uB798","\uBCF4\uB77C","\uCD08\uB85D","\uBBFC\uD2B8","\uCF69\uC774","\uD1A0\uB9AC","\uBAA8\uBAA8","\uB8E8\uB8E8","\uC9C0\uC9C0","\uCF54\uCF54"],ni=window.NET&&NET.online?34:26,Us=25,Ll=25,Qp=[16114632,13011546,15907014,12573941,16769162,16448250,12171716,16229212,11069129,13482224,9136970,16765352],jp=[16739179,5090295,5361510,16766011,8675063,16749099,2148759,15754645,16777215,3382e3],ef=["round","pointy","long"],ii=[],$o={round:0,pointy:0,long:0};for(let i=0;i<ni;i++){let a=i===0||i===Us?"round":n(ef),l={i,name:i===0?"\uB098":i===Us?"\uC120\uC0DD\uB2D8":ju[i-1]||"\uCE5C\uAD6C",x:0,z:3,ang:0,phase:e()*6,breath:e()*6,moving:!1,run:!1,sc:1,baseY:0,hopY:0,hopV:0,hidden:!1,ear:a,earSlot:$o[a]++,fur:i===0?16769162:i===Us?16774374:n(Qp),shirt:i===0?16739179:i===Us?3890139:n(jp),blinkT:t(1,4),blink:0,cheer:0,wave:0,sad:0,tilt:0,act:"wander",st:"idle",timer:t(.3,3),tx:0,tz:0,off:0,stuck:0,speed:t(1.6,2.1),goal:null,team:-1,score:0,out:!1,q:null,target:null,think:0,emoT:t(4,20),lineT:0};ii.push(l)}let Y=ii[0],Ct=ii[Us];Ct.sc=1.18,Ct.baseY=U.h,Ct.x=0,Ct.z=U.z+.2,Ct.ang=0,Ct.act="teacher";let cn=ii.slice(1,Us),on=ii.slice(0,Us);for(let i of cn){for(let a=0;a<80;a++){let l=e()*6.28,u=t(3,15),m=de.x+Math.cos(l)*u,x=de.z+Math.sin(l)*u;if(!te(m,x,.6)){i.x=m,i.z=x;break}}i.ang=e()*6.28}Y.x=0,Y.z=7.5,Y.ang=Math.PI;let pi=i=>Re(i,16777215,{vert:!0}),Dt={body:rn(pi(new tt(.34,10,7)),ni),head:rn(pi(new tt(.4,12,9)),ni),muz:rn(pi(new tt(.16,8,5)),ni),nose:rn(pi(new tt(.055,5,3)),ni,4862247),eye:rn(pi(new tt(.05,5,4)),ni*2,2759702),shine:rn(pi(new tt(.018,4,3)),ni*2,16777215),blush:rn(pi(new tt(.065,5,3)),ni*2,16752048),arm:rn(pi(new tt(.085,5,4)),ni*2),foot:rn(pi(new tt(.1,6,4)),ni*2),ear:{round:rn(pi(new tt(.13,6,5)),$o.round*2),pointy:rn(pi(new Ii(.12,.26,6)),$o.pointy*2),long:rn(pi(new tt(.1,7,5)),$o.long*2)}};{let i=new Se,a=new Se,l=new Se,u=new Se;for(let m of ii){i.setHex(m.fur),a.copy(i).lerp(new Se(16777215),.6),l.copy(i).multiplyScalar(.8),u.setHex(m.shirt),Dt.body.setColorAt(m.i,u),Dt.head.setColorAt(m.i,i),Dt.muz.setColorAt(m.i,a);for(let x of[0,1])Dt.arm.setColorAt(m.i*2+x,i),Dt.foot.setColorAt(m.i*2+x,l),Dt.ear[m.ear].setColorAt(m.earSlot*2+x,i)}}let mi={head:f(0,1,0,0,1.06,.94,.96),muz:f(0,.9,.31,0,1.25,.82,.75),nose:f(0,.96,.43),eyeL:f(.15,1.08,.36,0,.8,1.25,.6),eyeR:f(-.15,1.08,.36,0,.8,1.25,.6),eyeLb:f(.15,1.07,.37,0,.95,.18,.6),eyeRb:f(-.15,1.07,.37,0,.95,.18,.6),shineL:f(.165,1.105,.385),shineR:f(-.135,1.105,.385),blushL:f(.27,.95,.31,0,1.2,.7,.35),blushR:f(-.27,.95,.31,0,1.2,.7,.35),ears:{round:[f(.25,1.34,-.02,0,1,1,.55),f(-.25,1.34,-.02,0,1,1,.55)],pointy:[f(.22,1.36,0,0,1,1,1,0,-.32),f(-.22,1.36,0,0,1,1,1,0,.32)],long:[f(.16,1.55,-.04,0,.75,2.5,.5,0,-.2),f(-.16,1.55,-.04,0,.75,2.5,.5,0,.2)]}},gi=new It().makeScale(0,0,0);function e0(){return ge(64,64,i=>{let a=i.createRadialGradient(32,32,2,32,32,31);a.addColorStop(0,"rgba(255,255,255,1)"),a.addColorStop(.55,"rgba(255,255,255,0.65)"),a.addColorStop(1,"rgba(255,255,255,0)"),i.fillStyle=a,i.fillRect(0,0,64,64)})}let tf=e0(),nf=Z(new Rt({map:tf,color:2767718,transparent:!0,opacity:.42,depthWrite:!1}),"sh"),Ns=new hi(new en(1,1).rotateX(-Math.PI/2),nf,ni);Ns.frustumCulled=!1,Ns.renderOrder=3,Ns.instanceMatrix.setUsage(Di),w.add(Ns);let t0=Z(new Rt({color:16777215,transparent:!0,opacity:.9,depthWrite:!1}),"ring"),bi=new hi(new Bo(.44,.6,22).rotateX(-Math.PI/2),t0,ni);bi.frustumCulled=!1,bi.renderOrder=4,bi.instanceMatrix.setUsage(Di);for(let i=0;i<ni;i++)bi.setColorAt(i,new Se(16777215));w.add(bi);let Dl=!1,io=new vt(Re(new fi(.2,0),16766011,{vert:!0}),ce);io.frustumCulled=!1,w.add(io);let Ul=(()=>{let i=[];for(let l of[.15,-.15])i.push(Re(new ls(.085,.018,5,12).translate(l,1.08,.385),4804695,{vert:!0}).toNonIndexed());i.push(Re(new pe(.1,.02,.02).translate(0,1.1,.39),4804695,{vert:!0}).toNonIndexed());let a=new vt(Oe(i),ce);return a.matrixAutoUpdate=!1,a.frustumCulled=!1,w.add(a),a})(),Nl=new It,tn=new It,Vn=new It,sf=new Yn;function fn(i,a,l){tn.multiplyMatrices(Nl,l),i.setMatrixAt(a,tn)}let n0=new Yn().setFromEuler(new ti(0,0,.55)),i0=new Yn().setFromEuler(new ti(0,0,-.55));function s0(i){let a=i.i;for(let l of["body","head","muz","nose"])Dt[l].setMatrixAt(a,gi);for(let l of["eye","shine","blush","arm","foot"])Dt[l].setMatrixAt(a*2,gi),Dt[l].setMatrixAt(a*2+1,gi);Dt.ear[i.ear].setMatrixAt(i.earSlot*2,gi),Dt.ear[i.ear].setMatrixAt(i.earSlot*2+1,gi),Ns.setMatrixAt(a,gi),bi.setMatrixAt(a,gi)}let ZM={v:1,t:1,min:.24,yaw:0,btn:null},BEAR=null;
+`+ie.replace("FADE","vFade"))},Fu=Z(new Rt({vertexColors:!0}),"leaf",i=>{i.vertexShader=i.vertexShader.replace("#include <begin_vertex>",Uu)}),Xp=Z(new Rt({vertexColors:!0}),"fade",i=>{Nu(i),zu(i)}),Ou=Z(new Rt({vertexColors:!0}),"leaffade",i=>{i.vertexShader=i.vertexShader.replace("#include <begin_vertex>",Uu),Nu(i),zu(i)}),Bu=Du([[1.12,0,2.25,0],[.86,-.62,1.95,.28],[.82,.6,2,-.12],[.7,.1,2.95,-.05]].map(([i,a,l,u])=>Re(new tt(i,9,6).translate(a,l,u),16777215,{vert:!0,ao:.32,aoH:1.3,y0:1.25}))),Hu=Du([[1.15,1.5,1.55],[.92,1.3,2.35],[.66,1.1,3.1]].map(([i,a,l])=>Re(new Ii(i,a,8).translate(0,l,0),16777215,{vert:!0,ao:.25,aoH:1.2,y0:1}))),ku=Re(new ot(.15,.22,1.6,7,1).translate(0,.8,0),16777215,{vert:!0,ao:.25,aoH:.8}),Gu=Mt.filter(i=>i.type==="round").length,qp=Mt.length-Gu,Wo=rn(ku,Mt.length),Xo=rn(Bu,Gu,16777215,Fu),qo=rn(Hu,qp,16777215,Fu);function Il(i,a,l){let u=i.clone(),m=new Xr(new Float32Array(a),1);m.setUsage(Di),u.setAttribute("iFade",m);let x=new hi(u,l,a);x.count=0,x.frustumCulled=!1,x.instanceMatrix.setUsage(Di);let E=new Se(16777215);for(let L=0;L<a;L++)x.setColorAt(L,E);return w.add(x),x}let Qr=Il(ku,10,Xp),jr=Il(Bu,10,Ou),eo=Il(Hu,10,Ou),Vu=[Wo,Xo,qo,Qr,jr,eo],Wu=[6078542,6801754,5223242,7655267],Xu=[4169059,4892780,3641687],qu=[9264698,10119747,8672559];Mt.forEach((i,a)=>{i.i=a,i.shake=0,i.vis=!1,i.ti=0,i.ci=0,i.fade=0,i.faded=!1,i.fi=0,i.fci=0,i.leaf=new Se(i.type==="round"?i.big?6012236:Wu[a%Wu.length]:Xu[a%Xu.length]),i.bark=new Se(qu[a%qu.length])});let to=new It;function Yu(i,a){let l=i.shake>0?Math.sin(i.shake*30)*.075*(i.shake/.75):0;return y.setFromEuler(g.set(l*.6,i.rot,l,"YXZ")),a.compose(_.set(i.x,0,i.z),y,M.set(i.s,i.s,i.s))}function $u(i){i.vis&&(Yu(i,to),i.faded?(Qr.setMatrixAt(i.fi,to),(i.type==="round"?jr:eo).setMatrixAt(i.fci,to)):(Wo.setMatrixAt(i.ti,to),(i.type==="round"?Xo:qo).setMatrixAt(i.ci,to)))}function Yp(i){let a=!1;if(S.loc!=="village")return!1;for(let l of D){let u=l.z-Y.z,m=l.x-Y.x,x=u>.2&&u<5.8&&Math.abs(m)<2.8?.8:0;l.fade!==x&&(l.fade+=(x-l.fade)*Math.min(1,i*7),Math.abs(l.fade-x)<.03&&(l.fade=x),l.uF.value=l.fade)}for(let l of Mt){let u=l.z-Y.z,m=l.x-Y.x,E=u>.3&&u<(3.7*l.s-1)/.69&&Math.abs(m)<.8+1.05*l.s?.8:0;l.fade!==E&&(l.fade+=(E-l.fade)*Math.min(1,i*7),Math.abs(l.fade-E)<.03&&(l.fade=E),a=!0)}return a}let Zu=1e9,Ju=1e9,Ku=null,Qu=0,Vi=!0;function $p(i){let a=Yp(i),l=Vi||Math.abs(Et.x-Zu)>=.5||Math.abs(Et.z-Ju)>=.5||Ku!==Gs||Math.abs(Et.zoom-Qu)>.03;if(!l&&!a)return;if(l){Vi=!1,Zu=Et.x,Ju=Et.z,Ku=Gs,Qu=Et.zoom,Ui(Et.x,Et.z,Gs,Et.zoom);let ne=S.loc==="village";for(let Ce of Wt)Ce.mesh.visible=ne&&Ce.x1>Jt.x0&&Ce.x0<Jt.x1&&Ce.z1>Jt.z0&&Ce.z0<Jt.z1;for(let Ce of D)Ce.mesh.visible=ne&&Sn(Ce.x,Ce.z,4)}let u=0,m=0,x=0,E=0,L=0,z=0,$=Qr.geometry.attributes.iFade,oe=jr.geometry.attributes.iFade,Q=eo.geometry.attributes.iFade;for(let ne of Mt)ne.vis=Sn(ne.x,ne.z,2.2*ne.s),ne.faded=!1,ne.vis&&(ne.fade>0&&E<10?(ne.faded=!0,ne.fi=E++,Qr.setColorAt(ne.fi,ne.bark),$.setX(ne.fi,ne.fade),ne.type==="round"?(ne.fci=L++,jr.setColorAt(ne.fci,ne.leaf),oe.setX(ne.fci,ne.fade)):(ne.fci=z++,eo.setColorAt(ne.fci,ne.leaf),Q.setX(ne.fci,ne.fade))):(ne.ti=u++,Wo.setColorAt(ne.ti,ne.bark),ne.type==="round"?(ne.ci=m++,Xo.setColorAt(ne.ci,ne.leaf)):(ne.ci=x++,qo.setColorAt(ne.ci,ne.leaf))),$u(ne));Wo.count=u,Xo.count=m,qo.count=x,Qr.count=E,jr.count=L,eo.count=z;for(let ne of Vu)ne.instanceMatrix.needsUpdate=!0,ne.instanceColor.needsUpdate=!0;$.needsUpdate=!0,oe.needsUpdate=!0,Q.needsUpdate=!0}let Zp=[[-.62,1.95,.72],[.55,2.25,.78],[.05,1.72,1]],Yo=[];for(let i of Mt)if(i.fruit){i.fruits=[];for(let a=0;a<3;a++){let l={t:i,k:a,st:"tree",x:0,y:0,z:0,vx:0,vy:0,vz:0,timer:0,grow:1};i.fruits.push(l),Yo.push(l)}}let Jp=Re(new tt(.17,7,5),16777215,{vert:!0}),no=rn(Jp,Yo.length);Yo.forEach((i,a)=>{i.i=a,i.col=new Se(i.t.fruit)});function Kp(i){let a=!1;for(let l=0;l<Hi;l++){let u=Mt[l];u.shake>0&&(u.shake=Math.max(0,u.shake-i),$u(u),a=u.vis||a)}if(a)for(let l of Vu)l.instanceMatrix.needsUpdate=!0}let ju=["\uD558\uB298","\uBC14\uB2E4","\uBCC4\uC774","\uB3C4\uD1A0\uB9AC","\uAD6C\uB984","\uC194\uC774","\uB2E4\uC628","\uB77C\uC628","\uBD04\uC774","\uC5EC\uB984","\uAC00\uC744","\uACA8\uC6B8","\uD574\uB2D8","\uB2EC\uB2D8","\uB098\uB798","\uBCF4\uB77C","\uCD08\uB85D","\uBBFC\uD2B8","\uCF69\uC774","\uD1A0\uB9AC","\uBAA8\uBAA8","\uB8E8\uB8E8","\uC9C0\uC9C0","\uCF54\uCF54"],ni=window.NET&&NET.online?34:26,Us=25,Ll=25,Qp=[16114632,13011546,15907014,12573941,16769162,16448250,12171716,16229212,11069129,13482224,9136970,16765352],jp=[16739179,5090295,5361510,16766011,8675063,16749099,2148759,15754645,16777215,3382e3],ef=["round","pointy","long"],ii=[],$o={round:0,pointy:0,long:0};for(let i=0;i<ni;i++){let a=i===0||i===Us?"round":n(ef),l={i,name:i===0?"\uB098":i===Us?"\uC120\uC0DD\uB2D8":ju[i-1]||"\uCE5C\uAD6C",x:0,z:3,ang:0,phase:e()*6,breath:e()*6,moving:!1,run:!1,sc:1,baseY:0,hopY:0,hopV:0,hidden:!1,ear:a,earSlot:$o[a]++,fur:i===0?16769162:i===Us?16774374:n(Qp),shirt:i===0?16739179:i===Us?3890139:n(jp),blinkT:t(1,4),blink:0,cheer:0,wave:0,sad:0,tilt:0,act:"wander",st:"idle",timer:t(.3,3),tx:0,tz:0,off:0,stuck:0,speed:t(1.6,2.1),goal:null,team:-1,score:0,out:!1,q:null,target:null,think:0,emoT:t(4,20),lineT:0};ii.push(l)}let Y=ii[0],Ct=ii[Us];Ct.sc=1.18,Ct.baseY=U.h,Ct.x=0,Ct.z=U.z+.2,Ct.ang=0,Ct.act="teacher";let cn=ii.slice(1,Us),on=ii.slice(0,Us);for(let i of cn){for(let a=0;a<80;a++){let l=e()*6.28,u=t(3,15),m=de.x+Math.cos(l)*u,x=de.z+Math.sin(l)*u;if(!te(m,x,.6)){i.x=m,i.z=x;break}}i.ang=e()*6.28}Y.x=0,Y.z=7.5,Y.ang=Math.PI;let pi=i=>Re(i,16777215,{vert:!0}),Dt={body:rn(pi(new tt(.34,10,7)),ni),head:rn(pi(new tt(.4,12,9)),ni),muz:rn(pi(new tt(.16,8,5)),ni),nose:rn(pi(new tt(.055,5,3)),ni,4862247),eye:rn(pi(new tt(.05,5,4)),ni*2,2759702),shine:rn(pi(new tt(.018,4,3)),ni*2,16777215),blush:rn(pi(new tt(.065,5,3)),ni*2,16752048),arm:rn(pi(new tt(.085,5,4)),ni*2),foot:rn(pi(new tt(.1,6,4)),ni*2),ear:{round:rn(pi(new tt(.13,6,5)),$o.round*2),pointy:rn(pi(new Ii(.12,.26,6)),$o.pointy*2),long:rn(pi(new tt(.1,7,5)),$o.long*2)}};{let i=new Se,a=new Se,l=new Se,u=new Se;for(let m of ii){i.setHex(m.fur),a.copy(i).lerp(new Se(16777215),.6),l.copy(i).multiplyScalar(.8),u.setHex(m.shirt),Dt.body.setColorAt(m.i,u),Dt.head.setColorAt(m.i,i),Dt.muz.setColorAt(m.i,a);for(let x of[0,1])Dt.arm.setColorAt(m.i*2+x,i),Dt.foot.setColorAt(m.i*2+x,l),Dt.ear[m.ear].setColorAt(m.earSlot*2+x,i)}}let mi={head:f(0,1,0,0,1.06,.94,.96),muz:f(0,.9,.31,0,1.25,.82,.75),nose:f(0,.96,.43),eyeL:f(.15,1.08,.36,0,.8,1.25,.6),eyeR:f(-.15,1.08,.36,0,.8,1.25,.6),eyeLb:f(.15,1.07,.37,0,.95,.18,.6),eyeRb:f(-.15,1.07,.37,0,.95,.18,.6),shineL:f(.165,1.105,.385),shineR:f(-.135,1.105,.385),blushL:f(.27,.95,.31,0,1.2,.7,.35),blushR:f(-.27,.95,.31,0,1.2,.7,.35),ears:{round:[f(.25,1.34,-.02,0,1,1,.55),f(-.25,1.34,-.02,0,1,1,.55)],pointy:[f(.22,1.36,0,0,1,1,1,0,-.32),f(-.22,1.36,0,0,1,1,1,0,.32)],long:[f(.16,1.55,-.04,0,.75,2.5,.5,0,-.2),f(-.16,1.55,-.04,0,.75,2.5,.5,0,.2)]}},gi=new It().makeScale(0,0,0);function e0(){return ge(64,64,i=>{let a=i.createRadialGradient(32,32,2,32,32,31);a.addColorStop(0,"rgba(255,255,255,1)"),a.addColorStop(.55,"rgba(255,255,255,0.65)"),a.addColorStop(1,"rgba(255,255,255,0)"),i.fillStyle=a,i.fillRect(0,0,64,64)})}let tf=e0(),nf=Z(new Rt({map:tf,color:2767718,transparent:!0,opacity:.42,depthWrite:!1}),"sh"),Ns=new hi(new en(1,1).rotateX(-Math.PI/2),nf,ni);Ns.frustumCulled=!1,Ns.renderOrder=3,Ns.instanceMatrix.setUsage(Di),w.add(Ns);let t0=Z(new Rt({color:16777215,transparent:!0,opacity:.9,depthWrite:!1}),"ring"),bi=new hi(new Bo(.44,.6,22).rotateX(-Math.PI/2),t0,ni);bi.frustumCulled=!1,bi.renderOrder=4,bi.instanceMatrix.setUsage(Di);for(let i=0;i<ni;i++)bi.setColorAt(i,new Se(16777215));w.add(bi);let Dl=!1,io=new vt(Re(new fi(.2,0),16766011,{vert:!0}),ce);io.frustumCulled=!1,w.add(io);let Ul=(()=>{let i=[];for(let l of[.15,-.15])i.push(Re(new ls(.085,.018,5,12).translate(l,1.08,.385),4804695,{vert:!0}).toNonIndexed());i.push(Re(new pe(.1,.02,.02).translate(0,1.1,.39),4804695,{vert:!0}).toNonIndexed());let a=new vt(Oe(i),ce);return a.matrixAutoUpdate=!1,a.frustumCulled=!1,w.add(a),a})(),Nl=new It,tn=new It,Vn=new It,sf=new Yn;function fn(i,a,l){tn.multiplyMatrices(Nl,l),i.setMatrixAt(a,tn)}let n0=new Yn().setFromEuler(new ti(0,0,.55)),i0=new Yn().setFromEuler(new ti(0,0,-.55));function s0(i){let a=i.i;for(let l of["body","head","muz","nose"])Dt[l].setMatrixAt(a,gi);for(let l of["eye","shine","blush","arm","foot"])Dt[l].setMatrixAt(a*2,gi),Dt[l].setMatrixAt(a*2+1,gi);Dt.ear[i.ear].setMatrixAt(i.earSlot*2,gi),Dt.ear[i.ear].setMatrixAt(i.earSlot*2+1,gi),Ns.setMatrixAt(a,gi),bi.setMatrixAt(a,gi)}let ZM={v:1,t:1,min:.24,yaw:0},BEAR=null;window.__zoom=t=>{ZM.t=Math.max(ZM.min,Math.min(1,t))};
 /* 광장 '나' 캐릭터 고르기 · 아이템 · 옷장 · 선물 상자 — plaza_inject.py가 광장 코드 안(function r0 앞)에 그대로 넣는다
  * 첫 줄(BEAR 선언)은 확대 카메라 넣기(once)가 그 글자를 찾아 ZM을 붙이므로 바꾸지 않는다
  * 이 자리에서 쓰는 광장 이름: vt=Mesh, un=BufferGeometry, jt=BufferAttribute, ei=Texture, Rt=MeshBasicMaterial, Z=땅 휘어짐 재질,
- *   w=장면, ht=소리, Y=나, ZM=확대 카메라
+ *   w=장면, ht=소리, Y=나, ZM=옷장 카메라(조금 다가감)
  * 저장(이 기기): plaza.char 고른 캐릭터 · plaza.items 모은 아이템 · plaza.wear 입은 아이템 {자리: id} · plaza.enter 포털에 들어간 때
  */
 try {
@@ -6864,9 +7245,9 @@ try {
         });
         pick.hidden = !1
       },
-      // 옷장: 카메라가 내 캐릭터 앞으로 다가가고, 자리별로 모은 아이템을 눌러 입기/벗기. 못 얻은 것은 ❔
-      // 휴대폰 세로에서는 옷장이 아래 절반을 덮으니 카메라가 아래를 더 봐서 캐릭터가 창 위에 보이게(ZM.dy)
-      zoomTo = on => { try { on ? (ZM.t = .34, ZM.yaw = Y.ang, ZM.dy = matchMedia('(max-width:640px) and (orientation:portrait)').matches ? 1.15 : 0) : (ZM.t = 1, ZM.dy = 0) } catch (e) { } },
+      // 옷장: 카메라가 내 캐릭터 쪽으로 아주 조금만 다가가고(2026-11-25 선생님: 가까이 보면 저그래픽이 티가 남 — 예전 .34 → .82, 돌아보기 없음),
+      // 자리별로 모은 아이템을 눌러 입기/벗기. 못 얻은 것은 ❔. 휴대폰·7" 세로에서는 옷장이 아래 절반을 덮으니 카메라가 아래를 더 봐서 캐릭터가 창 위에 보이게(ZM.dy, 바라보는 점을 그만큼 내림)
+      zoomTo = on => { try { on ? (ZM.t = .82, ZM.yaw = 0, ZM.dy = matchMedia('(max-width:640px) and (orientation:portrait)').matches ? 4.4 : 0) : (ZM.t = 1, ZM.dy = 0) } catch (e) { } },
       // 옷장 자리 9곳(2026-11-19: 머리·안경·목·윗옷·바지·신발·팔찌·등·손) → 위에 자리 단추(두 줄), 아래에 고른 자리의 아이템만.
       // 한 줄씩 다 늘어놓으면 휴대폰·낡은 패드에서 너무 길어져서. 자리 단추에는 입은 아이템 그림과 '모은 수/전체'
       SLOT_EMO = { head: "👒", face: "👓", neck: "🎀", top: "👕", pants: "👖", shoes: "👟", wrist: "⌚", back: "🎒", hand: "🎈" },
@@ -7752,7 +8133,7 @@ try {
     };
   })();
 } catch (e) { console.warn("home", e) }
-function vm(i){if(Ct.hidden)return;Ct.breath+=i*2.2,$l(Ct,i);let a=0;S.mode==="free"&&Math.hypot(Y.x-Ct.x,Y.z-Ct.z)<9&&(a=Math.atan2(Y.x-Ct.x,Y.z-Ct.z)),oo(Ct,a,i*.5),S.mode==="free"&&(Ct.emoT-=i,Ct.emoT<=0&&(Ct.emoT=t(14,30),Sn(Ct.x,Ct.z,0)&&(Ct.wave=1.6,Kt(Ct,n(["\uC548\uB155~","\uC88B\uC740 \uC544\uCE68!","\u{1F60A}","\uC624\uB298\uB3C4 \uC990\uAC81\uAC8C!"]),2.4))))}function Mm(i){for(let a of cn)if(a.breath+=i*2.2,$l(a,i),!a.hidden&&S.loc!=="arena"){if(a.goal){B0(a,i);continue}if(a.act==="stand"){a.moving=!1,a.run=!1,a.standFace!==void 0&&oo(a,a.standFace,i),a.cheer>0&&a.hopY===0?a.hopV=3.4:a.hopY===0&&e()<i*.04&&(a.hopV=2.6);continue}a.act!=="gone"&&W0(a,i)}Y.cheer>0&&Y.hopY===0&&!Y.moving&&(Y.hopV=3.4)}function Em(i){if(lm(i),vm(i),S.loc==="arena"&&rm(i),Mm(i),H0(i),S.mode==="quiz"&&Ye.on&&Z0(i),S.mode==="gather"&&(Ql+=i,Ql>45&&lo()),S.mode==="rush"&&S.loc==="village"&&ve.st==="rush"){let a=Te[ve.wi];ve.t+=i,Math.hypot(Y.x-a.gx,Y.z-a.gz)<1.05&&cc(),ve.t>9&&cn.every(l=>l.hidden)&&!ve.nag&&(ve.nag=!0,Kt(Ct,"\uC5B4\uC11C \uB4E4\uC5B4\uAC00\uC694~",3))}for(let a of Te){a.uOpen.value+=(a.open-a.uOpen.value)*Math.min(1,i*3);a.uSpin.value+=i*(1+.6*a.uOpen.value);let nd=S.loc==="village"&&!Y.hidden&&!(window.PLAZA_GAMES&&PLAZA_GAMES.isOpen&&!PLAZA_GAMES.isOpen(a))?Math.hypot(Y.x-a.gx,Y.z-a.gz):99,nt=Math.max(0,Math.min(1,(7.5-nd)/3.5));a.uNear.value+=(nt-a.uNear.value)*Math.min(1,i*2.5);a.portal&&(a.portal.visible=Math.max(a.uNear.value,a.uOpen.value)>.004)}S.loc==="village"&&S.mode!=="game"&&(Xe.birdT-=i,Xe.birdT<=0&&(Xe.birdT=t(3,9),ht.chirp())),X0(i),K0(i),U0(i),ta&&C>ta&&Ln(null),na&&C>na&&(na=0,ps.hidden=!0)}let mo=ke("panel");function go(i){mo.hidden=i===void 0?!mo.hidden:!i,ke("bTeacher").textContent=mo.hidden?"\u{1F469}\u200D\u{1F3EB} \uC120\uC0DD\uB2D8":"\u2715 \uB2EB\uAE30",mo.hidden||(ks.hidden=!0)}ke("bTeacher").addEventListener("click",()=>{ht.click(),go()}),ke("bSound").addEventListener("click",()=>{yf(!Xe.on),ht.click()});let pr=i=>()=>{ht.click(),go(!1),i()};ke("pGather").addEventListener("click",pr(()=>window.NET&&NET.online?NET.recall():ua())),ke("pQuiz").addEventListener("click",pr(()=>ho())),ke("pNext").addEventListener("click",pr(zf)),ke("pQuizEnd").addEventListener("click",pr(()=>{Ye.on&&ma()})),ke("pAO").addEventListener("click",()=>{ht.click(),tc="O",ke("pAO").classList.add("sel"),ke("pAX").classList.remove("sel")}),ke("pAX").addEventListener("click",()=>{ht.click(),tc="X",ke("pAX").classList.add("sel"),ke("pAO").classList.remove("sel")}),ke("pAsk").addEventListener("click",()=>{if(ht.click(),!ke("qIn").value.trim()){ke("qIn").focus();return}go(!1),J0()}),ke("qIn").addEventListener("keydown",i=>{i.key==="Enter"&&(i.preventDefault(),ke("pAsk").click())}),Te.forEach((i,a)=>{let l=document.createElement("button");l.className="pb",l.innerHTML=`${i.emoji} ${i.name}<small>${i.modeName}</small>`,l.addEventListener("click",pr(()=>lc(a))),ke("pWorlds").appendChild(l)}),ke("pHome").addEventListener("click",pr(()=>{window.NET&&NET.online?NET.teacherHome():S.loc==="room"?po():S.loc==="arena"||S.mode==="rush"?_a():ua()}));let ks=ke("emo");ke("emoBtn").addEventListener("click",()=>{ht.click(),ks.hidden=!ks.hidden}),ks.querySelectorAll(".eb").forEach(i=>i.addEventListener("click",()=>{let a=i.textContent;Kt(Y,a,2.2),window.NET&&NET.emo(a),ht.pop(),Y.hopY===0&&(Y.hopV=3.2),a==="\u{1F44B}"&&(Y.wave=1.4),ks.hidden=!0,cn.filter(u=>!u.hidden&&Math.hypot(u.x-Y.x,u.z-Y.z)<6).slice(0,3).forEach((u,m)=>{u.emoT=.5+m*.5+e()*.4,u.replyE=a})}));for(let i of["topR","panel","emoBtn","emo","act","card","score","chip","count","banner","start","decoBtn","decoBar","homeArrow"])ke(i).addEventListener("pointerdown",a=>a.stopPropagation());let Xt={id:null,ox:0,oy:0,dx:0,dy:0},Si={left:0,right:0,up:0,down:0},xo=ke("joy"),rd=ke("knob");G.addEventListener("pointerdown",i=>{if(ks.hidden=!0,S.deco){HOME.down(i);return}if(!(Xt.id!==null||i.clientX>innerWidth*.62)){Xt.id=i.pointerId,Xt.ox=i.clientX,Xt.oy=i.clientY,Xt.dx=Xt.dy=0,xo.style.left=i.clientX+"px",xo.style.top=i.clientY+"px",rd.style.transform="",xo.hidden=!1;try{G.setPointerCapture(i.pointerId)}catch{}}}),G.addEventListener("pointermove",i=>{if(i.pointerId!==Xt.id)return;let a=i.clientX-Xt.ox,l=i.clientY-Xt.oy,u=Math.hypot(a,l),m=52;u>m&&(a*=m/u,l*=m/u),Xt.dx=a/m,Xt.dy=l/m,rd.style.transform=`translate(${a}px,${l}px)`});let od=i=>{i.pointerId===Xt.id&&(Xt.id=null,Xt.dx=Xt.dy=0,xo.hidden=!0)};G.addEventListener("pointerup",od),G.addEventListener("pointercancel",od);{let tp=new Map,pin=null,orb=null,clampZ=v=>Math.max(ZM.min,Math.min(1,v)),stopJoy=()=>{Xt.id=null,Xt.dx=Xt.dy=0,xo.hidden=!0};window.JUMP=()=>{if(window.HOME&&HOME.sitting()){HOME.act("stand");return}Y.hidden||Y.hopY>0||Y.hopV>0||(Y.hopV=5.2,ht.pop())};{let jb=ke("jumpBtn");jb&&jb.addEventListener("pointerdown",e=>{e.stopPropagation(),e.preventDefault(),JUMP()})}ZM.btn=ke("zoomReset");ZM.btn&&(ZM.btn.addEventListener("pointerdown",e=>e.stopPropagation()),ZM.btn.onclick=()=>{ZM.t=1});let dist=()=>{let p=[...tp.values()];return Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)||1};addEventListener("pointerdown",e=>{if(e.target!==G||S.deco)return;if(e.pointerType!=="mouse")tp.set(e.pointerId,{x:e.clientX,y:e.clientY});if(tp.size>=2){e.stopPropagation(),stopJoy(),orb=null,pin={d:dist(),z:ZM.t};return}if(e.clientX>innerWidth*.62&&ZM.t<.97)orb={id:e.pointerId,x:e.clientX}},!0);addEventListener("pointermove",e=>{if(tp.has(e.pointerId))tp.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pin&&tp.size>=2){e.stopPropagation(),ZM.t=clampZ(pin.z*pin.d/dist());return}if(orb&&e.pointerId===orb.id){ZM.yaw-=(e.clientX-orb.x)*.01,orb.x=e.clientX}},!0);let up=e=>{tp.delete(e.pointerId);tp.size<2&&(pin=null);orb&&e.pointerId===orb.id&&(orb=null)};addEventListener("pointerup",up,!0),addEventListener("pointercancel",up,!0);G.addEventListener("wheel",e=>{e.preventDefault(),ZM.t=clampZ(ZM.t*Math.exp(e.deltaY*.0015))},{passive:!1})}let ba={ArrowLeft:"left",KeyA:"left",ArrowRight:"right",KeyD:"right",ArrowUp:"up",KeyW:"up",ArrowDown:"down",KeyS:"down"},bm=()=>document.activeElement&&/^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName);addEventListener("keydown",i=>{bm()||(ba[i.code]&&(Si[ba[i.code]]=1,i.preventDefault()),i.code==="Space"&&(Zi?Qf():window.JUMP&&JUMP(),i.preventDefault()))}),addEventListener("keyup",i=>{ba[i.code]&&(Si[ba[i.code]]=0)}),addEventListener("blur",()=>{Si.left=Si.right=Si.up=Si.down=0});let Et={x:Y.x,z:Y.z,zoom:1},Gs=!1;function ad(){let i=innerWidth,a=innerHeight;Gs=a>i,N.setSize(i,a,!1),F.aspect=i/a,F.fov=Gs?50:36,F.updateProjectionMatrix(),Vi=!0}addEventListener("resize",ad),ad();function Sm(i){let a=Y.x,l=Y.z,u=1;if(S.deco){let L=Wi[S.deco];a=L.ox+L.cols/2,l=L.oz+L.rows/2+(S.deco==="room"?2.2:2.6),u=L.zoom}else if(S.loc==="room")a=o(Y.x,Ae.x,Ae.cf),l=o(Y.z,Ae.z,Ae.cf)+2.4,u=.84*Ae.cz;else if(S.loc==="arena")a=o(Y.x,lt,.55),l=o(Y.z,Le+1.5,.55),u=1.42;else if(S.mode==="quiz"||S.mode==="gather"||S.mode==="quizEnd"){let L=Y.out?.42:.55;a=o(Y.x,0,L),l=o(Y.z,2.4,L)-(Y.out?0:1.4),u=Y.out?1.28:1.2}else S.mode==="rush"&&(u=1.08);let m=1-Math.exp(-i*4);Et.x+=(a-Et.x)*m,Et.z+=(l-Et.z)*m,Et.zoom+=(u-Et.zoom)*(1-Math.exp(-i*2.5));let x=(Gs?16.2:13.2)*Et.zoom,E=(Gs?13.6:11.2)*Et.zoom;ZM.v+=(ZM.t-ZM.v)*(1-Math.exp(-i*8));ZM.dv=(ZM.dv||0)+((ZM.dy||0)-(ZM.dv||0))*(1-Math.exp(-i*8));ZM.t>=.999&&Math.abs(ZM.v-1)<.01&&(ZM.yaw*=.8);let zt=Math.max(0,Math.min(1,(1-ZM.v)/(1-ZM.min))),cx=Et.x+(Y.x-Et.x)*zt,cz=Et.z+(Y.z-Et.z)*zt,gy=(Y.baseY||0)+ut(Y.x,Y.z),ly=.8+(gy+1.05*(Y.sc||1)-.8)*zt-(ZM.dv||0)*zt,lz=cz-3.2*(1-zt);x*=ZM.v,E*=ZM.v*(1-.35*zt);let dz=cz+x-lz,dy=E-ly,ya=ZM.yaw*zt;F.position.set(cx+dz*Math.sin(ya),ly+dy,lz+dz*Math.cos(ya)),F.lookAt(cx,ly,lz);ZM.btn&&(ZM.btn.hidden=ZM.t>.97),window.PLZ_CAM&&PLZ_CAM(F,i,J),F.updateMatrixWorld(),J.uCurveZ.value=Et.z,Ol.position.copy(F.position)}let ld=ke("fps"),wm=ke("qual"),Sa=ke("measure"),cd=["auto",1,.75,.5],mc=0,it={frames:0,t0:0,fps:0,qa:[],measuring:!1,mBegin:0,mSecs:[],secFrames:0,secT0:0,scaleSum:0,scaleN:0,tris:0,calls:0};function gc(i){window.PLZ_Q=i,I.scale=i,N.setPixelRatio(B*i)}function Tm(i){return i>=30?"#24a148":i>=24?"#d98e04":"#d93636"}function hd(){ld.textContent=Math.round(it.fps),ld.style.color=Tm(it.fps),wm.textContent="\xB7 \uD654\uC9C8 "+Math.round(I.scale*100)+"%"}function Am(){if(I.mode!=="auto"||(it.qa.push(it.fps),it.qa.length<3))return;let i=(it.qa[0]+it.qa[1]+it.qa[2])/3;it.qa.length=0,i<27&&I.scale>.45?gc(Math.max(.45,Math.round((I.scale-.15)*100)/100)):i>52&&I.scale<1&&gc(Math.min(1,Math.round((I.scale+.1)*100)/100))}let _o="";try{let i=N.getContext(),a=i.getExtension("WEBGL_debug_renderer_info");_o=String(a?i.getParameter(a.UNMASKED_RENDERER_WEBGL):i.getParameter(i.RENDERER)).slice(0,80)}catch{_o=""}function ud(i){let a=performance.now();it.measuring=!0,it.mBegin=a+i*1e3,it.mSecs=[],it.secFrames=0,it.secT0=it.mBegin,it.scaleSum=0,it.scaleN=0,it.qa=[],Sa.hidden=!1,Sa.textContent="\uC18D\uB3C4 \uC7AC\uB294 \uC911\u2026 \uC900\uBE44"}function Rm(){it.measuring=!1,Sa.hidden=!0;let i=it.mSecs,a=i.reduce((x,E)=>x+E,0)/i.length,l=i.slice().sort((x,E)=>x-E)[1],u=it.scaleN?it.scaleSum/it.scaleN:I.scale,m;a>=30&&l>=24?m=u>=.8?"\u{1F44D} \uC774 \uD328\uB4DC\uC5D0\uC11C \uC798 \uB3CC\uC544\uAC00\uC694!":"\u{1F642} \uB3CC\uC544\uAC00\uC694. \uB2E4\uB9CC \uD654\uC9C8\uC774 \uC870\uAE08 \uB0AE\uC544\uC838\uC694.":a>=24?m="\u{1F610} \uC870\uAE08 \uBC84\uAC70\uC6CC\uC694. \uD654\uC9C8\uC744 \uB0AE\uCD94\uBA74 \uAD1C\uCC2E\uC544\uC694.":m="\u{1F625} \uBC84\uAC70\uC6CC\uC694. \uC774 \uD328\uB4DC\uB294 \uB354 \uAC00\uBCBC\uC6B4 \uD310\uC774 \uD544\uC694\uD574\uC694.",sa("\uC18D\uB3C4 \uC7AC\uAE30 \uACB0\uACFC",`1\uCD08\uC5D0 \uD3C9\uADE0 ${Math.round(a)}\uC7A5`,`<div>\uAC00\uC7A5 \uB290\uB9B4 \uB54C ${Math.round(l)}\uC7A5 \xB7 \uD654\uC9C8 ${Math.round(u*100)}%</div><div>\uC0BC\uAC01\uD615 ${(it.tris/1e4).toFixed(1)}\uB9CC \uAC1C \xB7 \uADF8\uB9AC\uAE30 ${it.calls}\uBC88</div><div class="row" style="justify-content:center">${m}</div><div style="font-size:12px;color:#8a99ab;word-break:break-all">${_o?_o+" \xB7 ":""}three.js r${Ho}</div><div style="font-size:12px">\uC774 \uD654\uBA74\uC744 \uCC0D\uC5B4\uC11C \uD074\uB85C\uB4DC\uC5D0\uAC8C \uBCF4\uB0B4 \uC8FC\uC138\uC694</div>`,[{label:"\uB2EB\uAE30",fn:$i},{label:"\uB2E4\uC2DC \uC7AC\uAE30",main:!0,fn:()=>{$i(),ud(1.5)}}])}function Cm(i){if(it.frames++,i-it.t0>=500&&(it.fps=it.frames*1e3/(i-it.t0),it.frames=0,it.t0=i,hd(),Am()),it.measuring){if(i<it.mBegin)return;it.secFrames++,Sa.textContent=`\uC18D\uB3C4 \uC7AC\uB294 \uC911\u2026 ${20-it.mSecs.length}\uCD08`,i-it.secT0>=1e3&&(it.mSecs.push(it.secFrames*1e3/(i-it.secT0)),it.secFrames=0,it.secT0=i,it.scaleSum+=I.scale,it.scaleN++,it.mSecs.length>=20&&Rm())}}ke("pQual").addEventListener("click",()=>{ht.click(),mc=(mc+1)%cd.length;let i=cd[mc];I.mode=i==="auto"?"auto":"fixed",gc(i==="auto"?1:i),ke("pQual").textContent=i==="auto"?"\uD654\uC9C8 \uC790\uB3D9":`\uD654\uC9C8 ${Math.round(i*100)}%`,hd()}),ke("pMeasure").addEventListener("click",()=>{ht.click(),go(!1),ud(1.5)}),ke("chip").addEventListener("click",()=>{sa("\uAE30\uAE30 \uC815\uBCF4",`1\uCD08\uC5D0 ${Math.round(it.fps)}\uC7A5`,`<div>\uD654\uC9C8 ${Math.round(I.scale*100)}% (${I.mode==="auto"?"\uC790\uB3D9":"\uACE0\uC815"})</div><div>\uC0BC\uAC01\uD615 ${(it.tris/1e4).toFixed(1)}\uB9CC \uAC1C \xB7 \uADF8\uB9AC\uAE30 ${it.calls}\uBC88</div><div style="font-size:12px;color:#8a99ab;word-break:break-all">${_o}</div>`,[{label:"\uB2EB\uAE30",main:!0,fn:$i}])});function gs(i){TX.tick(i);window.NET&&NET.tick(i);window.PLAZA_GAMES&&PLAZA_GAMES.tick&&PLAZA_GAMES.tick(i);C+=i,J.uTime.value=C,Em(i),Kp(i),pm(i),Sm(i),$p(i),r0(i),d0(i),m0(i),x0(i),y0(),M0(i),R0(),io.visible=!Y.hidden&&ZM.v>.6,io.position.set(Y.x,ut(Y.x,Y.z)+2.15+Math.sin(C*3)*.06+Y.hopY,Y.z),io.rotation.y=C*2.2,c0(),xm(),mm(),a0(),hm(),I0()}function Vs(){N.render(w,F),it.tris=N.info.render.triangles,it.calls=N.info.render.calls}/* 광장 분위기(낮·노을·밤)와 반 별 보상 */
+function vm(i){if(Ct.hidden)return;Ct.breath+=i*2.2,$l(Ct,i);let a=0;S.mode==="free"&&Math.hypot(Y.x-Ct.x,Y.z-Ct.z)<9&&(a=Math.atan2(Y.x-Ct.x,Y.z-Ct.z)),oo(Ct,a,i*.5),S.mode==="free"&&(Ct.emoT-=i,Ct.emoT<=0&&(Ct.emoT=t(14,30),Sn(Ct.x,Ct.z,0)&&(Ct.wave=1.6,Kt(Ct,n(["\uC548\uB155~","\uC88B\uC740 \uC544\uCE68!","\u{1F60A}","\uC624\uB298\uB3C4 \uC990\uAC81\uAC8C!"]),2.4))))}function Mm(i){for(let a of cn)if(a.breath+=i*2.2,$l(a,i),!a.hidden&&S.loc!=="arena"){if(a.goal){B0(a,i);continue}if(a.act==="stand"){a.moving=!1,a.run=!1,a.standFace!==void 0&&oo(a,a.standFace,i),a.cheer>0&&a.hopY===0?a.hopV=3.4:a.hopY===0&&e()<i*.04&&(a.hopV=2.6);continue}a.act!=="gone"&&W0(a,i)}Y.cheer>0&&Y.hopY===0&&!Y.moving&&(Y.hopV=3.4)}function Em(i){if(lm(i),vm(i),S.loc==="arena"&&rm(i),Mm(i),H0(i),S.mode==="quiz"&&Ye.on&&Z0(i),S.mode==="gather"&&(Ql+=i,Ql>45&&lo()),S.mode==="rush"&&S.loc==="village"&&ve.st==="rush"){let a=Te[ve.wi];ve.t+=i,Math.hypot(Y.x-a.gx,Y.z-a.gz)<1.05&&cc(),ve.t>9&&cn.every(l=>l.hidden)&&!ve.nag&&(ve.nag=!0,Kt(Ct,"\uC5B4\uC11C \uB4E4\uC5B4\uAC00\uC694~",3))}for(let a of Te){a.uOpen.value+=(a.open-a.uOpen.value)*Math.min(1,i*3);a.uSpin.value+=i*(1+.6*a.uOpen.value);let nd=S.loc==="village"&&!Y.hidden&&!(window.PLAZA_GAMES&&PLAZA_GAMES.isOpen&&!PLAZA_GAMES.isOpen(a))?Math.hypot(Y.x-a.gx,Y.z-a.gz):99,nt=Math.max(0,Math.min(1,(7.5-nd)/3.5));a.uNear.value+=(nt-a.uNear.value)*Math.min(1,i*2.5);a.portal&&(a.portal.visible=Math.max(a.uNear.value,a.uOpen.value)>.004)}S.loc==="village"&&S.mode!=="game"&&(Xe.birdT-=i,Xe.birdT<=0&&(Xe.birdT=t(3,9),ht.chirp())),X0(i),K0(i),U0(i),ta&&C>ta&&Ln(null),na&&C>na&&(na=0,ps.hidden=!0)}let mo=ke("panel");function go(i){mo.hidden=i===void 0?!mo.hidden:!i,ke("bTeacher").textContent=mo.hidden?"\u{1F469}\u200D\u{1F3EB} \uC120\uC0DD\uB2D8":"\u2715 \uB2EB\uAE30",mo.hidden||(ks.hidden=!0)}ke("bTeacher").addEventListener("click",()=>{ht.click(),go()}),ke("bSound").addEventListener("click",()=>{yf(!Xe.on),ht.click()});let pr=i=>()=>{ht.click(),go(!1),i()};ke("pGather").addEventListener("click",pr(()=>window.NET&&NET.online?NET.recall():ua())),ke("pQuiz").addEventListener("click",pr(()=>ho())),ke("pNext").addEventListener("click",pr(zf)),ke("pQuizEnd").addEventListener("click",pr(()=>{Ye.on&&ma()})),ke("pAO").addEventListener("click",()=>{ht.click(),tc="O",ke("pAO").classList.add("sel"),ke("pAX").classList.remove("sel")}),ke("pAX").addEventListener("click",()=>{ht.click(),tc="X",ke("pAX").classList.add("sel"),ke("pAO").classList.remove("sel")}),ke("pAsk").addEventListener("click",()=>{if(ht.click(),!ke("qIn").value.trim()){ke("qIn").focus();return}go(!1),J0()}),ke("qIn").addEventListener("keydown",i=>{i.key==="Enter"&&(i.preventDefault(),ke("pAsk").click())}),Te.forEach((i,a)=>{let l=document.createElement("button");l.className="pb",l.innerHTML=`${i.emoji} ${i.name}<small>${i.modeName}</small>`,l.addEventListener("click",pr(()=>lc(a))),ke("pWorlds").appendChild(l)}),ke("pHome").addEventListener("click",pr(()=>{window.NET&&NET.online?NET.teacherHome():S.loc==="room"?po():S.loc==="arena"||S.mode==="rush"?_a():ua()}));let ks=ke("emo");ke("emoBtn").addEventListener("click",()=>{ht.click(),ks.hidden=!ks.hidden}),ks.querySelectorAll(".eb").forEach(i=>i.addEventListener("click",()=>{let a=i.textContent;Kt(Y,a,2.2),window.NET&&NET.emo(a),ht.pop(),Y.hopY===0&&(Y.hopV=3.2),a==="\u{1F44B}"&&(Y.wave=1.4),ks.hidden=!0,cn.filter(u=>!u.hidden&&Math.hypot(u.x-Y.x,u.z-Y.z)<6).slice(0,3).forEach((u,m)=>{u.emoT=.5+m*.5+e()*.4,u.replyE=a})}));for(let i of["topR","panel","emoBtn","emo","act","card","score","chip","count","banner","start","decoBtn","decoBar","homeArrow"])ke(i).addEventListener("pointerdown",a=>a.stopPropagation());let Xt={id:null,ox:0,oy:0,dx:0,dy:0},Si={left:0,right:0,up:0,down:0},xo=ke("joy"),rd=ke("knob");G.addEventListener("pointerdown",i=>{if(ks.hidden=!0,S.deco){HOME.down(i);return}if(!(Xt.id!==null||i.clientX>innerWidth*.62)){Xt.id=i.pointerId,Xt.ox=i.clientX,Xt.oy=i.clientY,Xt.dx=Xt.dy=0,xo.style.left=i.clientX+"px",xo.style.top=i.clientY+"px",rd.style.transform="",xo.hidden=!1;try{G.setPointerCapture(i.pointerId)}catch{}}}),G.addEventListener("pointermove",i=>{if(i.pointerId!==Xt.id)return;let a=i.clientX-Xt.ox,l=i.clientY-Xt.oy,u=Math.hypot(a,l),m=52;u>m&&(a*=m/u,l*=m/u),Xt.dx=a/m,Xt.dy=l/m,rd.style.transform=`translate(${a}px,${l}px)`});let od=i=>{i.pointerId===Xt.id&&(Xt.id=null,Xt.dx=Xt.dy=0,xo.hidden=!0)};G.addEventListener("pointerup",od),G.addEventListener("pointercancel",od);{window.JUMP=()=>{if(window.HOME&&HOME.sitting()){HOME.act("stand");return}Y.hidden||Y.hopY>0||Y.hopV>0||(Y.hopV=5.2,ht.pop())};let jb=ke("jumpBtn");jb&&jb.addEventListener("pointerdown",e=>{e.stopPropagation(),e.preventDefault(),JUMP()})}let ba={ArrowLeft:"left",KeyA:"left",ArrowRight:"right",KeyD:"right",ArrowUp:"up",KeyW:"up",ArrowDown:"down",KeyS:"down"},bm=()=>document.activeElement&&/^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName);addEventListener("keydown",i=>{bm()||(ba[i.code]&&(Si[ba[i.code]]=1,i.preventDefault()),i.code==="Space"&&(Zi?Qf():window.JUMP&&JUMP(),i.preventDefault()))}),addEventListener("keyup",i=>{ba[i.code]&&(Si[ba[i.code]]=0)}),addEventListener("blur",()=>{Si.left=Si.right=Si.up=Si.down=0});let Et={x:Y.x,z:Y.z,zoom:1},Gs=!1;function ad(){let i=innerWidth,a=innerHeight;Gs=a>i,N.setSize(i,a,!1),F.aspect=i/a,F.fov=Gs?50:36,F.updateProjectionMatrix(),Vi=!0}addEventListener("resize",ad),ad();function Sm(i){let a=Y.x,l=Y.z,u=1;if(S.deco){let L=Wi[S.deco];a=L.ox+L.cols/2,l=L.oz+L.rows/2+(S.deco==="room"?2.2:2.6),u=L.zoom}else if(S.loc==="room")a=o(Y.x,Ae.x,Ae.cf),l=o(Y.z,Ae.z,Ae.cf)+2.4,u=.84*Ae.cz;else if(S.loc==="arena")a=o(Y.x,lt,.55),l=o(Y.z,Le+1.5,.55),u=1.42;else if(S.mode==="quiz"||S.mode==="gather"||S.mode==="quizEnd"){let L=Y.out?.42:.55;a=o(Y.x,0,L),l=o(Y.z,2.4,L)-(Y.out?0:1.4),u=Y.out?1.28:1.2}else S.mode==="rush"&&(u=1.08);let m=1-Math.exp(-i*4);Et.x+=(a-Et.x)*m,Et.z+=(l-Et.z)*m,Et.zoom+=(u-Et.zoom)*(1-Math.exp(-i*2.5));let x=(Gs?16.2:13.2)*Et.zoom,E=(Gs?13.6:11.2)*Et.zoom;ZM.v+=(ZM.t-ZM.v)*(1-Math.exp(-i*8));ZM.dv=(ZM.dv||0)+((ZM.dy||0)-(ZM.dv||0))*(1-Math.exp(-i*8));ZM.t>=.999&&Math.abs(ZM.v-1)<.01&&(ZM.yaw*=.8);let zt=Math.max(0,Math.min(1,(1-ZM.v)/(1-ZM.min))),cx=Et.x+(Y.x-Et.x)*zt,cz=Et.z+(Y.z-Et.z)*zt,gy=(Y.baseY||0)+ut(Y.x,Y.z),ly=.8+(gy+1.05*(Y.sc||1)-.8)*zt-(ZM.dv||0),lz=cz-3.2*(1-zt);x*=ZM.v,E*=ZM.v*(1-.35*zt);let dz=cz+x-lz,dy=E-ly,ya=ZM.yaw*zt;F.position.set(cx+dz*Math.sin(ya),ly+dy,lz+dz*Math.cos(ya)),F.lookAt(cx,ly,lz);window.PLZ_CAM&&PLZ_CAM(F,i,J),F.updateMatrixWorld(),J.uCurveZ.value=Et.z,Ol.position.copy(F.position)}let ld=ke("fps"),wm=ke("qual"),Sa=ke("measure"),cd=["auto",1,.75,.5],mc=0,it={frames:0,t0:0,fps:0,qa:[],measuring:!1,mBegin:0,mSecs:[],secFrames:0,secT0:0,scaleSum:0,scaleN:0,tris:0,calls:0};function gc(i){window.PLZ_Q=i,I.scale=i,N.setPixelRatio(B*i)}function Tm(i){return i>=30?"#24a148":i>=24?"#d98e04":"#d93636"}function hd(){ld.textContent=Math.round(it.fps),ld.style.color=Tm(it.fps),wm.textContent="\xB7 \uD654\uC9C8 "+Math.round(I.scale*100)+"%"}function Am(){if(I.mode!=="auto"||(it.qa.push(it.fps),it.qa.length<3))return;let i=(it.qa[0]+it.qa[1]+it.qa[2])/3;it.qa.length=0,i<27&&I.scale>.45?gc(Math.max(.45,Math.round((I.scale-.15)*100)/100)):i>52&&I.scale<1&&gc(Math.min(1,Math.round((I.scale+.1)*100)/100))}let _o="";try{let i=N.getContext(),a=i.getExtension("WEBGL_debug_renderer_info");_o=String(a?i.getParameter(a.UNMASKED_RENDERER_WEBGL):i.getParameter(i.RENDERER)).slice(0,80)}catch{_o=""}function ud(i){let a=performance.now();it.measuring=!0,it.mBegin=a+i*1e3,it.mSecs=[],it.secFrames=0,it.secT0=it.mBegin,it.scaleSum=0,it.scaleN=0,it.qa=[],Sa.hidden=!1,Sa.textContent="\uC18D\uB3C4 \uC7AC\uB294 \uC911\u2026 \uC900\uBE44"}function Rm(){it.measuring=!1,Sa.hidden=!0;let i=it.mSecs,a=i.reduce((x,E)=>x+E,0)/i.length,l=i.slice().sort((x,E)=>x-E)[1],u=it.scaleN?it.scaleSum/it.scaleN:I.scale,m;a>=30&&l>=24?m=u>=.8?"\u{1F44D} \uC774 \uD328\uB4DC\uC5D0\uC11C \uC798 \uB3CC\uC544\uAC00\uC694!":"\u{1F642} \uB3CC\uC544\uAC00\uC694. \uB2E4\uB9CC \uD654\uC9C8\uC774 \uC870\uAE08 \uB0AE\uC544\uC838\uC694.":a>=24?m="\u{1F610} \uC870\uAE08 \uBC84\uAC70\uC6CC\uC694. \uD654\uC9C8\uC744 \uB0AE\uCD94\uBA74 \uAD1C\uCC2E\uC544\uC694.":m="\u{1F625} \uBC84\uAC70\uC6CC\uC694. \uC774 \uD328\uB4DC\uB294 \uB354 \uAC00\uBCBC\uC6B4 \uD310\uC774 \uD544\uC694\uD574\uC694.",sa("\uC18D\uB3C4 \uC7AC\uAE30 \uACB0\uACFC",`1\uCD08\uC5D0 \uD3C9\uADE0 ${Math.round(a)}\uC7A5`,`<div>\uAC00\uC7A5 \uB290\uB9B4 \uB54C ${Math.round(l)}\uC7A5 \xB7 \uD654\uC9C8 ${Math.round(u*100)}%</div><div>\uC0BC\uAC01\uD615 ${(it.tris/1e4).toFixed(1)}\uB9CC \uAC1C \xB7 \uADF8\uB9AC\uAE30 ${it.calls}\uBC88</div><div class="row" style="justify-content:center">${m}</div><div style="font-size:12px;color:#8a99ab;word-break:break-all">${_o?_o+" \xB7 ":""}three.js r${Ho}</div><div style="font-size:12px">\uC774 \uD654\uBA74\uC744 \uCC0D\uC5B4\uC11C \uD074\uB85C\uB4DC\uC5D0\uAC8C \uBCF4\uB0B4 \uC8FC\uC138\uC694</div>`,[{label:"\uB2EB\uAE30",fn:$i},{label:"\uB2E4\uC2DC \uC7AC\uAE30",main:!0,fn:()=>{$i(),ud(1.5)}}])}function Cm(i){if(it.frames++,i-it.t0>=500&&(it.fps=it.frames*1e3/(i-it.t0),it.frames=0,it.t0=i,hd(),Am()),it.measuring){if(i<it.mBegin)return;it.secFrames++,Sa.textContent=`\uC18D\uB3C4 \uC7AC\uB294 \uC911\u2026 ${20-it.mSecs.length}\uCD08`,i-it.secT0>=1e3&&(it.mSecs.push(it.secFrames*1e3/(i-it.secT0)),it.secFrames=0,it.secT0=i,it.scaleSum+=I.scale,it.scaleN++,it.mSecs.length>=20&&Rm())}}ke("pQual").addEventListener("click",()=>{ht.click(),mc=(mc+1)%cd.length;let i=cd[mc];I.mode=i==="auto"?"auto":"fixed",gc(i==="auto"?1:i),ke("pQual").textContent=i==="auto"?"\uD654\uC9C8 \uC790\uB3D9":`\uD654\uC9C8 ${Math.round(i*100)}%`,hd()}),ke("pMeasure").addEventListener("click",()=>{ht.click(),go(!1),ud(1.5)}),ke("chip").addEventListener("click",()=>{sa("\uAE30\uAE30 \uC815\uBCF4",`1\uCD08\uC5D0 ${Math.round(it.fps)}\uC7A5`,`<div>\uD654\uC9C8 ${Math.round(I.scale*100)}% (${I.mode==="auto"?"\uC790\uB3D9":"\uACE0\uC815"})</div><div>\uC0BC\uAC01\uD615 ${(it.tris/1e4).toFixed(1)}\uB9CC \uAC1C \xB7 \uADF8\uB9AC\uAE30 ${it.calls}\uBC88</div><div style="font-size:12px;color:#8a99ab;word-break:break-all">${_o}</div>`,[{label:"\uB2EB\uAE30",main:!0,fn:$i}])});function gs(i){TX.tick(i);window.NET&&NET.tick(i);window.PLAZA_GAMES&&PLAZA_GAMES.tick&&PLAZA_GAMES.tick(i);C+=i,J.uTime.value=C,Em(i),Kp(i),pm(i),Sm(i),$p(i),r0(i),d0(i),m0(i),x0(i),y0(),M0(i),R0(),io.visible=!Y.hidden&&ZM.v>.6,io.position.set(Y.x,ut(Y.x,Y.z)+2.15+Math.sin(C*3)*.06+Y.hopY,Y.z),io.rotation.y=C*2.2,c0(),xm(),mm(),a0(),hm(),I0()}function Vs(){N.render(w,F),it.tris=N.info.render.triangles,it.calls=N.info.render.calls}/* 광장 분위기(낮·노을·밤)와 반 별 보상 */
 let TX=(()=>{let mats=new Set,cur="",want="day",stage=-1,fwT=3,celebT=0,inRoom=!1,lastLoc="",spinT=0;
 let SKY={day:O,sunset:16297106,night:1318436},TINT={day:[1,1,1],sunset:[1,.8,.7],night:[.4,.46,.72]};
 let glowM=Z(new Rt({vertexColors:!0}),"glow");glowM.userData.noTint=!0;
