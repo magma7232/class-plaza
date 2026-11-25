@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>사랑둥이 대모험</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
+<style>
+  :root { --u: 1px; --pink: #ff5f9e; --ink: #4a2a5a; }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden; background: #1d1030;
+    touch-action: none; overscroll-behavior: none;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
+    font-family: Jua, "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  }
+  body { background: radial-gradient(circle at 50% 30%, #3a2160, #160a26); }
+  button, input { font-family: inherit; }
+  #stage { position: absolute; overflow: hidden; box-shadow: 0 0 40px rgba(0,0,0,.4); }
+  #game { display: block; }
+
+  #snd {
+    position: absolute; left: calc(var(--u) * 282); top: calc(var(--u) * 12);
+    width: calc(var(--u) * 36); height: calc(var(--u) * 36); min-width: 30px; min-height: 30px;
+    border-radius: 50%; border: 2px solid rgba(255,255,255,.8); background: rgba(40,22,64,.72);
+    display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; z-index: 5;
+  }
+  #snd svg { width: 62%; height: 62%; }
+  #snd .x { display: none; }
+  #snd.off .w { display: none; }
+  #snd.off .x { display: block; }
+  /* 배경 음악 켜기/끄기(🎵, music.js가 #snd 바로 뒤에 붙임) — 소리 단추 오른쪽에 같은 모양(왼쪽은 상태창) */
+  #bgmBtn {
+    position: absolute; left: calc(var(--u) * 288 + max(var(--u) * 36, 30px)); top: calc(var(--u) * 12);
+    width: calc(var(--u) * 36); height: calc(var(--u) * 36); min-width: 30px; min-height: 30px;
+    border-radius: 50%; border: 2px solid rgba(255,255,255,.8); background: rgba(40,22,64,.72); color: #fff;
+    font-size: calc(var(--u) * 17); line-height: 1; padding: 0; cursor: pointer; z-index: 5;
+  }
+
+  /* 조작 패드 */
+  #pad { position: absolute; pointer-events: none; z-index: 4; display: none; }
+  body.touch #pad { display: block; }
+  body.menu #pad, body.mini #pad { display: none !important; }
+  #joy {
+    position: absolute; pointer-events: auto; touch-action: none;
+    width: calc(var(--u) * 150); height: calc(var(--u) * 150); min-width: 112px; min-height: 112px;
+    left: calc(var(--u) * 26); bottom: calc(var(--u) * 22); border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,.28) 0 38%, rgba(255,255,255,.14) 39% 100%);
+    border: 3px solid rgba(255,255,255,.55);
+  }
+  #knob {
+    position: absolute; left: 50%; top: 50%; width: 44%; height: 44%; margin: -22% 0 0 -22%;
+    border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, #ffc2dc 55%, #ff7fb3);
+    border: 3px solid #fff; box-shadow: 0 3px 8px rgba(80,20,60,.35);
+  }
+  #btns { position: absolute; right: 0; bottom: 0; width: 100%; height: 100%; }
+  .b {
+    position: absolute; pointer-events: auto; touch-action: none; border-radius: 50%;
+    border: 3px solid rgba(255,255,255,.85); color: #fff; font-size: calc(var(--u) * 20);
+    background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.45), rgba(120,70,170,.55) 60%, rgba(70,30,110,.7));
+    display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1;
+    text-shadow: 0 2px 0 rgba(60,20,80,.6); padding: 0;
+  }
+  .b.on { transform: scale(.92); filter: brightness(1.25); }
+  #bShoot {
+    width: calc(var(--u) * 112); height: calc(var(--u) * 112); min-width: 84px; min-height: 84px;
+    right: calc(var(--u) * 30); bottom: calc(var(--u) * 26);
+    background: radial-gradient(circle at 35% 30%, #ffd2e4, #ff6fa8 55%, #d6336f); font-size: calc(var(--u) * 40);
+  }
+  #bShoot small { font-size: calc(var(--u) * 13); margin-top: 2px; }
+  #bJump { width: calc(var(--u) * 82); height: calc(var(--u) * 82); min-width: 62px; min-height: 62px; right: calc(var(--u) * 158); bottom: calc(var(--u) * 22); }
+  #bAct { width: calc(var(--u) * 82); height: calc(var(--u) * 82); min-width: 62px; min-height: 62px; right: calc(var(--u) * 50); bottom: calc(var(--u) * 152); }
+  #bEmo { display: none; width: calc(var(--u) * 56); height: calc(var(--u) * 56); min-width: 44px; min-height: 44px; right: calc(var(--u) * 262); bottom: calc(var(--u) * 122); font-size: calc(var(--u) * 24); }
+  #bDash { width: calc(var(--u) * 72); height: calc(var(--u) * 72); min-width: 56px; min-height: 56px; right: calc(var(--u) * 150); bottom: calc(var(--u) * 116);
+    background: radial-gradient(circle at 35% 30%, #d8f6ff, #5fb8ff 55%, #2a6fd0); font-size: calc(var(--u) * 17); }
+  #bDash.cool { filter: grayscale(.6) brightness(.8); }
+  #bSpecial { --g: 0; width: calc(var(--u) * 80); height: calc(var(--u) * 80); min-width: 60px; min-height: 60px; right: calc(var(--u) * 252); bottom: calc(var(--u) * 24);
+    background: radial-gradient(circle at 50% 50%, rgba(70,30,110,.92) 0 56%, transparent 57%), conic-gradient(#ffd23f calc(var(--g) * 3.6deg), rgba(255,255,255,.22) 0);
+    font-size: calc(var(--u) * 17); }
+  #bSpecial.ready { background: radial-gradient(circle at 35% 30%, #fff7c2, #ff8fc4 55%, #ff4f94); animation: pulse 0.8s infinite; }
+  #bSpecial small { font-size: calc(var(--u) * 11); opacity: .9; }
+  body.multi #bEmo { display: flex; }
+  #bAct.ready { background: radial-gradient(circle at 35% 30%, #fff7c2, #ffc93c 55%, #e08a00); animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 calc(var(--u) * 8) rgba(255,210,80,.35); } }
+  #pad.talking #joy, #pad.talking #bJump, #pad.talking #bShoot, #pad.talking #bEmo, #pad.talking #bDash, #pad.talking #bSpecial { opacity: 0; pointer-events: none; }
+
+  body.portrait #pad { background: linear-gradient(#2a1745, #1a0d2c); }
+  body.portrait #joy { width: 38vw; height: 38vw; max-width: 190px; max-height: 190px; left: 6vw; top: 50%; bottom: auto; transform: translateY(-50%); }
+  body.portrait #bShoot { width: 25vw; height: 25vw; max-width: 130px; max-height: 130px; right: 6vw; bottom: auto; top: 50%; transform: translateY(-30%); font-size: 9vw; }
+  body.portrait #bShoot small { font-size: 3.2vw; }
+  body.portrait #bJump { width: 17vw; height: 17vw; max-width: 90px; max-height: 90px; right: 33vw; top: 58%; bottom: auto; font-size: 4.2vw; }
+  body.portrait #bAct { width: 17vw; height: 17vw; max-width: 90px; max-height: 90px; right: 21vw; top: 8%; bottom: auto; font-size: 4.2vw; }
+  body.portrait #bEmo { width: 12vw; height: 12vw; max-width: 64px; max-height: 64px; right: 47vw; top: 62%; bottom: auto; font-size: 5.5vw; }
+  body.portrait #bDash { width: 15vw; height: 15vw; max-width: 80px; max-height: 80px; right: 38vw; top: 16%; bottom: auto; font-size: 3.8vw; }
+  body.portrait #bSpecial { width: 17vw; height: 17vw; max-width: 90px; max-height: 90px; right: 3vw; top: 4%; bottom: auto; font-size: 3.8vw; }
+  body.portrait #bSpecial small { font-size: 2.6vw; }
+  body.portrait #bShoot.on { transform: translateY(-30%) scale(.92); }
+
+  /* 화면 위 창 */
+  .overlay { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: #fff; padding: 16px; overflow-y: auto; }
+  .hidden { display: none !important; }
+  #loading { background: #1d1030; }
+  #loading .spin { font-size: 64px; color: var(--pink); animation: beat 0.9s infinite; }
+  #loading p { font-size: 20px; opacity: .85; }
+  @keyframes beat { 50% { transform: scale(1.25); } }
+  #title { background: radial-gradient(ellipse at 50% 45%, rgba(40,20,70,.15), rgba(20,8,40,.72)); }
+  .logo {
+    font-size: clamp(38px, 10vmin, 92px); line-height: 1; letter-spacing: 1px; color: #fff;
+    text-shadow: 0 4px 0 #ff5f9e, 0 8px 0 #9b2f7a, 0 12px 18px rgba(0,0,0,.35); -webkit-text-stroke: 2px #9b2f7a;
+  }
+  .logo span { display: block; font-size: .62em; color: #ffe680; margin-top: .12em; -webkit-text-stroke: 2px #8a4a00; text-shadow: 0 4px 0 #ff9a3c, 0 8px 14px rgba(0,0,0,.3); }
+  #titleBalloon { width: clamp(96px, 22vmin, 200px); margin: 1.2vmin 0 0; animation: bob 2.4s ease-in-out infinite; filter: drop-shadow(0 10px 14px rgba(0,0,0,.35)); }
+  @keyframes bob { 50% { transform: translateY(-10px) rotate(-3deg); } }
+  .sub { font-size: clamp(15px, 3.2vmin, 24px); margin: 1vmin 0 2vmin; color: #ffe9f4; text-shadow: 0 2px 0 rgba(80,20,80,.7); }
+  .btnrow { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  .big-btn {
+    font-size: clamp(20px, 4.4vmin, 34px); color: #fff; padding: .4em 1.4em; border-radius: 999px; cursor: pointer;
+    border: 4px solid #fff; background: linear-gradient(#ff8fc0, #ff4f94);
+    box-shadow: 0 6px 0 #b8306a, 0 10px 20px rgba(0,0,0,.3); text-shadow: 0 2px 0 rgba(120,20,70,.6);
+  }
+  .big-btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #b8306a; }
+  .big-btn.alt { background: linear-gradient(#8fd8ff, #3f8ff0); box-shadow: 0 6px 0 #1f5aa8, 0 10px 20px rgba(0,0,0,.3); }
+  .big-btn.gold { background: linear-gradient(#ffe680, #f0a21a); box-shadow: 0 6px 0 #a86a00, 0 10px 20px rgba(0,0,0,.3); }
+  .small-btn { font-size: clamp(14px, 2.8vmin, 19px); color: #fff; padding: .35em 1em; border-radius: 999px; cursor: pointer; border: 3px solid rgba(255,255,255,.85); background: rgba(120,90,170,.75); }
+  #multiRow { margin-top: 1.6vmin; }
+  .help { margin-top: 2vmin; font-size: clamp(12px, 2.4vmin, 17px); color: rgba(255,255,255,.85); line-height: 1.55; }
+  .help .t { display: none; }
+  body.touch .help .t { display: inline; }
+  body.touch .help .k { display: none; }
+  .rot { display: none; font-size: 14px; color: #ffe680; margin-top: 8px; }
+  body.portrait .rot { display: block; }
+
+  .panel {
+    background: linear-gradient(#fff6fb, #ffe3f0); color: var(--ink); border: 5px solid var(--pink); border-radius: 26px;
+    padding: clamp(14px, 3vmin, 28px) clamp(18px, 4vmin, 40px); box-shadow: 0 14px 40px rgba(0,0,0,.4); max-width: 94vw;
+  }
+  .panel h2 { margin: 0 0 6px; font-size: clamp(24px, 5vmin, 36px); font-weight: normal; color: #d6336f; }
+  .panel p { margin: 4px 0 10px; font-size: clamp(14px, 2.8vmin, 19px); }
+  .field { display: flex; align-items: center; gap: 10px; justify-content: center; margin: 8px 0; font-size: clamp(16px, 3.2vmin, 22px); }
+  .field input {
+    font-size: clamp(20px, 4.4vmin, 30px); padding: .2em .5em; width: 7.5em; border-radius: 14px; border: 3px solid #ff9cc6; text-align: center; color: var(--ink);
+    -webkit-user-select: text; user-select: text; background: #fff;
+  }
+  #joinCode, #tOld { letter-spacing: .25em; text-transform: uppercase; width: 5.2em; }
+  #colors { display: flex; gap: 10px; justify-content: center; margin: 8px 0 4px; }
+  #colors button { width: clamp(52px, 11vmin, 70px); height: clamp(52px, 11vmin, 70px); border-radius: 18px; border: 3px solid transparent; background: rgba(255,255,255,.6); padding: 4px; cursor: pointer; }
+  #colors button img { width: 100%; height: 100%; object-fit: contain; }
+  #colors button.sel { border-color: #ff5f9e; background: #fff; transform: scale(1.08); }
+  #joinMsg { min-height: 1.4em; color: #d6336f; font-size: clamp(14px, 2.8vmin, 19px); margin: 6px 0; }
+  .row { display: flex; gap: 12px; justify-content: center; margin-top: 8px; flex-wrap: wrap; }
+  #joinGo:disabled { opacity: .6; }
+
+  #teacher .panel { width: min(860px, 96vw); max-height: 92vh; overflow-y: auto; }
+  #tCode { font-size: clamp(54px, 13vmin, 110px); letter-spacing: .14em; color: #fff; background: #4a2a5a; border-radius: 20px; padding: 0 .4em; display: inline-block; border: 5px solid #ffd23f; line-height: 1.25; }
+  #tLink { font-size: clamp(14px, 2.8vmin, 20px); color: #3a5a8a; word-break: break-all; }
+  #tCount { margin: 8px 0; font-size: clamp(15px, 3vmin, 21px); color: #d6336f; }
+  table { width: 100%; border-collapse: collapse; font-size: clamp(13px, 2.6vmin, 18px); }
+  th, td { padding: 5px 8px; border-bottom: 2px dashed #ffc6e0; text-align: left; }
+  th { color: #d6336f; font-weight: normal; }
+  .dot { display: inline-block; width: .8em; height: .8em; border-radius: 50%; margin-right: .4em; vertical-align: -1px; border: 2px solid #fff; box-shadow: 0 0 0 1px #c9a; }
+  .c-red { background: #ff4a5a; } .c-pink { background: #ff8fc4; } .c-blue { background: #4aa8ff; } .c-gold { background: #ffcf3a; } .c-mint { background: #4fe0b0; }
+
+  #ending { background: linear-gradient(rgba(30,10,50,.62), rgba(30,10,50,.1) 55%, rgba(30,10,50,.35)); justify-content: flex-start; padding-top: 4vh; }
+  #ending .logo { font-size: clamp(30px, 8vmin, 72px); }
+  #ending .btnrow { margin-top: auto; margin-bottom: 4vh; }
+  #ending .msg { font-size: clamp(16px, 3.4vmin, 25px); margin: 2vmin 0; line-height: 1.5; text-shadow: 0 2px 0 rgba(80,20,80,.8); }
+  #endStat { font-size: clamp(14px, 3vmin, 20px); color: #ffe680; margin-bottom: 2vmin; line-height: 1.5; }
+  @media (max-height: 520px) {
+    #titleBalloon { width: 13vmin; margin: 0; }
+    .sub { margin: .6vmin 0 1.2vmin; }
+    .help { display: none; }
+    #title .logo { font-size: 9vmin; }
+    .big-btn { padding: .3em 1.2em; }
+  }
+</style>
+</head>
+<body class="menu">
+<div id="stage">
+  <canvas id="game"></canvas>
+  <button id="snd" aria-label="소리 켜기 끄기">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 9h4l5-4v14l-5-4H4z" fill="#fff"/>
+      <path class="w" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>
+      <path class="x" d="M16 9l5 6M21 9l-5 6"/>
+    </svg>
+  </button>
+</div>
+<div id="pad">
+  <div id="joy"><div id="knob"></div></div>
+  <div id="btns">
+    <button class="b" id="bJump"><span>점프</span></button>
+    <button class="b" id="bShoot"><span>♥</span><small>꾹 누르면 큰 하트</small></button>
+    <button class="b" id="bAct"><span id="bActLabel">대화</span></button>
+    <button class="b" id="bEmo" aria-label="하트 인사">♥</button>
+    <button class="b" id="bDash"><span>대시</span></button>
+    <button class="b" id="bSpecial"><span>필살</span><small>사랑 폭발</small></button>
+  </div>
+</div>
+
+<div id="loading" class="overlay"><div class="spin">♥</div><p>사랑둥이를 부르는 중…</p></div>
+
+<div id="title" class="overlay hidden">
+  <div class="logo">사랑둥이<span>대모험</span></div>
+  <img id="titleBalloon" alt="사랑둥이">
+  <div class="sub">베개 공주와 자 왕자를 구하고, 사라진 친구 콩닥이를 찾아라!</div>
+  <div class="btnrow">
+    <button id="contBtn" class="big-btn gold hidden">이어하기</button>
+    <button id="newBtn" class="big-btn">혼자 하기</button>
+  </div>
+  <div id="multiRow" class="btnrow hidden">
+    <button id="multiBtn" class="big-btn alt">친구랑 같이 하기</button>
+    <button id="teachBtn" class="small-btn">선생님: 방 만들기</button>
+  </div>
+  <div class="help">
+    <span class="k">방향키(또는 WASD) 이동 · 스페이스 점프 · J(또는 Z) 하트 — 꾹 눌렀다 떼면 큰 하트<br>Shift 대시 · F 사랑 폭발(게이지가 차면) · E 대화·살펴보기 · Esc 대화 건너뛰기 · M 소리</span>
+    <span class="t">조이스틱 이동 · ♥ 하트(꾹 누르면 큰 하트) · 점프 · 대시 · 필살(게이지가 차면) · 대화</span>
+  </div>
+  <div class="rot">휴대폰을 가로로 돌리면 더 크게 볼 수 있어요</div>
+</div>
+
+<div id="join" class="overlay hidden">
+  <div class="panel">
+    <h2>친구랑 같이 하기</h2>
+    <p>선생님이 알려 준 방 코드와 내 이름을 넣어요.</p>
+    <div class="field">방 코드 <input id="joinCode" maxlength="4" autocomplete="off" inputmode="latin" placeholder="ABCD"></div>
+    <div class="field">내 이름 <input id="joinName" maxlength="6" autocomplete="off" placeholder="별명"></div>
+    <p>내 풍선 색깔</p>
+    <div id="colors">
+      <button data-c="red" class="sel"><img data-c="red" alt="빨강"></button>
+      <button data-c="pink"><img data-c="pink" alt="분홍"></button>
+      <button data-c="blue"><img data-c="blue" alt="파랑"></button>
+      <button data-c="gold"><img data-c="gold" alt="노랑"></button>
+      <button data-c="mint"><img data-c="mint" alt="민트"></button>
+    </div>
+    <div id="joinMsg"></div>
+    <div class="row"><button id="joinGo" class="big-btn">들어가기</button><button id="joinBack" class="small-btn">뒤로</button></div>
+  </div>
+</div>
+
+<div id="teacher" class="overlay hidden">
+  <div class="panel">
+    <h2>선생님 화면</h2>
+    <p>학생들에게 이 방 코드를 알려 주세요.</p>
+    <div id="tCode">····</div>
+    <p>학생들은 이 주소에 들어가 <b>친구랑 같이 하기</b>를 눌러요<br><span id="tLink"></span></p>
+    <div id="tCount"></div>
+    <table><thead><tr><th>이름</th><th>있는 곳</th><th>하는 중인 퀘스트</th><th>체력</th></tr></thead><tbody id="tList"></tbody></table>
+    <div class="row" style="margin-top:14px">
+      <input id="tOld" maxlength="4" autocomplete="off" placeholder="코드" style="font-size:20px;padding:.2em .4em;border-radius:12px;border:3px solid #ff9cc6;text-align:center">
+      <button id="tWatch" class="small-btn">예전 방 다시 보기</button>
+      <button id="tBack" class="small-btn">처음 화면</button>
+    </div>
+  </div>
+</div>
+
+<div id="ending" class="overlay hidden">
+  <div class="logo">사랑둥이<span>대모험 완료!</span></div>
+  <div class="msg">베개 공주를 깨우고, 자 왕자를 구하고,<br>외로웠던 콩닥이와 다시 친구가 되었어요!</div>
+  <div id="endStat"></div>
+  <div class="btnrow"><button id="keepBtn" class="big-btn gold">계속 놀기</button><button id="againBtn" class="big-btn">처음부터 다시</button></div>
+</div>
+
+<script>window.SOLO_ONLY = true;</script>
+<script src="js/util.js"></script>
+<script src="../../music/music.js" data-btn="after:#snd"></script>
+<script src="js/audio.js"></script>
+<script src="js/art.js"></script>
+<script src="js/art2.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/scenes.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/content.js"></script>
+<script src="js/minigames.js"></script>
+<script src="js/net.js"></script>
+<script src="js/game.js"></script>
+<script src="../back.js" data-pos="top-center"></script>
+</body>
+</html>
