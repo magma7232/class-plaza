@@ -13,9 +13,9 @@
 (function () {
   "use strict";
   var LIST = {
-    0: { name: "뚝딱 장터", emoji: "🍙", modeName: "3D 분식 가게", goal: "주방장 모자를 쓰고 주문 카드대로 분식을 만들어요!", url: "games/jangteo3d.html" },
-    1: { name: "하트 특공대", emoji: "💖", modeName: "동화 마을 지키기", goal: "하트 친구들과 투덜이들을 웃게 만들어요!", url: "games/heart.html" },
-    2: { name: "사랑둥이 대모험", emoji: "🎈", modeName: "혼자 모험", goal: "베개 공주와 자 왕자를 구하러 가요!", url: "games/sarang/index.html" },
+    0: { name: "오늘은 내가 요리사!", emoji: "🍙", modeName: "분식집 요리 모험", goal: "주문 카드대로 분식을 만들어요!", url: "games/jangteo3d.html", wid: "jangteo3d" },
+    1: { name: "하트 특공대", emoji: "💖", modeName: "동화 마을 지키기", goal: "투덜이들을 웃게 만들어요!", url: "games/heart.html", wid: "heart" },
+    2: { name: "사랑둥이 대모험", emoji: "🎈", modeName: "혼자 모험", goal: "베개 공주와 자 왕자를 구해요!", url: "games/sarang/index.html", wid: "sarang" },
   };
 
   function backUrl() {
@@ -25,13 +25,158 @@
     return u.toString();
   }
 
-  // 포탈에 들어갈 때: 화면 가운데 소용돌이가 열리고 그 속으로 날아 들어가는 장면(약 1초) → 하얗게 번쩍 → cb
-  // (시험판에서 더함. 예전엔 하얗게 흐려지기만 했다)
+  // 포털에 들어갈 때(2026-11-25 다시 만듦, 선생님: "정말 게임에 들어간다 '우와~' 하는 느낌"):
+  //  ① 카메라가 문 쪽으로 쑥 다가가며 화각이 넓어짐(빨려 드는 느낌) — 광장 카메라 손잡이 window.PLZ_CAM(plaza_inject.py)
+  //  ② 문 속 빛 터널(포털과 같은 portalFx 셰이더)이 문 자리에서 화면 가득 커짐 → 빛 줄기가 점점 빨라짐
+  //  ③ 하얗게 번쩍 → cb(게임으로). 모두 약 1.25초. WebGL이 안 되면 예전 2D 그림 장면(warp2d)
+  //  낡은 패드: 화면 절반쯤 해상도로 그리고(화질이 낮아진 기기는 더 작게), 셰이더 하나·그림 파일 없음
+  function focusOf(T) {
+    try {
+      var m = null, cx = 0, cy = 0, hh = 1;
+      if (T === CASTLE) { m = window.CASTLE_DOOR && window.CASTLE_DOOR.m; cy = 1.25; hh = 1.1; }
+      else if (T.key && window.PLAZA_DOORS && window.PLAZA_DOORS[T.key]) { var D = window.PLAZA_DOORS[T.key]; m = D.m; cx = D.c ? D.c[0] : 0; cy = D.c ? D.c[1] : 0.74; hh = D.hh || 0.8; }
+      else if (T.portal) { m = T.portal; cy = 2.0; hh = 1.7; }
+      if (!m || !m.matrixWorld) return null;
+      var e = m.matrixWorld.elements;
+      return { x: e[0] * cx + e[4] * cy + e[12], y: e[1] * cx + e[5] * cy + e[13], z: e[2] * cx + e[6] * cy + e[14], ux: e[4] * hh, uy: e[5] * hh, uz: e[6] * hh };
+    } catch (er) { return null; }
+  }
+  function proj(F, x, y, z) {
+    var v = F.matrixWorldInverse.elements, P = F.projectionMatrix.elements;
+    var a = v[0] * x + v[4] * y + v[8] * z + v[12], b = v[1] * x + v[5] * y + v[9] * z + v[13], c = v[2] * x + v[6] * y + v[10] * z + v[14];
+    var px = P[0] * a + P[4] * b + P[8] * c + P[12], py = P[1] * a + P[5] * b + P[9] * c + P[13], pw = P[3] * a + P[7] * b + P[11] * c + P[15];
+    if (pw <= 0.05) return null;
+    return { x: (px / pw * 0.5 + 0.5) * innerWidth, y: (0.5 - py / pw * 0.5) * innerHeight };
+  }
+  var WARP_FS = [
+    "#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif",   // 16비트(mediump)면 잡음이 납작해져 빛 줄기가 사라짐(검토)
+    "uniform vec2 uRes; uniform vec2 uC; uniform float uR; uniform float uS; uniform float uT; uniform float uSpd; uniform float uFl; uniform vec3 uCol;",
+    "", // ← PORTAL_GLSL
+    "void main(){",
+    "  vec2 px = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y);",
+    "  float d = length(px - uC);",
+    "  vec2 qq = (px - uC) / uS; qq.y = -qq.y;",
+    "  float eg = (uR - d) / uS;",
+    "  vec4 c = portalFx(qq, eg, 1.0, uT, uCol, 1.0);",
+    "  float rn = length(qq), an = atan(qq.y, qq.x) / 6.2832 + 0.5, dep = 0.34 / (rn + 0.07);",
+    "  float ln = smoothstep(0.72, 1.0, pfN(vec2(an * 64.0, dep * 0.22 + uT * 1.5), 64.0)) * smoothstep(0.12, 0.55, rn) * uSpd;",
+    "  vec3 col = mix(c.rgb, vec3(1.0), ln * 0.85);",
+    "  col = mix(col, vec3(1.0, 0.99, 0.96), smoothstep(0.45 * (1.0 - uFl), 0.0, rn) * uSpd * 0.6);",
+    "  float a = smoothstep(uR, uR - 3.0, d);",
+    "  float halo = exp(-max(0.0, d - uR) / (uS * 0.16 + 4.0)) * (1.0 - a);",   // 문 밖으로 번지는 빛
+    "  col = mix(mix(uCol, vec3(1.0), 0.6), col, a); a = max(a, halo * 0.6);",
+    "  col = mix(col, vec3(1.0), uFl); a = max(a, uFl);",
+    "  gl_FragColor = vec4(col * a, a);",
+    "}"];
   function warp(T, cb) {
     // 배경 음악(music/music.js)은 소용돌이 속으로 날아가는 동안 천천히 작아져요(포털·꿈빛 성 문 모두)
+    try { if (window.BGM) BGM.stop(0.9); } catch (e) {}
+    var done = false, cv = null, raf = 0, st = { F: null };
+    function cleanup() {
+      window.PLZ_CAM = null;
+      try { if (st.F && st.fov0) { st.F.fov = st.fov0; st.F.updateProjectionMatrix(); } } catch (e) {}
+      if (raf) cancelAnimationFrame(raf);
+      if (cv && cv.parentNode) cv.parentNode.removeChild(cv);
+      try { var lx = gl && gl.getExtension("WEBGL_lose_context"); if (lx) lx.loseContext(); } catch (e) {} // 낡은 안드로이드는 WebGL 판이 16개쯤까지라 바로 돌려줌
+    }
+    function fin() {
+      if (done) return;
+      done = true;
+      cb();
+      // 게임으로 넘어간 뒤 브라우저 '뒤로'로 페이지가 그대로 되살아나면 하얀 막·카메라가 남지 않게
+      window.addEventListener("pageshow", cleanup, { once: true });
+    }
+    setTimeout(fin, 1900 * (window.__WARP_SLOW || 1)); // 탭이 숨겨져 그림이 멈춰도 넘어가요
+    var gl = null, W = innerWidth, H = innerHeight;
     try {
-      if (window.BGM) BGM.stop(0.9);
-    } catch (e) {}
+      if (!window.PORTAL_GLSL) throw 0;
+      var q = window.PLZ_Q || 1, sc = q < 0.7 ? 0.45 : 0.62; // 그리는 해상도(화면 글자 크기 기준): 빛 터널은 원래 흐릿해서 작게 그려도 같아 보여요
+      cv = document.createElement("canvas");
+      cv.width = Math.max(64, Math.round(W * sc));
+      cv.height = Math.max(64, Math.round(H * sc));
+      cv.style.cssText = "position:fixed;left:0;top:0;width:100%;height:100%;z-index:99999;pointer-events:none";
+      gl = cv.getContext("webgl", { premultipliedAlpha: true, antialias: false, depth: false, alpha: true });
+      if (!gl) throw 0;
+      var mk = function (t, src) { var o = gl.createShader(t); gl.shaderSource(o, src); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); return o; };
+      var fs = WARP_FS.slice(); fs[2] = window.PORTAL_GLSL;
+      var pr = gl.createProgram();
+      gl.attachShader(pr, mk(gl.VERTEX_SHADER, "attribute vec2 p;void main(){gl_Position=vec4(p,0.0,1.0);}"));
+      gl.attachShader(pr, mk(gl.FRAGMENT_SHADER, fs.join("\n")));
+      gl.linkProgram(pr);
+      if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw 0;
+      gl.useProgram(pr);
+      gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+      var lo = gl.getAttribLocation(pr, "p");
+      gl.enableVertexAttribArray(lo);
+      gl.vertexAttribPointer(lo, 2, gl.FLOAT, false, 0, 0);
+      var U = {};
+      ["uRes", "uC", "uR", "uS", "uT", "uSpd", "uFl", "uCol"].forEach(function (n) { U[n] = gl.getUniformLocation(pr, n); });
+      var c = T.color || 0x8a6bff;
+      gl.uniform3f(U.uCol, ((c >> 16) & 255) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255);
+      gl.uniform2f(U.uRes, cv.width, cv.height);
+      gl.viewport(0, 0, cv.width, cv.height);
+      document.body.appendChild(cv);
+    } catch (e) {
+      if (cv && cv.parentNode) cv.parentNode.removeChild(cv);
+      cv = null;
+      return warp2d(T, fin);
+    }
+    // ① 카메라: 문 가운데를 보며 80%까지 다가가고 화각은 넓게(땅이 둥글게 휜 만큼 문 높이를 맞춰요)
+    var SL = window.__WARP_SLOW || 1; // 점검용: 장면을 느리게(사진으로 순간순간 보려고)
+    var fp = focusOf(T), t0 = performance.now(), last = t0, tt = 3.0, diag = Math.hypot(W, H), now0 = function () { return t0 + (performance.now() - t0) / SL; };
+    var scr = { x: W / 2, y: H / 2, r: Math.min(W, H) * 0.08 };
+    if (fp) {
+      window.PLZ_CAM = function (F, dt, J) {
+        if (done) return;
+        st.F = F;
+        var bend = function (x, y, z) { var dz = z - J.uCurveZ.value; return y - J.uCurve.value * dz * dz; };
+        if (!st.p0) { st.p0 = { x: F.position.x, y: F.position.y, z: F.position.z }; st.fov0 = F.fov; }
+        var k = Math.min(1, (now0() - t0) / 700);
+        k = k * k * (3 - 2 * k);
+        var fy = bend(fp.x, fp.y, fp.z), p0 = st.p0, m = 0.78 * k;
+        F.position.set(p0.x + (fp.x - p0.x) * m, p0.y + (fy - p0.y) * m, p0.z + (fp.z - p0.z) * m);
+        F.lookAt(fp.x, fy, fp.z);
+        F.fov = st.fov0 + 24 * k;
+        F.updateProjectionMatrix();
+        F.updateMatrixWorld();
+        F.matrixWorldInverse.copy(F.matrixWorld).invert();
+        var a = proj(F, fp.x, fy, fp.z), b = proj(F, fp.x + fp.ux, bend(fp.x + fp.ux, fp.y + fp.uy, fp.z + fp.uz), fp.z + fp.uz);
+        if (a) { scr.x = a.x; scr.y = a.y; if (b) scr.r = Math.max(18, Math.hypot(b.x - a.x, b.y - a.y)); }
+      };
+    }
+    try { NET.G.ht.portal(); } catch (e) {} // 띠리링(포털 소리, 소리를 껐으면 안 남)
+    var D = 1250;
+    var fr = function (now) {
+      if (done) return;
+      now = now0();
+      var t = Math.max(0, now - t0), dt = Math.min(0.1, Math.max(0, now - last) / 1000);
+      last = now;
+      var g = Math.min(1, Math.max(0, (t - 140) / 560)); // ② 문 → 화면 가득
+      g = g * g * g;
+      var spd = Math.min(1, Math.max(0, (t - 300) / 650));
+      spd = spd * spd * (3 - 2 * spd);
+      tt += dt * (1.2 + 9 * spd);
+      var R = scr.r + (diag * 0.75 - scr.r) * g, cx = scr.x + (W / 2 - scr.x) * g, cy = scr.y + (H / 2 - scr.y) * g;
+      var S = Math.min(R, Math.min(W, H) * 0.62), fl = Math.min(1, Math.max(0, (t - 960) / 230));
+      var k = cv.width / W;
+      gl.uniform2f(U.uC, cx * k, cy * k);
+      gl.uniform1f(U.uR, R * k);
+      gl.uniform1f(U.uS, S * k);
+      gl.uniform1f(U.uT, tt);
+      gl.uniform1f(U.uSpd, spd);
+      gl.uniform1f(U.uFl, fl * fl);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      if (t < D) raf = requestAnimationFrame(fr);
+      else fin();
+    };
+    raf = requestAnimationFrame(fr);
+  }
+
+  // WebGL이 안 되는 기기용: 예전 2D 그림 소용돌이 장면(약 1초)
+  function warp2d(T, cb) {
     var done = false;
     function fin() {
       if (done) return;
@@ -87,7 +232,7 @@
         var bg = g.createRadialGradient(cx, cy, 0, cx, cy, rv);
         bg.addColorStop(0, "rgba(255,250,235,1)");
         bg.addColorStop(0.12, "rgba(190,170,255,1)");
-        bg.addColorStop(0.4, "rgba(40,22,96,1)");
+        bg.addColorStop(0.4, "rgba(214,200,255,1)");
         bg.addColorStop(0.8, col(1, 0.7));
         bg.addColorStop(1, col(1, 1.15));
         g.fillStyle = bg;
@@ -144,12 +289,13 @@
 
   var ask = null,
     askOpen = 0,
-    skip = null;
+    skip = null,
+    tLast = 0;
 
   // ---------- 꿈빛 성 본관 문 (2026-11-19, 성탈출탐정) ----------
   // 성 마당으로 들어가 본관 문 앞까지 걸어오면 "들어갈까요?" → 포털과 같은 소용돌이 장면 → games/castle.html(꿈빛 성 탐정단)
   // 문 안 소용돌이 모양은 plaza_inject.py가 넣은 window.CASTLE_DOOR(성탈출탐정/plaza_door.js). 여기서는 가까울수록 열고 돌린다
-  var CASTLE = { name: "꿈빛 성 탐정단", emoji: "🏰", goal: "친구들과 탐정이 되어 성의 수수께끼를 풀고 꼭대기 다락방까지 올라가요! (혼자도 할 수 있어요)", ext: "games/castle.html", color: 0xb197fc, x: 0, z: -45.25 };
+  var CASTLE = { name: "꿈빛 성 탐정단", emoji: "🏰", goal: "성의 수수께끼를 풀어요! (혼자도, 친구랑도)", ext: "games/castle.html", color: 0xb197fc, x: 0, z: -45.25, wid: "castle" };
   var cAsk = false,
     cSkip = false,
     cLast = 0;
@@ -160,7 +306,7 @@
     cLast = now;
     if (!D) return;
     var d = Math.hypot(Y.x - CASTLE.x, Y.z - CASTLE.z),
-      nt = S.loc === "village" && !Y.hidden ? Math.max(0, Math.min(1, (6.5 - d) / 3)) : 0;
+      nt = S.loc === "village" && !Y.hidden && wOpen(CASTLE) ? Math.max(0, Math.min(1, (6.5 - d) / 3)) : 0;
     D.u.uNear.value += (nt - D.u.uNear.value) * Math.min(1, dt * 2.5);
     D.u.uSpin.value += dt * (1 + 0.6 * D.u.uNear.value);
     D.m.visible = D.u.uNear.value > 0.004;
@@ -169,13 +315,14 @@
   function castleTick(G, S, Y, ok) {
     var d = Math.hypot(Y.x - CASTLE.x, Y.z - CASTLE.z);
     if (cAsk) {
-      if (!ok || d > 2.6) {
+      if (!ok || d > 2.6 || !wOpen(CASTLE)) {
         cAsk = false;
         G.fns.$i();
       }
       return true;
     }
     if (cSkip && d > 2.6) cSkip = false;
+    if (!wOpen(CASTLE)) return !ask && lockedTick(G, CASTLE, d, 1.35, ok);
     if (!ok || cSkip || d > 1.35 || ask || G.ve.st === "fading") return false;
     var card = document.getElementById("card");
     if (!card || !card.hidden) return false;
@@ -209,17 +356,75 @@
   // ---------- 명소 입구 4곳 (2026-11-20): 소원 우물·마법사 탑·버섯 집·반짝 등대 호숫가 → 새 게임 4개 + 바람 풍차 → 하트섬 원정대(2026-11-24) ----------
   // 문 모양·자리는 plaza_inject.py가 넣은 window.PLAZA_DOORS(캐릭터3D/pipeline/plaza_doors.js). 가까이 가면 소용돌이가 열리고, 문 앞에서 "들어갈까요?"
   // 게임 파일은 games/ 안(원본은 games/원본_*.html, back.js·uriban_bridge.js를 붙인 것은 캐릭터3D/pipeline/uriban_inject.py가 만듦)
-  var COOP = "둘이서 해요. 각자 패드로 방 번호(숫자 4자리)를 맞춰 만나요. 한 패드로도 해 볼 수 있어요.";
+  var COOP = "둘이서 방 번호 4자리로 만나요.";
   var DOORS = [
-    { key: "pyramid", name: "피라미드 대탈출", emoji: "🏺", goal: "우물 속 피라미드로 쑥 떨어져요! 큰 돌을 탄 미라를 피해 출구까지 달려요. 상자에서는 피라미드 옷이 나와요.", ext: "games/pyramid_run.html", color: 0xffc37a, params: { play: "" }, acc: "pyramid", noChar: true, wish: true },   // noChar: 피라미드는 char=0/1(사랑둥이/왕자)이라 광장 동물 이름을 넘기면 고른 왕자가 풀림 · wish: 소원 우물이라 카드에 소원 빌기도
-    { key: "giant", name: "거인과 꼬마", emoji: "👣", goal: "거인은 무거운 것을 옮기고, 꼬마는 작은 구멍으로 들어가요. " + COOP, ext: "games/giant.html", color: 0xb197fc },
-    { key: "jelly", name: "젤리와 팡", emoji: "🍯", goal: "꿀젤리와 불꽃 친구가 힘을 합쳐 꿀나무 마을을 지나가요. " + COOP, ext: "games/jelly.html", color: 0xffc94d },
-    { key: "magnet", name: "자석 친구", emoji: "🧲", goal: "빨강 N과 파랑 S 자석이 서로 당기고 밀며 얼음 성까지 가요. " + COOP, ext: "games/magnet.html", color: 0x8ec5ff },
-    { key: "island", name: "하트섬 원정대", emoji: "😈", goal: "풍차 바람을 타고 하트섬으로! 신전 세 곳에서 사랑의 불꽃을 찾아 그림자 악마둥이를 만나요. 혼자도, 친구 6명까지 같이도 해요.", ext: "games/island.html", color: 0xff7ab8 },   // 마지막 보스(2026-11-24, 하트섬원정대/)
-    { key: "escape", name: "사랑둥이 방탈출", emoji: "💗", goal: "심술 구름이 하트 학교를 꽁꽁 잠갔어요! 가구마다 걸린 반짝이 문제를 맞혀 하트 열쇠 조각을 찾고, 투덜이를 피해 3층까지 탈출해요. 혼자도, 친구 4명까지 같이도 해요.", ext: "games/escape.html", color: 0xff8fb7 },   // 시계탑 문(2026-11-24, 사랑둥이방탈출/)
+    { key: "pyramid", name: "피라미드 대탈출", emoji: "🏺", goal: "미라를 피해 출구까지 달려요!", ext: "games/pyramid_run.html", wid: "pyramid_run", color: 0xffc37a, params: { play: "" }, acc: "pyramid", noChar: true, wish: true },   // noChar: 피라미드는 char=0/1(사랑둥이/왕자)이라 광장 동물 이름을 넘기면 고른 왕자가 풀림 · wish: 소원 우물이라 카드에 소원 빌기도
+    { key: "giant", name: "거인과 꼬마", emoji: "👣", goal: "거인과 꼬마가 힘을 합쳐요. " + COOP, ext: "games/giant.html", wid: "giant", color: 0xb197fc },
+    { key: "jelly", name: "젤리와 팡", emoji: "🍯", goal: "꿀젤리와 불꽃 친구가 힘을 합쳐요. " + COOP, ext: "games/jelly.html", wid: "jelly", color: 0xffc94d },
+    { key: "magnet", name: "자석 친구", emoji: "🧲", goal: "N과 S 자석이 당기고 밀어요. " + COOP, ext: "games/magnet.html", wid: "magnet", color: 0x8ec5ff },
+    { key: "island", name: "하트섬 원정대", emoji: "😈", goal: "그림자 악마둥이를 찾아가요! (친구 6명까지)", ext: "games/island.html", wid: "island", color: 0xff7ab8 },   // 마지막 보스(2026-11-24, 하트섬원정대/)
+    { key: "escape", name: "사랑둥이 방탈출", emoji: "💗", goal: "문제를 맞혀 하트 열쇠를 찾고 탈출해요! (친구 4명까지)", ext: "games/escape.html", wid: "escape", color: 0xff8fb7 },   // 시계탑 문(2026-11-24, 사랑둥이방탈출/)
   ];
   // 광장 옷 → 피라미드 꾸미기(피라미드는 자기 꾸미기 14가지만 입힘). 거꾸로(피라미드 → 광장)는 games/uriban_bridge.js
   var PYR_ACC = { bow: "ribbon", flower_crown: "flower", sunglasses: "glasses", cat_ears: "cat", magician_hat: "magic", grad_cap: "grad", star_antenna: "antenna", egg_hat: "egg", pharaoh_nemes: "nemes", halo: "halo", kinball_hat: "minikin", backpack_mint: "backpack", cape_red: "cape", butterfly_wings: "butterfly" };
+  // ---------- 월드 잠금(2026-11-25, worlds.js): 월드 이름(wid) = 게임 파일 이름(back.js가 '끝까지 깼다'를 이 이름으로 알려 줌) ----------
+  // 순서대로 모드의 차례 = 이야기 순서(이야기장면/README.md: 1화 사랑둥이 → 하트 특공대 → 젤리와 팡 → 거인과 꼬마 → 자석 친구 → 피라미드 → 7화 뚝딱 장터 → 번외 꿈빛 성·방탈출 → 마지막 화 하트섬)
+  var ORDER = ["sarang", "heart", "jelly", "giant", "magnet", "pyramid_run", "jangteo3d", "castle", "escape", "island"];
+  function worldsList() {
+    var out = [], G = window.NET && NET.G;
+    for (var k in LIST) {
+      var T = G && G.Te ? G.Te[+k] : null;
+      out.push({ wid: LIST[k].wid, name: LIST[k].name, emoji: LIST[k].emoji, color: T ? T.color : 0xffc94d, T: T || LIST[k] });
+    }
+    out.push({ wid: CASTLE.wid, name: CASTLE.name, emoji: CASTLE.emoji, color: CASTLE.color, T: CASTLE });
+    DOORS.forEach(function (D) { out.push({ wid: D.wid, name: D.name, emoji: D.emoji, color: D.color, T: D }); });
+    out.sort(function (a, b) { var i = ORDER.indexOf(a.wid), j = ORDER.indexOf(b.wid); return (i < 0 ? 99 : i) - (j < 0 ? 99 : j); });
+    return out;
+  }
+  function wOpen(T) { return !T || !T.wid || !window.PLAZA_WORLDS || window.PLAZA_WORLDS.isOpen(T.wid); }
+  // 잠긴 문 사슬을 붙일 자리: 문 소용돌이 판(m)과 그 안의 가운데·크기(판 좌표)
+  function hostOf(T) {
+    if (!T) return null;
+    if (T === CASTLE) return window.CASTLE_DOOR ? { m: window.CASTLE_DOOR.m, cx: 0, cy: 1.2, w: 1.35, h: 2.3 } : null;
+    if (T.key && window.PLAZA_DOORS && window.PLAZA_DOORS[T.key]) {
+      var D = window.PLAZA_DOORS[T.key], c = D.c || [0, 0.74], hh = D.hh || 0.8, hw = D.hw || 0.45;
+      return T.key === "pyramid" ? { m: D.m, cx: 0, cy: 0, w: 1.6, h: 1.6, sq: 1 } : { m: D.m, cx: c[0], cy: c[1], w: hw * 2.3, h: hh * 2.1 };
+    }
+    if (T.portal) return { m: T.portal, cx: 0, cy: 1.95, w: 2.6, h: 3.6 };
+    return null;
+  }
+  var lockSkip = null,
+    lockShown = null; // 지금 떠 있는 잠김 창 {x, z, r}: 멀어지면 저절로 닫음(묻는 창과 같게)
+  function lockAway(G, Y) {
+    if (!lockShown) return;
+    var card = document.getElementById("card");
+    if (lockShown.T && wOpen(lockShown.T) && card && !card.hidden && card.getAttribute("data-wlock") === "1") lockShown.x = 1e9; // 보는 사이 열리면 창 닫기
+    if (!card || card.hidden || card.getAttribute("data-wlock") !== "1" || (card.textContent || "").indexOf("아직 잠겨") < 0) { lockShown = null; if (card) card.removeAttribute("data-wlock"); return; }
+    if (Math.hypot(Y.x - lockShown.x, Y.z - lockShown.z) > lockShown.r + 2.2 || G.S.loc !== "village") {
+      lockShown = null;
+      card.removeAttribute("data-wlock");
+      G.fns.$i();
+    }
+  }
+  // 잠긴 문 앞에 오면(묻는 거리) 한 번 알려 줌. 멀어졌다 다시 오면 또. 알려 주는 중이면 true
+  function lockedTick(G, T, d, near, ok) {
+    if (lockSkip === T) { if (d > near + 1.3) lockSkip = null; return false; }
+    if (!ok || d > near || G.ve.st === "fading") return false;
+    var card = document.getElementById("card");
+    if (!card || !card.hidden) return false;
+    lockSkip = T;
+    var wl = worldsList(), w = null;
+    for (var i = 0; i < wl.length; i++) if (wl[i].wid === T.wid) w = wl[i];
+    if (w && window.PLAZA_WORLDS) {
+      PLAZA_WORLDS.lockedCard(G, w, function () { lockShown = null; card.removeAttribute("data-wlock"); });
+      var Y = G.Y, P = window.PLAZA_DOORS;
+      lockShown = T === CASTLE ? { x: CASTLE.x, z: CASTLE.z, r: near } : T.key && P && P[T.key] ? { x: P[T.key].x, z: P[T.key].z, r: near } : T.gx != null ? { x: T.gx, z: T.gz, r: 1.5 } : { x: Y.x, z: Y.z, r: 1 };
+      lockShown.T = T;
+      card.setAttribute("data-wlock", "1");
+    }
+    try { G.ht.beep(false); } catch (e) {}
+    return true;
+  }
   var dAsk = null,
     dSkip = null,
     dLast = 0;
@@ -233,7 +438,7 @@
       var D = P[DOORS[i].key];
       if (!D) continue;
       var d = Math.hypot(Y.x - D.x, Y.z - D.z),
-        nt = S.loc === "village" && !Y.hidden ? Math.max(0, Math.min(1, (6.5 - d) / 3)) : 0;
+        nt = S.loc === "village" && !Y.hidden && wOpen(DOORS[i]) ? Math.max(0, Math.min(1, (6.5 - d) / 3)) : 0;
       D.u.uNear.value += (nt - D.u.uNear.value) * Math.min(1, dt * 2.5);
       D.u.uSpin.value += dt * (1 + 0.6 * D.u.uNear.value);
       D.m.visible = D.u.uNear.value > 0.004;
@@ -245,7 +450,7 @@
     if (!P) return false;
     if (dAsk) {
       var A = P[dAsk.key];
-      if (!ok || !A || Math.hypot(Y.x - A.x, Y.z - A.z) > A.r + 1.3) {
+      if (!ok || !A || Math.hypot(Y.x - A.x, Y.z - A.z) > A.r + 1.3 || !wOpen(dAsk)) {
         dAsk = null;
         G.fns.$i();
       }
@@ -259,6 +464,7 @@
       if (!D) continue;
       var d = Math.hypot(Y.x - D.x, Y.z - D.z);
       if (dSkip === T && d > D.r + 1.3) dSkip = null;
+      if (!wOpen(T)) { if (!ask && !best && lockedTick(G, T, d, D.r, ok)) return true; continue; }
       if (d <= D.r && d < bd && dSkip !== T) {
         best = T;
         bd = d;
@@ -320,6 +526,10 @@
     list: LIST,
     castle: CASTLE,
     doors: DOORS,
+    warpTo: warp, // 점검용(tests/portal_look.mjs)
+    worlds: worldsList, // 월드 목록(순서대로 모드 차례, worlds.js)
+    hostOf: hostOf,
+    isOpen: wOpen,
     // 광장이 켜질 때 포탈 이름표를 게임 이름으로 바꿔요
     applyTe: function (Te) {
       for (var k in LIST) {
@@ -331,6 +541,7 @@
         T.modeName = g.modeName;
         T.goal = g.goal;
         T.ext = g.url;
+        T.wid = g.wid;
         T.mode = "solo"; // 각자 기기에서 해요(선생님 기기는 광장에 남아요)
       }
     },
@@ -353,6 +564,10 @@
       var G = N.G,
         S = G.S,
         Y = G.Y;
+      var wnow = performance.now(), wdt = tLast ? Math.min(0.1, (wnow - tLast) / 1000) : 0;
+      tLast = wnow;
+      if (window.PLAZA_WORLDS) PLAZA_WORLDS.tick(wdt); // 잠긴 문 사슬·풀리는 반짝
+      lockAway(G, Y);
       castleGlow(S, Y); // 성 문 소용돌이는 선생님 화면에서도
       doorsGlow(S, Y); // 명소 입구 4곳도
       if (N.online && N.role === "teacher") return; // 선생님 기기는 묻지 않아요
@@ -383,7 +598,7 @@
       var card = document.getElementById("card");
       if (ask) {
         // 묻는 중에 문에서 멀어지면 창을 닫아요
-        if (!ok || bd > 3) closeAsk(G);
+        if (!ok || bd > 3 || !wOpen(ask)) closeAsk(G);
         return;
       }
       if (!best) return;
@@ -394,6 +609,7 @@
         return;
       }
       if (!card || !card.hidden) return;
+      if (!wOpen(best)) { lockSkip = null; lockedTick(G, best, 0, 1, ok); return; } // 잠긴 포털(선생님이 '다 같이 들어가기'로 연 문은 위에서 그대로 들어감)
       ask = best;
       askOpen = best.open;
       best.open = 1;
@@ -429,7 +645,7 @@
       if (T.params) for (var pk in T.params) u.searchParams.set(pk, T.params[pk]); // 예: 피라미드 ?play(처음 화면 없이 떨어지는 장면부터)
       if (window.NET && NET.online && NET.name) u.searchParams.set("name", NET.name);
       // 선생님 기기: 이야기 건너뛰기 언제나. 서버 반(선생님으로 들어옴) 또는 광장 주소 끝에 ?teacher(공개 주소처럼 서버가 없을 때)
-      if ((window.NET && NET.online && NET.role === "teacher") || new URLSearchParams(location.search).has("teacher")) u.searchParams.set("teacher", "1");
+      if (window.NET && NET.online ? NET.role === "teacher" : new URLSearchParams(location.search).has("teacher")) u.searchParams.set("teacher", "1"); // 서버 반에서는 선생님으로 들어온 기기만(월드 깬 수에서 빠지는 표시라서, 검토 3)
       try { var gq = window.PLAZA_GRADE ? window.PLAZA_GRADE() : parseInt(new URLSearchParams(location.search).get("grade"), 10) || parseInt(localStorage.getItem("plaza.grade"), 10); if (gq >= 1 && gq <= 6) u.searchParams.set("grade", String(gq)); } catch (e) {} // 학년(광장 grade.js PLAZA_GRADE = 🎓 표시와 같은 값)
       // 시험판: 내 캐릭터·입은 아이템을 게임에 넘기고(게임 캐릭터에 반영), 들어간 시각을 적어 둔다(1분 넘게 놀고 오면 선물 상자 뽑기)
       try {

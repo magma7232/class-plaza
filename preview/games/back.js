@@ -110,7 +110,7 @@
     var opened = false;
     ws.onopen = function () {
       opened = true;
-      ws.send(JSON.stringify({ t: "watch", name: q.get("name") || "친구", ticket: q.get("ticket") }));
+      ws.send(JSON.stringify({ t: "watch", name: q.get("name") || "친구", ticket: q.get("ticket"), teacher: q.get("teacher") === "1" })); // teacher: 선생님이 해 본 게임은 월드 깬 수에 안 셈
       clearInterval(pingT);
       pingT = setInterval(function () {
         try {
@@ -170,7 +170,8 @@
     while (wsOk && clears.length) {
       try {
         var c = clears.shift();
-        ws.send(JSON.stringify({ t: "clear", game: c.game, team: c.team }));
+        // w·fin: 월드 잠금(2026-11-25) — 어느 월드(게임 파일 이름)를 끝까지 깼는지. 친구 기기는 반 별 없이 깬 기록만(wclr)
+        ws.send(JSON.stringify(c.guest ? { t: "wclr", w: c.w } : { t: "clear", game: c.game, team: c.team, w: c.w, fin: c.fin }));
       } catch (e) {
         break;
       }
@@ -238,14 +239,20 @@
   }
 
   // ---------- 3) 게임을 깨면 반 별 하나 ----------
+  // 월드 이름 = 게임 파일 이름(games/castle.html → castle, games/sarang/index.html → sarang). 7번·광장 games.js의 wid와 같음
+  var WKEY = (function () { var a = location.pathname.split("/").filter(Boolean), k = (a[a.length - 1] || "").replace(/\.html?$/i, ""); return !k || k === "index" ? a[a.length - 2] || "" : k; })();
   // 친구랑 같이 한 방은 한 팀이라서 별도 하나예요: 방장 기기만 보내고, 친구 기기(guest)는 알림만 보여 줘요.
   var toastEl = null;
   window.addEventListener("minigame-clear", function (e) {
     var d = (e && e.detail) || {};
     var team = Math.max(1, Math.min(4, d.team | 0 || 1));
     if (!ROOM || !q.get("ticket")) return;
+    var fin = window.PLAZA_IS_FINAL ? !!window.PLAZA_IS_FINAL(d) : true; // 끝까지 깼나(7번)
     if (!d.guest) {
-      clears.push({ game: String(d.game || "game"), team: team });
+      clears.push({ game: String(d.game || "game"), team: team, w: WKEY, fin: fin });
+      flushClears();
+    } else if (fin) {
+      clears.push({ guest: 1, w: WKEY });
       flushClears();
     }
     if (!toastEl) {

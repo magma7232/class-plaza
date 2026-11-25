@@ -455,6 +455,7 @@
         NET.recallLeft = m.recall || 0;
         if (m.grade >= 1 && m.grade <= 6 && window.PLAZA_SET_GRADE) PLAZA_SET_GRADE(m.grade, "server"); // 선생님이 정한 우리 반 학년(grade.js)
         else if (m.role === "teacher" && window.PLAZA_GRADE && NET.cloud) { try { NET.cloud.send({ t: "grade", g: PLAZA_GRADE() }); } catch (e) {} } // 반 학년을 아직 안 정했으면 선생님 기기의 학년(🎓 표시)을 반 학년으로(검토)
+        if (window.PLAZA_WORLDS) { if (m.worlds) PLAZA_WORLDS.onServer(m.worlds, true); else if (PLAZA_WORLDS.noServer) PLAZA_WORLDS.noServer(); } // 월드 잠금(worlds.js)
         if (!NET.started) {
           NET.online = true;
           NET.started = true;
@@ -527,6 +528,9 @@
         return;
       case "grade":
         if (window.PLAZA_SET_GRADE) PLAZA_SET_GRADE(m.g, "server");
+        return;
+      case "worlds":
+        if (window.PLAZA_WORLDS) PLAZA_WORLDS.onServer(m.w, false); // 월드 잠금: 선생님이 바꿨거나 순서대로 모드로 저절로 열림
         return;
       case "plot":
         for (var pn in NET.plots) if (NET.plots[pn] === m.k && pn !== m.name) delete NET.plots[pn]; // 돌려받은 집은 옛 주인 이름을 지워요
