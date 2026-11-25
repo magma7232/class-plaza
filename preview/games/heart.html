@@ -403,7 +403,43 @@ img{-webkit-user-drag:none}
 
   <div id="loading"><div class="lh"><svg viewBox="0 0 40 40"><path d="M20 34C10 26 5 20 5 13.5 5 9 8.5 6 12.5 6c3 0 5.6 1.8 7.5 4.6C21.9 7.8 24.5 6 27.5 6 31.5 6 35 9 35 13.5 35 20 30 26 20 34z" fill="#ff6fae" stroke="#fff" stroke-width="3"/></svg></div><p>하트 친구들을 깨우는 중…</p></div>
 </div>
-<script src="../peerjs.min.js"></script>
+<script>
+/* 하트 특공대 학년 맞춤 (heart_inject.py) */
+window.PLAZA_QUIZ_GATES = true;   // 꼭 푸는 문제만(LEVEL UP·보물 상자·보스 반 퀴즈), 고르는 ❓ 말풍선은 끔
+(function () {
+  var GK = { 1: { hp: 0.6, dmg: 0.55, rate: 0.75, qt: 30 }, 2: { hp: 0.72, dmg: 0.7, rate: 0.82, qt: 28 }, 3: { hp: 0.88, dmg: 0.85, rate: 0.92, qt: 22 },
+    4: { hp: 1, dmg: 1, rate: 1, qt: 20 }, 5: { hp: 1.18, dmg: 1.12, rate: 1.08, qt: 24 }, 6: { hp: 1.35, dmg: 1.25, rate: 1.15, qt: 24 } };
+  function own() {
+    var g = 0;
+    try { if (window.PLAZA_GRADE) g = +window.PLAZA_GRADE(); } catch (e) {}
+    if (!(g >= 1 && g <= 6)) { try { g = parseInt(new URLSearchParams(location.search).get('grade'), 10); } catch (e) {} }
+    return g >= 1 && g <= 6 ? g : 4;
+  }
+  // 친구 기기는 방장이 보낸 학년(__heartHostG), 아니면 내 학년
+  window.HEART_G = function () { var h = window.__heartHostG; return h >= 1 && h <= 6 ? h : own(); };
+  window.HEART_GK = function () { return GK[window.HEART_G()] || GK[4]; };
+  // 문제 모음 불러오기(광장 퀴즈와 같은 파일, 읽기만). 못 불러오면 원래 문제만
+  if (!window.QUIZ_BANK) {
+    try { var sc = document.createElement('script'); sc.src = '../quiz/bank.js'; sc.async = true; document.head.appendChild(sc); } catch (e) {}
+  }
+  var bags = {}, cnt = 0;
+  // 4문제 중 3문제는 학년 문제. null이면 원래 문제(체육 안전·예절)
+  window.HEART_GRADE_Q = function () {
+    cnt++;
+    if (cnt % 4 === 0) return null;
+    var g = window.HEART_G(), list = (window.QUIZ_BANK || {})[g];
+    if (!list || !list.length) return null;
+    var bag = bags[g];
+    if (!bag || !bag.length) {
+      bag = bags[g] = list.slice();
+      for (var i = bag.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = bag[i]; bag[i] = bag[j]; bag[j] = t; }
+    }
+    var b = bag.pop();
+    if (!b || !b.c || b.c.length < 2) return null;
+    return { k: 'mc', q: b.q, o: b.c.slice(), a: 0, e: b.hint ? b.hint + ' (정답: ' + b.c[0] + ')' : '정답은 「' + b.c[0] + '」예요.', c: 'g' };
+  };
+})();
+</script><script src="../peerjs.min.js"></script>
 <script src="../peer-config.js"></script>
 <script>/* ---- util.js ---- */
 /* 공통 도우미 · 조이스틱 */
@@ -1246,10 +1282,10 @@ const DATA = (() => {
     return {
       L, boss: odd ? 'clock' : 'devil', pool,
       title: (L > 2 ? '더 세진 ' : '') + (odd ? '째깍째깍 장난감 섬' : '보랏빛 하트 구름섬'),
-      hpMul: 1 + 0.5 * k + 0.12 * k * k, dmgMul: 1 + 0.15 * k, xpMul: 1 + 0.25 * k,
-      rate0: 1.5 * (1 + 0.24 * k), rate1: 3.4 * (1 + 0.24 * k), cap: 70 + 14 * Math.min(k, 4),
+      hpMul: (1 + 0.5 * k + 0.12 * k * k) * window.HEART_GK().hp, dmgMul: (1 + 0.15 * k) * window.HEART_GK().dmg, xpMul: 1 + 0.25 * k,
+      rate0: 1.5 * (1 + 0.24 * k) * window.HEART_GK().rate, rate1: 3.4 * (1 + 0.24 * k) * window.HEART_GK().rate, cap: 70 + 14 * Math.min(k, 4),
       elites: L === 1 ? [26] : L === 2 ? [18, 36] : [12, 26, 40],
-      bossHp: Math.round(BOSS[odd ? 'clock' : 'devil'].hp * (1 + 0.62 * k + 0.08 * k * k)), rage: L >= 3,
+      bossHp: Math.round(BOSS[odd ? 'clock' : 'devil'].hp * (1 + 0.62 * k + 0.08 * k * k) * window.HEART_GK().hp), rage: L >= 3, gr: window.HEART_G(),
     };
   }
   const need = (lv) => Math.round(6 + 6 * lv + 0.7 * lv * lv);
@@ -1330,6 +1366,7 @@ const DATA = (() => {
   // 문제 뽑기: 체육 안전 4개에 예절 1개꼴, 최근에 나온 문제는 피한다
   let bag = [], mbag = [], cnt = 0;
   function nextQ() {
+    const gq = window.HEART_GRADE_Q && window.HEART_GRADE_Q(); if (gq) return gq;
     cnt++; const useM = cnt % 5 === 0;
     if (useM) { if (!mbag.length) mbag = shuffle(Q.filter((q) => q.c === 'm')); return mbag.pop(); }
     if (!bag.length) bag = shuffle(Q.filter((q) => q.c !== 'm')); return bag.pop();
@@ -2019,7 +2056,7 @@ const Game = (() => {
   function update(dt) {
     if (!G.on) return;
     if (G.modal && !(G.net && (G.modal.k === 'lvup' || G.modal.k === 'chest'))) return;
-    if (G.queue.length && (!G.modal || (G.queue[0].p && G.queue[0].p.net)) && (G.phase === 'wave' || G.phase === 'boss' || G.phase === 'free' || G.phase === 'clear')) { const ev = G.queue.shift(); if (ev.p && ev.p.net) { emit('remote', ev); return; } if (ev.k === 'lvup' && G.cfg.show) return; if (ev.k === 'chest' && !G.cfg.pick) { const o = options(ev.p, 1)[0]; apply(ev.p, o); emit('gain', o, '보물 상자!'); return; } G.modal = ev; emit('modal', ev); return; }
+    if (G.queue.length && !window.__heartAsking && (!G.modal || (G.queue[0].p && G.queue[0].p.net)) && (G.phase === 'wave' || G.phase === 'boss' || G.phase === 'free' || G.phase === 'clear')) { const ev = G.queue.shift(); if (ev.p && ev.p.net) { emit('remote', ev); return; } if (ev.k === 'lvup' && G.cfg.show) return; if (ev.k === 'chest' && !G.cfg.pick && !ev.asked && !G.net && ev.p === G.me && window.PLAZA_QUIZ && window.PLAZA_QUIZ.ask) { ev.asked = true; window.__heartAsking = true; const run = window.__heartRun; Promise.resolve(window.PLAZA_QUIZ.ask({ game: 'heart', why: '보물 상자를 열려면 문제를 풀어요!', icon: '🎁', big: '능력 하나 + 체력 가득', small: '능력 하나', grade: window.HEART_G() })).catch(() => ({ skipped: true })).then((r) => { window.__heartAsking = false; if (!G.on || run !== window.__heartRun) return; if (r && r.first) { ev.p.hp = maxHp(ev.p); FX.pop(ev.p.x, ev.p.y - 120, '체력 가득!', '#7dffb0', '#1f6a3a', 24, 1.1); } G.queue.unshift(ev); }); return; } if (ev.k === 'chest' && !G.cfg.pick) { const o = options(ev.p, 1)[0]; apply(ev.p, o); emit('gain', o, '보물 상자!'); return; } G.modal = ev; emit('modal', ev); return; }
     if (G.freeze > 0) { G.freeze -= dt; return; }
     G.t += dt; G.stats.time += dt;
     rebuild();
@@ -2077,13 +2114,13 @@ const Game = (() => {
     }
     for (const id of [...sentGems.keys()]) if (!seen.has(id)) { GD.push(id); sentGems.delete(id); }
     const md = G.modal && G.modal.k === 'pause' ? 'pause' : G.modal && G.modal.k === 'cq' ? 'cq' : '';
-    return { t: 's', full: full ? 1 : 0, T: R2(G.t), ph: G.phase, L: G.L, wt: R2(G.waveT), bt: R2(G.bossT), k: G.stats.kills, md, P, PW, E, B, S, H, GA, GM, GD, IT: G.items.map((it) => [it.k, R1(it.x), R1(it.y)]) };
+    return { t: 's', full: full ? 1 : 0, T: R2(G.t), ph: G.phase, L: G.L, gr: window.HEART_G(), wt: R2(G.waveT), bt: R2(G.bossT), k: G.stats.kills, md, P, PW, E, B, S, H, GA, GM, GD, IT: G.items.map((it) => [it.k, R1(it.x), R1(it.y)]) };
   }
   function lobPos(s) { if (s.t < 0) return; const u = s.t / s.T; if (u >= 1) { s.t = -9; return; } s.x = lerp(s.x0, s.x1, u); s.y = lerp(s.y0, s.y1, u); s.z = 4 * s.h * u * (1 - u) + 24 * (1 - u); }
   function netApply(d) {
     const me = G.me, mi = G.players.indexOf(me);
     if (Math.abs(G.t - d.T) > 0.5) G.t = d.T; else G.t += (d.T - G.t) * 0.2;
-    G.phase = d.ph; G.L = d.L; if (!G.lv || G.lv.L !== d.L) G.lv = DATA.LV(d.L); G.waveT = d.wt; G.bossT = d.bt; G.stats.kills = d.k; G.netPause = d.md === 'pause';
+    G.phase = d.ph; G.L = d.L; if (d.gr) window.__heartHostG = d.gr; if (!G.lv || G.lv.L !== d.L || G.lv.gr !== window.HEART_G()) G.lv = DATA.LV(d.L); G.waveT = d.wt; G.bossT = d.bt; G.stats.kills = d.k; G.netPause = d.md === 'pause';
     d.P.forEach((a, i) => {
       const p = G.players[i]; if (!p) return;
       if (p !== me) { p.nx = a[0]; p.ny = a[1]; p.vx = a[2]; p.vy = a[3]; p.face = a[4]; }
@@ -2316,7 +2353,7 @@ const Game = (() => {
   /* ── 시작 ── */
   function start(hero, cfg) {
     Object.assign(G.cfg, cfg || {}); G.on = true; G.t = 0; G.stats = { kills: 0, ok: 0, n: 0, maxL: 1, time: 0 }; G.queue.length = 0; G.modal = null; G.botGain.length = 0; G.gems.length = 0; G.items.length = 0; G.enemies.length = 0; G.freeze = 0;
-    G.net = !!(cfg && cfg.net); G.guest = !!(cfg && cfg.guest); G.netPause = false; G.topLv = 1; G.sndP = G.net ? [] : null;
+    G.net = !!(cfg && cfg.net); if (!(cfg && cfg.guest)) window.__heartHostG = 0; window.__heartAsking = false; window.__heartRun = (window.__heartRun || 0) + 1; G.guest = !!(cfg && cfg.guest); G.netPause = false; G.topLv = 1; G.sndP = G.net ? [] : null;
     if (G.guest) {
       // 친구 기기: 방장 기기가 정한 순서 그대로 하트 친구들을 세워요
       G.players = cfg.guest.list.map((a, i) => { const p = mkPlayer(a.hero, !!a.bot, i); p.nick = a.nick || p.name; p.nid = a.id; p.nx = p.x; p.ny = p.y; return p; });
@@ -2460,7 +2497,7 @@ const UI = (() => {
   function openModal(ev) {
     cur = ev; const m = E('modal'); m.classList.remove('hide'); m.className = ''; clearTimeout(modalTimer); clearInterval(qTimer);
     if (ev.k === 'lvup') quiz(ev, '힘내기 퀴즈!', '정답을 맞히면 새 능력을 얻어요');
-    else if (ev.k === 'chest') { m.classList.add('gold'); grant(ev.p, '보물 상자! 능력을 하나 골라요'); }
+    else if (ev.k === 'chest') { if (window.PLAZA_QUIZ && window.PLAZA_QUIZ.ask && !G.net) { m.classList.add('hide'); const evc = ev; Promise.resolve(window.PLAZA_QUIZ.ask({ game: 'heart', why: '보물 상자를 열려면 문제를 풀어요!', icon: '🎁', big: '능력 하나 + 체력 가득', small: '능력 하나', grade: window.HEART_G() })).catch(() => ({ skipped: true })).then((r) => { if (cur !== evc) return; m.classList.remove('hide'); m.classList.add('gold'); if (r && r.first) Net.heal(evc.p, 999); grant(evc.p, r && r.first ? '정답! 체력 가득 — 능력을 하나 골라요' : '보물 상자! 능력을 하나 골라요'); }); } else { m.classList.add('gold'); grant(ev.p, '보물 상자! 능력을 하나 골라요'); } }
     else if (ev.k === 'cq') classQuiz(ev.b);
   }
   function close() { clearTimeout(modalTimer); clearInterval(qTimer); E('modal').classList.add('hide'); box().onclick = null; box().innerHTML = ''; cur = null; G.modal = null; }
@@ -2483,7 +2520,7 @@ const UI = (() => {
       else { Net.heal(ev.p, 20); const nx = el('button', 'btn small', '꿀사탕 먹고 다시 힘내기 (+20)'); nx.onclick = close; box().appendChild(nx); modalTimer = setTimeout(close, G.cfg.auto ? 400 : 4200); }
     };
     box().onclick = null; for (const b of box().querySelectorAll('.opt')) b.onclick = (e) => { e.stopPropagation(); answer(+b.dataset.i); };
-    timer(20, () => answer(-1));
+    timer(window.HEART_GK().qt, () => answer(-1));
     if (G.cfg.auto) modalTimer = setTimeout(() => answer(Math.random() < 0.8 ? q.a : (q.a + 1) % q.o.length), 500);
   }
   // 얻은 능력 한 줄(정답 칸 안에 바로 보여 줌)
@@ -2552,7 +2589,7 @@ const UI = (() => {
     };
     v.onAnswer = answer;
     cqRemoteFn = (i, ok) => { if (done || !crew[i] || crew[i].bot || res[i] !== null) return; res[i] = ok; v.mark(i, '골랐어요!'); Net.cqMark(i); if (mine && !waiting()) reveal(); };
-    timer(20, () => { if (!mine) answer(-1); reveal(); });
+    timer(window.HEART_GK().qt, () => { if (!mine) answer(-1); reveal(); });
     if (G.cfg.auto) modalTimer = setTimeout(() => answer(Math.random() < 0.8 ? q.a : (q.a + 1) % q.o.length), 600);
   }
   function cqRemote(i, ok) { if (cqRemoteFn) cqRemoteFn(i, ok); }
@@ -2562,7 +2599,7 @@ const UI = (() => {
     let mine = false;
     v.onAnswer = (oi) => { if (mine) return; mine = true; const ok = oi === d.q.a; G.stats.n++; if (ok) G.stats.ok++; v.lock(oi); Snd.sfx(ok ? 'ok' : 'no'); v.mark(me, '골랐어요!'); Net.send({ t: 'cqa', ok }); };
     d.crew.forEach((c, i) => { if (c.bot) setTimeout(() => v.mark(i, '골랐어요!'), 900 + Math.random() * 3500); });
-    timer(20, () => v.onAnswer(-1));
+    timer(window.HEART_GK().qt, () => v.onAnswer(-1));
     if (G.cfg.auto) modalTimer = setTimeout(() => v.onAnswer(Math.random() < 0.8 ? d.q.a : (d.q.a + 1) % d.q.o.length), 700);
   }
   function cqMarkRemote(i) { if (cqView) cqView.mark(i, '골랐어요!'); }
@@ -2793,7 +2830,7 @@ const Net = (() => {
     rec = false; UI.begin(S.hero, { net: true, humans, nick: S.nick });
     X.length = SN.length = U.length = M.length = 0; G.sndP = [];
     const list = G.players.map((p) => ({ hero: p.hero, nick: p.nick, bot: !!p.bot, id: p === G.me ? 'h' : p.net || null }));
-    hsend({ t: 'start', list, L: G.L });
+    hsend({ t: 'start', list, L: G.L, gr: window.HEART_G() });
     S.started = true; S.full = true; S.snapT = 0; rec = true; S.screen = null;
   }
 
@@ -2841,6 +2878,7 @@ const Net = (() => {
     const me = (d.list || []).findIndex((a) => a.id === S.myId);
     if (me < 0) return;
     E('result').classList.add('hide'); waitOverlay(false); S.pend.length = 0;
+    if (d.gr) window.__heartHostG = d.gr;
     UI.begin(d.list[me].hero, { guest: { list: d.list, me }, nick: d.list[me].nick });
     S.started = true; S.lastSnap = performance.now(); S.screen = null;
   }

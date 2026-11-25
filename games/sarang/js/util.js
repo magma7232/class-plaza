@@ -21,5 +21,13 @@ const U = {
   easeInOut: (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2),
   rgba(c, a) { return `rgba(${c[0]},${c[1]},${c[2]},${a})`; },
   mix(c1, c2, t) { return [Math.round(c1[0] + (c2[0] - c1[0]) * t), Math.round(c1[1] + (c2[1] - c1[1]) * t), Math.round(c1[2] + (c2[2] - c1[2]) * t)]; },
+  // 학년(1~6): 광장 back.js의 PLAZA_GRADE() → 주소 ?grade= → 4. back.js는 게임 파일보다 늦게 붙으니 쓸 때마다 묻는다
+  grade() {
+    try { if (window.PLAZA_GRADE) { const g = +window.PLAZA_GRADE(); if (g >= 1 && g <= 6) return g; } } catch (e) { /* 아래로 */ }
+    try { const g = parseInt(new URLSearchParams(location.search).get('grade'), 10); if (g >= 1 && g <= 6) return g; } catch (e) { /* 아래로 */ }
+    return 4;
+  },
+  // 학년별 싸움 난이도: 적 체력(hp)·받는 피해(dmg). 4학년 = 예전 그대로
+  GRADE_K: { 1: { hp: 0.6, dmg: 0.55 }, 2: { hp: 0.75, dmg: 0.7 }, 3: { hp: 0.9, dmg: 0.85 }, 4: { hp: 1, dmg: 1 }, 5: { hp: 1.2, dmg: 1.15 }, 6: { hp: 1.38, dmg: 1.3 } },
   hex(h) { h = h.replace('#', ''); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; },
 };

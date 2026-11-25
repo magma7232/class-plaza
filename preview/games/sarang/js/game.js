@@ -121,7 +121,7 @@
 
   // ---------------- 상태 ----------------
   let state = 'loading';              // loading | title | play
-  let t = 0, camX = 0, camCenter = null, zoom = 1, zoomTarget = 1;
+  let t = 0, camX = 0, camLead = 0, camCenter = null, zoom = 1, zoomTarget = 1;
   let mapId = 'heart', map = null, scene = null;
   let ents = [], toasts = [], pickups = [], timers = [];
   const mons = new Map(), remote = new Map(), roster = new Map();
@@ -191,6 +191,16 @@
   // '같이 하기'(서버로 친구와 연결)에서는 퀴즈를 열어도 게임을 멈추지 않아요(친구 화면에서 내가 멈춰 보이고, 돌아올 때 공격이 한꺼번에 오지 않게)
   window.PLAZA_QUIZ_NOPAUSE = () => mode === 'multi';
   window.PLAZA_QUIZ_REWARD = { icon: '💖', big: '사랑 게이지 가득 + 체력 가득 + 15초 무적!', small: '사랑 게이지 +30 + 체력 가득' };
+  // 꼭 푸는 문제(2026-11-25 선생님: "옆에서 고르는 퀴즈 말고, 하다 보면 꼭 풀어야 하고 풀면 이점"):
+  //   ① 새 들판·숲·성에 처음 갈 때 '마음 문' ② 보스가 화나는 순간(빈틈) '심술 방패'. 고르는 ❓ 말풍선은 끔
+  //   광장 밖(PLAZA_QUIZ 없음)·퀴즈를 끈 판은 바로 통과
+  window.PLAZA_QUIZ_GATES = true;
+  let gating = false;
+  function gateQuiz(o) {
+    const PQ = window.PLAZA_QUIZ;
+    if (!PQ || !PQ.ask || mode === 'multi') return Promise.resolve({ correct: true, first: false, skipped: true });
+    return Promise.resolve(PQ.ask(Object.assign({ game: 'sarang', grade: U.grade() }, o))).catch(() => ({ correct: true, first: false, skipped: true }));
+  }
 
   function save() {
     if (!Q || state !== 'play' || !player) return;
@@ -295,6 +305,22 @@
   function goMap(id, x, y, cb) { fadeTo(() => { loadMap(id, x, y); Sound.play('portal'); if (cb) cb(); }); }
   function usePortal(e) {
     if (e.locked && e.locked()) { Sound.play('wrong'); toast(val(e.lockMsg) || '아직 갈 수 없어요!', '#ffb3c8'); return; }
+    const dest = SIM.MAPS[e.to];
+    if (dest && !dest.safe && Q && !Q.flags['gate_' + e.to]) {   // 처음 가는 곳: 마음 문 문제
+      if (gating) return;
+      gating = true; clearPresses();
+      gateQuiz({ why: `${dest.name} 가는 마음 문! 문제를 풀면 열려요`, icon: '🚪', big: '사랑 게이지 +40 · 체력 가득', small: '체력 가득' }).then((r) => {
+        gating = false;
+        if (state !== 'play' || !player) return;
+        Q.flags['gate_' + e.to] = true;
+        if (!r.skipped) {
+          player.hp = player.max; Sound.play('heal');
+          if (r.first) { gainLove(40); toast('정답! 마음 문이 활짝 — 사랑 게이지 +40, 체력 가득!', '#ffe680'); } else toast('마음 문이 열렸어요! 체력 가득', '#d9f5ff');
+        }
+        save(); usePortal(e);
+      });
+      return;
+    }
     FX.burst(e.x, e.y, 60, 'star', 12, { speed: 200 });
     goMap(e.to, e.toX, player.y);
   }
@@ -402,6 +428,17 @@
       if (!introShown && b) { introShown = true; intro = { t: 0, type: b.type, x: b.rx }; camCenter = b.rx - 40; zoomTarget = 1.14; Sound.play('roar'); shake = 10; }
     } else if (e.k === 'phase') {
       shake = 12; Sound.play('slam'); FX.flash('#ffffff', 0.35, 0.25);
+      // 꼭 푸는 문제: 보스의 심술 방패 — 처음에 맞히면 보스 체력 -8%·6초 무적, 아니면 3초 무적
+      if (b && !player.dead) {
+        const bid = b.id;
+        gateQuiz({ why: '보스의 심술 방패! 문제를 풀어 깨뜨려요', icon: '💥', big: '보스 체력 깎기 + 6초 무적', small: '3초 무적' }).then((r) => {
+          if (r.skipped || state !== 'play' || !player || player.dead) return;
+          player.shieldT = Math.max(player.shieldT || 0, r.first ? 6 : 3);
+          const bb = mons.get(bid);
+          if (r.first && bb && bb.st !== 'down') { Net.hit(mapId, bid, Math.round((bb.max || 1000) * 0.08)); FX.word(bb.rx || player.x, bb.ry || player.y, 260, '방패 와장창!', '#fff36a', 34); }
+          toast(r.first ? '정답! 심술 방패가 깨졌어요 — 보스 체력 뚝, 6초 무적!' : '방패를 막아 냈어요! 3초 무적', r.first ? '#ffe680' : '#d9f5ff');
+        });
+      }
       if (b) { FX.shock(b.rx, b.ry, 80, 260, 0.45, '#ffd1e6', 8); FX.word(b.rx, b.ry, 240, '빈틈이다!', '#fff36a', 36); }
       toast(e.phase === 2 ? '보스가 화가 났어요! 그런데 지금이 빈틈! 마구 공격해요!' : '보스의 마지막 힘! 지금 빈틈을 노려요!', '#ffe680');
     } else if (e.k === 'down') {
@@ -513,6 +550,7 @@
   function hurt(dmg, fromX) {
     const p = player;
     if (p.dead || p.inv > 0 || p.shieldT > 0 || busy() || state !== 'play' || special || window.__game._god) return;
+    dmg = Math.max(1, Math.round(dmg * gradeK.dmg));
     p.hp = Math.max(0, p.hp - dmg); p.inv = 0.9; p.hurtT = 0.35; shake = Math.max(shake, 7); hitStop = Math.max(hitStop, 0.05);
     FX.text(p.x, p.y, 130, '-' + dmg, '#ff6b8b', { size: 26 }); FX.word(p.x, p.y, 150, pick(['아야!', '앗!', '으앗!']), '#ffb3c8', 24);
     FX.burst(p.x, p.y, 50, 'spark', 6, { col: '#ffb3c8' });
@@ -778,7 +816,9 @@
     if (free && input.actP && focus && actCool <= 0) { actCool = 0.35; const a = actOf(focus); if (a) a.fn(); }
     if (free && input.emoP) { player.emoT = 2.5; Net.emo('heart'); Sound.play('pop'); FX.burst(player.x, player.y, 140, 'heart', 5, { speed: 80 }); }
     if (free && input.specialP) { if (love >= 100) startSpecial(); else { Sound.play('wrong'); toast(`사랑 게이지가 아직 ${Math.floor(love)}%예요. 몬스터를 맑게 하면 차요!`, '#ffd1e6'); } }
-    const want = camCenter != null ? camCenter - W / 2 : player.x - W / 2 + player.facing * 50;
+    // 카메라(2026-11-25 "어지럽지 않게"): 보는 쪽으로 앞서 보는 거리를 천천히 바꿔서, 좌우로 자주 돌아도 화면이 출렁이지 않게
+    camLead += (player.facing * 50 - camLead) * Math.min(1, rdt * 1.6);
+    const want = camCenter != null ? camCenter - W / 2 : player.x - W / 2 + camLead;
     camX += (want - camX) * Math.min(1, rdt * 4);
     camX = U.clamp(camX, 0, Math.max(0, map.w - W));
     sendState();
@@ -950,7 +990,7 @@
     ctx.imageSmoothingEnabled = true;
     if (Mini.active) { Mini.draw(ctx, W, H); return; }
     if (!scene) { ctx.fillStyle = '#2a1a40'; ctx.fillRect(0, 0, W, H); return; }
-    const shx = shake > 0 ? (Math.random() - 0.5) * shake : 0, shy = shake > 0 ? (Math.random() - 0.5) * shake * 0.6 : 0;
+    const shx = shake > 0 ? (Math.random() - 0.5) * shake * 0.6 : 0, shy = shake > 0 ? (Math.random() - 0.5) * shake * 0.35 : 0;   // 흔들림은 살짝만(어지럽지 않게)
     ctx.save();
     if (zoom !== 1) { ctx.translate(W / 2, H * 0.62); ctx.scale(zoom, zoom); ctx.translate(-W / 2, -H * 0.62); }
     ctx.translate(shx, shy);
@@ -1618,8 +1658,10 @@
   $('snd').addEventListener('click', (e) => { e.stopPropagation(); Sound.init(); toggleSound(); });
   if (Sound.muted) $('snd').classList.add('off');
 
+  let gradeK = U.GRADE_K[4];
   function startGame(o) {
     Sound.init();
+    gradeK = U.GRADE_K[U.grade()] || U.GRADE_K[4]; SIM.setHpK(gradeK.hp);
     mode = o.mode; myName = o.name || '사랑둥이'; myColor = o.color || 'red';
     saveKey = mode === 'multi' ? 'sarang2:multi:' + myName : 'sarang2:solo';
     const sv = o.cont;
@@ -1645,6 +1687,7 @@
     state = 'title';
     for (const id of ['join', 'teacher', 'ending']) $(id).classList.add('hidden');
     $('title').classList.remove('hidden'); document.body.classList.add('menu');
+    $('gradeTag').textContent = `${U.grade()}학년 맞춤 모험 · 미니게임 문제와 싸움 난이도가 학년에 맞아요`;
     const sv = soloSave();
     $('contBtn').classList.toggle('hidden', !sv);
     if (sv) $('contBtn').textContent = `이어하기 · ${SIM.MAPS[sv.map].name}`;
@@ -1724,6 +1767,8 @@
     ents() { return ents.map((e) => ({ kind: e.kind, sub: e.sub, id: e.id, x: e.x, y: e.y, hidden: !!(e.hidden && e.hidden()), broken: e.broken })); },
     act(id) { const e = ents.find((q) => q.id === id); if (e) { const a = actOf(e); if (a) a.fn(); } },
     winMini() { const c = Mini._cur(); if (c) { c.s.res = 'win'; c.s.resT = 5; } },
+    mini(name) { G.mini(name, () => {}); },
+    portal(to) { const e = ents.find((q) => q.kind === 'portal' && q.to === to); if (e) usePortal(Object.assign({}, e, { locked: null })); return !!e; },
     face(d) { player.facing = d; },
     fire(big) { fire(!!big); },
     love(v) { love = v; if (v >= 100) loveFull = false; gainLove(0.001); },

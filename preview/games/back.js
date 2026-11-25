@@ -10,6 +10,22 @@
  *    위치는 <script src="back.js" data-pos="top-center"> 처럼 바꿀 수 있어요.
  *    (top-left, top-center, top-right, bottom-left, bottom-center, bottom-right, left-middle, right-middle, none=단추 없음)
  */
+/* 0) 학년(2026-11-25 선생님: "1~6학년별로 그 학년 문제·그 학년 수준 게임"): 모든 게임이 window.PLAZA_GRADE()로 읽는다(1~6).
+ *  순서: 주소 ?grade=N(이 기기에 plaza.grade로 기억) → 기억한 plaza.grade → 예전 퀴즈 기억 plaza.quizGrade → 기본 4.
+ *  광장(games.js)이 게임으로 갈 때 grade=N을 넘긴다. 게임은 (window.PLAZA_GRADE ? PLAZA_GRADE() : 4)처럼 쓴다. */
+(function () {
+  if (window.PLAZA_GRADE) return;
+  window.PLAZA_GRADE = function () {
+    var g = 0;
+    try { g = parseInt(new URLSearchParams(location.search).get("grade"), 10); } catch (e) {}
+    if (g >= 1 && g <= 6) { try { if (localStorage.getItem("plaza.grade") !== String(g)) localStorage.setItem("plaza.grade", String(g)); } catch (e) {} return g; }   /* 같으면 안 씀(매 장면 불러도 낡은 패드 부담 없게) */
+    try { g = parseInt(localStorage.getItem("plaza.grade"), 10); } catch (e) { g = 0; }
+    if (g >= 1 && g <= 6) return g;
+    try { g = parseInt(JSON.parse(localStorage.getItem("plaza.quizGrade") || "0"), 10); } catch (e) { g = 0; }
+    return g >= 1 && g <= 6 ? g : 4;
+  };
+})();
+
 (function () {
   "use strict";
   var me = document.currentScript;
@@ -407,8 +423,13 @@
   try {
     var me = document.currentScript;
     if (window.PLAZA_QUIZ || !me || !me.src) return;
+    // 꼭 푸는 문제(PLAZA_QUIZ.ask, 2026-11-25): quiz.js가 오기 전에 게임이 부르면 줄을 세워 두고, quiz.js가 와서 차례로 냄.
+    // quiz.js를 못 받으면(파일 없음·끊김) 통과로 돌려줘서 게임이 막히지 않게
+    var q = [], pass = function () { return { correct: true, first: false, tries: 0, skipped: true }; };
+    window.PLAZA_QUIZ = { __stub: true, __q: q, ask: function (o) { return new Promise(function (r) { q.push([o, r]); }); } };
     var s = document.createElement("script");
     s.src = new URL("../quiz/quiz.js", me.src).href;
+    s.onerror = function () { if (window.PLAZA_QUIZ && window.PLAZA_QUIZ.__stub) { window.PLAZA_QUIZ = { off: true, ask: function () { return Promise.resolve(pass()); } }; } q.splice(0).forEach(function (x) { x[1](pass()); }); };
     (document.head || document.documentElement).appendChild(s);
   } catch (e) {}
 })();

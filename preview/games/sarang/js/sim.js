@@ -58,9 +58,12 @@
     if (map.boss) spawnBoss(w, 1);
     return w;
   }
+  // 학년 맞춤 체력 배율(2026-11-25): 게임이 시작할 때 setHpK(학년 표의 값). 4학년 = 1(예전 그대로)
+  let HPK = 1;
+  function setHpK(k) { HPK = k > 0 ? k : 1; }
   function addMon(w, type, x, y, extra) {
-    const d = MON[type];
-    const m = Object.assign({ id: w.nextId++, type, x, y, z: d.z, hp: d.hp, max: d.hp, st: 'idle', tm: rnd(0.5, 2), cd: rnd(1, 3), f: -1,
+    const d = MON[type], hp0 = Math.max(1, Math.round(d.hp * HPK));
+    const m = Object.assign({ id: w.nextId++, type, x, y, z: d.z, hp: hp0, max: hp0, st: 'idle', tm: rnd(0.5, 2), cd: rnd(1, 3), f: -1,
       hx: x, hy: y, tx: x, ty: y, ph: Math.random() * 6, hitBy: {}, respawnAt: 0, minion: false, stun: 0 }, extra || {});
     w.mons.push(m);
     return m;
@@ -69,7 +72,7 @@
     const type = w.map.boss, d = MON[type];
     const k = Math.max(1, nPlayers) * 0.85 + 0.15;
     const b = addMon(w, type, w.map.w * 0.72, 430, { st: 'wait', phase: 1, scaleN: Math.max(1, nPlayers), seq: 0 });
-    b.hp = b.max = Math.round(d.hp * k);
+    b.hp = b.max = Math.round(d.hp * k * HPK);
     w.boss = b;
     return b;
   }
@@ -166,7 +169,7 @@
       spawnBoss(w, Math.max(1, players.length));
     }
     if (w.boss && w.boss.st !== 'down' && players.length > w.boss.scaleN) { // 사람이 늘면 보스 체력도 늘어남
-      const d = MON[w.boss.type], add = Math.round(d.hp * 0.85 * (players.length - w.boss.scaleN));
+      const d = MON[w.boss.type], add = Math.round(d.hp * HPK * 0.85 * (players.length - w.boss.scaleN));
       w.boss.hp += add; w.boss.max += add; w.boss.scaleN = players.length;
     }
     // 모두 기절하면 보스가 힘을 조금 되찾고 제자리로
@@ -403,7 +406,7 @@
         b.st = 'cast'; b.tm = 0.5; break;
       case 'summon': {
         const t = b.type === 'snoreKing' ? 'snore' : b.type === 'devil' ? (Math.random() < 0.5 ? 'bat' : 'cloud') : 'crumb';
-        for (const s of [-1, 1]) { const m = addMon(w, t, clamp(b.x + s * 140, 60, w.map.w - 60), clamp(b.y + s * 50, FT, FB), { minion: true, st: 'spawn', tm: 0.5 }); m.hp = m.max = Math.round(MON[t].hp * 0.8); }
+        for (const s of [-1, 1]) { const m = addMon(w, t, clamp(b.x + s * 140, 60, w.map.w - 60), clamp(b.y + s * 50, FT, FB), { minion: true, st: 'spawn', tm: 0.5 }); m.hp = m.max = Math.round(MON[t].hp * HPK * 0.8); }
         b.st = 'cast'; b.tm = 0.7; break;
       }
       case 'crumbs':
@@ -493,5 +496,5 @@
     return { id: a[0], type: TYPES[a[1]], x: a[2], y: a[3], z: a[4], hp: a[5], max: a[6], st: STATES[a[7]], f: a[8], phase: a[9], stun: a[10] ? 0.2 : 0, wave: !!a[11] };
   }
 
-  return { FT, FB, MAPS, MON, TYPES, STATES, createWorld, step, hit, snap, unsnap };
+  return { FT, FB, MAPS, MON, TYPES, STATES, createWorld, step, hit, snap, unsnap, setHpK };
 });

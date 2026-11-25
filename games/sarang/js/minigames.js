@@ -34,7 +34,8 @@ const Mini = (() => {
     Art.roundRect(c, x, y, w, h, h / 2.6);
     const g = c.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, o.c1 || '#ff9cc8'); g.addColorStop(1, o.c2 || '#ff4f94');
     c.fillStyle = g; c.fill(); c.lineWidth = focus ? 5 : 3; c.strokeStyle = focus ? '#fff36a' : '#fff'; c.stroke();
-    txt(c, label, x + w / 2, y + h / 2 + 1, o.size || Math.min(26, h * 0.46), '#fff', 'center', 'rgba(110,20,70,0.65)', 4);
+    if (typeof label === 'object') numTxt(c, label, x + w / 2, y + h / 2 + 1, o.size || Math.min(26, h * 0.46), '#fff', 'rgba(110,20,70,0.65)', 4);
+    else txt(c, label, x + w / 2, y + h / 2 + 1, o.size || Math.min(26, h * 0.46), '#fff', 'center', 'rgba(110,20,70,0.65)', 4);
     c.restore();
     btns.push({ id, x, y, w, h });
   }
@@ -82,26 +83,28 @@ const Mini = (() => {
   const rhythm = {
     title: '기상 나팔 불기',
     init() {
-      const bpm = 96, beat = 60 / bpm;
+      // 학년마다 빠르기·맞혀야 할 음표 수·판정 너그러움(4학년 = 예전 그대로)
+      const RG = { 1: [80, 14, 0.27], 2: [88, 16, 0.24], 3: [92, 18, 0.22], 4: [96, 20, 0.2], 5: [106, 21, 0.18], 6: [116, 22, 0.17] }[gradeNow()] || [96, 20, 0.2];
+      const bpm = RG[0], beat = 60 / bpm;
       const chart = [[0, 67], [1, 72], [2, 76], [3, 72], [4, 76], [4.5, 79], [5, 76], [6, 72],
         [8, 67], [9, 72], [10, 76], [11, 72], [12, 76], [12.5, 79], [13, 81], [13.5, 79], [14, 76],
         [16, 79], [17, 84], [17.5, 84], [18, 83], [19, 79], [20, 76], [21, 79], [22, 76], [22.5, 74], [23, 72], [24, 84]];
       const lead = 4 * beat;
-      return { beat, notes: chart.map(([b, n]) => ({ time: lead + b * beat, n, j: null, jt: 0 })), t: -0.6, travel: 1.8, hits: 0, need: 20, pops: [],
+      return { beat, notes: chart.map(([b, n]) => ({ time: lead + b * beat, n, j: null, jt: 0 })), t: -0.6, travel: bpm > 100 ? 1.55 : 1.8, hits: 0, need: RG[1], win: RG[2], pops: [],
         end: lead + 25 * beat + 0.8, lastBeat: -1, combo: 0, best: 0, flash: 0 };
     },
     update(s, dt, inp, tapId) {
       s.t += dt; s.flash = Math.max(0, s.flash - dt * 4);
       const b = Math.floor(s.t / s.beat);
       if (b !== s.lastBeat && s.t > 0 && s.t < s.end - 0.8) { s.lastBeat = b; Sound.note(b % 2 ? 55 : 48, 0.2, 'sine', 0.12); }
-      for (const n of s.notes) if (!n.j && s.t - n.time > 0.2) { n.j = 'miss'; n.jt = s.t; s.combo = 0; s.pops.push({ text: '앗!', col: '#b9a6d6', t: 0 }); }
+      for (const n of s.notes) if (!n.j && s.t - n.time > s.win) { n.j = 'miss'; n.jt = s.t; s.combo = 0; s.pops.push({ text: '앗!', col: '#b9a6d6', t: 0 }); }
       const pressed = !tapId && (inp.shootP || inp.actP || inp.jumpP || anyTapOutside(inp));
       if (pressed && s.t > 0) {
-        let best = null, bd = 0.3;
+        let best = null, bd = s.win + 0.1;
         for (const n of s.notes) if (!n.j && Math.abs(n.time - s.t) < bd) { bd = Math.abs(n.time - s.t); best = n; }
         if (best) {
-          if (bd <= 0.2) {
-            best.j = bd <= 0.1 ? 'perfect' : 'good'; best.jt = s.t; s.hits++; s.combo++; s.best = Math.max(s.best, s.combo); s.flash = 1;
+          if (bd <= s.win) {
+            best.j = bd <= s.win / 2 ? 'perfect' : 'good'; best.jt = s.t; s.hits++; s.combo++; s.best = Math.max(s.best, s.combo); s.flash = 1;
             Sound.note(best.n, 0.3, 'square', 0.06); Sound.note(best.n - 12, 0.3, 'triangle', 0.12); sparkle(140, 340, best.j === 'perfect' ? 14 : 8);
             s.pops.push({ text: best.j === 'perfect' ? '딱 좋아!' : '좋아!', col: best.j === 'perfect' ? '#fff36a' : '#9ff0ff', t: 0 });
           } else { best.j = 'miss'; best.jt = s.t; s.combo = 0; Sound.play('wrong'); s.pops.push({ text: best.time > s.t ? '너무 빨라!' : '늦었어!', col: '#b9a6d6', t: 0 }); }
@@ -154,29 +157,219 @@ const Mini = (() => {
   };
 
   // =========================================================
-  // 2. 양 세기
+  // 학년 맞춤 도우미 (2026-11-25 선생님: "학년을 고르면 그 학년 문제·그 학년 수준 게임")
+  // =========================================================
+  const gradeNow = () => (U.grade ? U.grade() : 4);
+  const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+  // 분수 글자(기약분수): 3, 8 → '8분의 3'
+  const fracTxt = (n, d) => { const g = gcd(n, d); n /= g; d /= g; return d === 1 ? String(n) : `${d}분의 ${n}`; };
+  const comma = (v) => String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  // 정답 + 겹치지 않는 보기 3개(글자로 비교, 정답이 늘 들어감). 모자라면 fill(i)로 채움
+  function makeOpts(ans, cands, fill) {
+    const out = [ans];
+    for (const v of cands) { if (out.length >= 4) break; if (v != null && v !== '' && !out.includes(v)) out.push(v); }
+    for (let i = 1; out.length < 4 && i < 60; i++) { const v = fill(i); if (!out.includes(v)) out.push(v); }
+    return shuffle(out);
+  }
+  const divisors = (n, lo, hi) => { const a = []; for (let d = lo; d <= hi; d++) if (n % d === 0) a.push(d); return a; };
+  // 가벼운 양 그림(무리용): 낡은 패드에서도 여러 마리를 한꺼번에 그릴 수 있게 그라데이션 없이
+  function miniSheep(c, x, y, s, dark, f, t, ph) {
+    c.save(); c.translate(x, y); if (f < 0) c.scale(-1, 1);
+    const lg = Math.sin(t * 9 + ph) * 3 * s;
+    c.strokeStyle = '#3a2f4a'; c.lineWidth = 2.4 * s; c.lineCap = 'round';
+    for (const lx of [-9, -3, 3, 9]) { c.beginPath(); c.moveTo(lx * s, -8 * s); c.lineTo(lx * s + (lx > 0 ? lg : -lg), 0); c.stroke(); }
+    c.fillStyle = '#3a2f4a';
+    for (const [bx, by, r] of [[-7, -15, 8], [0, -19, 9], [7, -15, 8], [0, -11, 9]]) { c.beginPath(); c.arc(bx * s, by * s, r * s + 1.8, 0, TAU); c.fill(); }
+    c.fillStyle = dark ? '#5d5470' : '#fbf8ff';
+    for (const [bx, by, r] of [[-7, -15, 8], [0, -19, 9], [7, -15, 8], [0, -11, 9]]) { c.beginPath(); c.arc(bx * s, by * s, r * s, 0, TAU); c.fill(); }
+    c.fillStyle = dark ? 'rgba(255,255,255,0.18)' : '#ffffff'; c.beginPath(); c.arc(-2 * s, -22 * s, 4 * s, 0, TAU); c.fill();
+    c.beginPath(); c.ellipse(12 * s, -17 * s, 5.5 * s, 4.8 * s, 0.2, 0, TAU); c.fillStyle = dark ? '#2a2236' : '#5a5068'; c.fill();
+    c.fillStyle = '#fff'; c.beginPath(); c.arc(13.5 * s, -18 * s, 1.3 * s, 0, TAU); c.fill();
+    c.fillStyle = '#ff9cc0'; c.beginPath(); c.arc(9 * s, -21 * s, 2 * s, 0, TAU); c.fill();
+    c.restore();
+  }
+
+  // =========================================================
+  // 2. 양 세기 (학년마다 다른 셈)
+  //   1학년: 한 마리씩 세기 · 2학년: 2·5·10씩 뛰어 세기 · 3학년: 곱셈·나눗셈 · 4학년: (세 자리)×(두 자리)·(세 자리)÷(두 자리)
+  //   5학년: 기약분수·평균·약수 · 6학년: 비·백분율·비례배분
+  //   양은 무리(한 무리 k마리)로 울타리를 넘고, 아이는 무리를 센 뒤 그 학년 문제를 푼다
   // =========================================================
   const ROUNDS_SHEEP = [
     { real: [6, 8], cloud: 0, turn: 0, gap: 0.95, spd: 210 },
     { real: [7, 9], cloud: 2, turn: 1, gap: 0.8, spd: 245 },
     { real: [9, 11], cloud: 3, turn: 2, gap: 0.62, spd: 285 },
   ];
+  // 한 판 계획: groups = 넘어갈 무리들 [{k, black}], cloud·turn = 헷갈리게 하는 것, q = 문제
+  function sheepPlan(g, r) {
+    const P = { groups: [], cloud: 0, turn: 0, gap: 1.5, spd: 200, badge: true, hint: '', memo: false };
+    const same = (n, k, black = 0) => { for (let i = 0; i < n; i++) P.groups.push({ k, black }); };
+    const cnt = (lo, hi, opts) => makeOpts(opts[0], opts.slice(1), (i) => opts[0] + (i % 2 ? i : -i) * (lo || 1));
+    if (g <= 1) {
+      const R = ROUNDS_SHEEP[r];
+      const n = ri(R.real[0], R.real[1]); same(n, 1);
+      Object.assign(P, { cloud: R.cloud, turn: R.turn, gap: R.gap, spd: R.spd, badge: false });
+      P.q = { lines: ['울타리를 넘어간 양은 몇 마리였을까요?'], unit: '마리', ans: String(n) };
+      P.q.opts = makeOpts(String(n), [-2, -1, 1, 2, 3].map((d) => n + d).filter((v) => v > 0).map(String), (i) => String(n + 3 + i));
+      P.explain = `양은 모두 ${n}마리!`;
+      P.head = r === 0 ? '울타리를 넘어가는 양을 세어요!' : '양만 세어요! 구름과 되돌아가는 양은 세지 않아요';
+      return P;
+    }
+    if (g === 2) {
+      const k = [2, 5, 10][r], n = r === 2 ? ri(3, 6) : ri(4, 7), T = n * k;
+      same(n, k); P.cloud = [0, 1, 2][r]; P.turn = [0, 1, 1][r]; P.spd = 190 + r * 15;
+      P.q = { lines: [`양이 ${k}마리씩 무리 지어 넘어갔어요.`, '넘어간 양은 모두 몇 마리일까요?'], ans: String(T) };
+      P.q.opts = makeOpts(String(T), [T - k, T + k, T + 2 * k, T - 1, T + 1].filter((v) => v > 0).map(String), (i) => String(T + i * k));
+      P.explain = `${Array.from({ length: n }, (_, i) => (i + 1) * k).join(', ')} → ${T}마리`;
+      P.head = `${k}마리씩 넘어가요! ${k}씩 뛰어 세어 봐요`;
+      return P;
+    }
+    if (g === 3) {
+      if (r < 2) {
+        const k = r ? ri(6, 9) : ri(3, 6), n = r ? ri(4, 7) : ri(3, 6), T = n * k;
+        same(n, k); P.cloud = r ? 2 : 0; P.turn = r ? 1 : 0; P.spd = 200 + r * 20;
+        P.q = { lines: [`한 무리에 양이 ${k}마리씩 넘어갔어요.`, '넘어간 양은 모두 몇 마리일까요?'], ans: String(T) };
+        P.q.opts = makeOpts(String(T), [(n + 1) * k, (n - 1) * k, n * (k + 1), n * (k - 1), n + k].filter((v) => v > 0).map(String), (i) => String(T + i));
+        P.explain = `${k} × ${n} = ${T}마리`;
+        P.head = '무리가 몇 개인지 세어요! 곱셈으로 모두 구해요';
+        return P;
+      }
+      for (let tries = 0; tries < 200; tries++) {
+        const n = ri(3, 7), k = ri(3, 9), T = n * k;
+        const ms = divisors(T, 2, 9).filter((m) => m !== n && m !== k && T / m <= 30);
+        if (!ms.length) continue;
+        const m = ms[ri(0, ms.length - 1)], A = T / m;
+        same(n, k); P.cloud = 1; P.turn = 1; P.spd = 220;
+        P.q = { lines: [`넘어간 양을 우리 ${m}개에 똑같이 나누어 넣어요.`, '한 우리에 몇 마리씩 들어갈까요?'], ans: String(A) };
+        P.q.opts = makeOpts(String(A), [A + 1, A - 1, A + 2, T - m, m].filter((v) => v > 0).map(String), (i) => String(A + 2 + i));
+        P.explain = `${k} × ${n} = ${T}마리, ${T} ÷ ${m} = ${A}마리`;
+        P.head = '무리를 세어 두었다가 나눗셈 문제를 풀어요';
+        return P;
+      }
+      return sheepPlan(3, 1);
+    }
+    if (g === 4) {
+      if (r === 0) {
+        const k = ri(12, 25), n = ri(3, 6), T = n * k;
+        same(n, k); P.spd = 200;
+        P.q = { lines: [`수레 하나에 양이 ${k}마리씩 타고 넘어갔어요.`, '넘어간 양은 모두 몇 마리일까요?'], ans: String(T) };
+        P.q.opts = makeOpts(String(T), [(n + 1) * k, (n - 1) * k, T + 10, T - 10, n * (k + 1)].filter((v) => v > 0).map(String), (i) => String(T + i));
+        P.explain = `${k} × ${n} = ${T}마리`;
+        P.head = '양 수레가 몇 대 넘어가는지 세어요!';
+        return P;
+      }
+      if (r === 1) { // (세 자리 수) ÷ (두 자리 수)
+        const n = ri(3, 6), k = ri(5, 9), T = n * k, q = ri(6, 15), C = T * q;
+        same(n, k); P.cloud = 2; P.turn = 1; P.spd = 225;
+        P.q = { lines: [`넘어간 양에게 당근 ${C}개를 똑같이 나누어 주어요.`, '한 마리에게 당근을 몇 개씩 줄까요?'], ans: `${q}개` };
+        P.q.opts = makeOpts(`${q}개`, [q + 1, q - 1, q + 2, q + 10, T].filter((v) => v > 0 && v !== q).map((v) => `${v}개`), (i) => `${q + 2 + i}개`);
+        P.explain = `양 ${k} × ${n} = ${T}마리, ${C} ÷ ${T} = ${q}개`;
+        P.head = '무리를 세어요! 구름과 되돌아가는 양은 빼고';
+        return P;
+      }
+      const n = ri(3, 6), k = ri(4, 9), T = n * k, per = [120, 150, 240, 250, 325, 408][ri(0, 5)], A = T * per;
+      same(n, k); P.cloud = 1; P.turn = 1; P.spd = 230;
+      P.q = { lines: [`양 한 마리의 털로 털실을 ${per} m씩 만들어요.`, '넘어간 양의 털로 털실을 모두 몇 m 만들까요?'], ans: `${comma(A)} m` };
+      P.q.opts = makeOpts(`${comma(A)} m`, [A + per, A - per, A * 10, A + 100, A - 100].filter((v) => v > 0).map((v) => `${comma(v)} m`), (i) => `${comma(A + i * 10)} m`);
+      P.explain = `양 ${k} × ${n} = ${T}마리, ${per} × ${T} = ${comma(A)} m`;
+      P.head = '무리를 세어 모두 몇 마리인지 구해 두어요';
+      return P;
+    }
+    if (g === 5) {
+      if (r === 0) {
+        const pairs = [[2, 4], [2, 6], [3, 6], [4, 6], [2, 8], [4, 8], [6, 8], [3, 9], [6, 9], [2, 10], [4, 10], [6, 10], [8, 10]];   // 검은 양이 보이게 한 무리 10마리까지
+        const [j, k] = pairs[ri(0, pairs.length - 1)], n = ri(3, 5);
+        same(n, k, j); P.spd = 175; P.gap = 1.9;
+        const A = fracTxt(j, k);
+        P.q = { lines: ['넘어간 양 가운데 검은 양은', '전체의 몇 분의 몇일까요? (기약분수로)'], ans: A };
+        P.q.opts = makeOpts(A, [fracTxt(k - j, k), fracTxt(j + 1, k), fracTxt(j, k + 2), fracTxt(1, k)].filter((v) => v !== A && !/^\d+$/.test(v)), (i) => fracTxt(1, k + i));
+        P.explain = `한 무리 ${k}마리 중 검은 양 ${j}마리 → ${k}분의 ${j} = ${A}`;
+        P.head = '검은 양과 흰 양을 잘 보세요!'; P.hint = '검은 양이 몇 마리 섞였는지 잘 보세요!';
+        return P;
+      }
+      if (r === 1) {
+        const n = ri(3, 5), ks = []; for (let i = 0; i < n; i++) ks.push(ri(3, 10));
+        let sum = ks.reduce((a, b) => a + b, 0); const fix = (n - (sum % n)) % n;
+        if (fix) { const i = ks.findIndex((v) => v + fix <= 12); ks[i >= 0 ? i : 0] += fix; sum += fix; }
+        const A = sum / n;
+        for (const k of ks) P.groups.push({ k, black: 0 });
+        P.cloud = 1; P.turn = 1; P.spd = 200; P.memo = true;
+        P.q = { lines: ['무리마다 양이 평균 몇 마리씩일까요?'], ans: `${A}마리` };
+        P.q.opts = makeOpts(`${A}마리`, [A + 1, A - 1, A + 2, sum, n].filter((v) => v > 0).map((v) => `${v}마리`), (i) => `${A + 2 + i}마리`);
+        P.explain = `(${ks.join(' + ')}) ÷ ${n} = ${sum} ÷ ${n} = ${A}`;
+        P.head = '넘어간 무리의 양 수를 수첩에 적어 줄게요'; P.hint = '수첩에 적힌 수로 평균을 구해요!';
+        return P;
+      }
+      for (let tries = 0; tries < 300; tries++) {
+        const n = ri(3, 6), k = ri(4, 9), T = n * k, ds = divisors(T, 2, 12), non = [];
+        for (let d = 2; d <= 12; d++) if (T % d) non.push(d);
+        if (ds.length < 3 || !non.length) continue;
+        const A = non[ri(0, non.length - 1)];
+        same(n, k); P.cloud = 2; P.turn = 1; P.spd = 225;
+        P.q = { lines: ['넘어간 양을 우리 몇 개에 남김없이 똑같이 나누려고 해요.', '우리의 수가 될 수 없는 것은 무엇일까요?'], ans: `${A}개` };
+        P.q.opts = makeOpts(`${A}개`, shuffle(ds.slice()).map((v) => `${v}개`), () => `${A}개`);
+        P.explain = `${k} × ${n} = ${T}마리. ${T}의 약수가 아닌 ${A}로는 나누어떨어지지 않아요`;
+        P.head = '무리를 세어 모두 몇 마리인지 구해 두어요';
+        return P;
+      }
+      return sheepPlan(5, 1);
+    }
+    // 6학년
+    if (r === 0) {
+      let k, j; do { k = ri(4, 8); j = ri(1, k - 1); } while (k - j === j);
+      const n = ri(3, 5), Wt = (k - j) * n, B = j * n;
+      same(n, k, j); P.spd = 185; P.gap = 1.8;
+      P.q = { lines: ['넘어간 흰 양과 검은 양의 수를 비로 나타내면?', '(흰 양 : 검은 양)'], ans: `${Wt} : ${B}` };
+      P.q.opts = makeOpts(`${Wt} : ${B}`, [`${B} : ${Wt}`, `${Wt} : ${Wt + B}`, `${B} : ${Wt + B}`, `${Wt + B} : ${B}`], (i) => `${Wt + i} : ${B}`);
+      P.explain = `흰 양 ${k - j} × ${n} = ${Wt}, 검은 양 ${j} × ${n} = ${B} → ${Wt} : ${B}`;
+      P.head = '흰 양과 검은 양을 잘 보며 무리를 세어요'; P.hint = '흰 양과 검은 양이 몇 마리씩인지 보세요!';
+      return P;
+    }
+    if (r === 1) {
+      const k = [4, 5, 10][ri(0, 2)], j = ri(1, k - 1), n = ri(3, 5), A = j * 100 / k;
+      same(n, k, j); P.cloud = 1; P.turn = 1; P.spd = 195; P.gap = 1.9;
+      P.q = { lines: ['넘어간 양 가운데 검은 양은', '전체의 몇 %일까요?'], ans: `${A}%` };
+      P.q.opts = makeOpts(`${A}%`, [100 - A, j, A + 10, A - 10, A * 2].filter((v) => v > 0 && v < 100).map((v) => `${v}%`), (i) => `${(A + 5 * i) % 100 || 5}%`);
+      P.explain = `한 무리 ${k}마리 중 ${j}마리 → ${j} ÷ ${k} × 100 = ${A}%`;
+      P.head = '검은 양이 얼마나 섞였는지 잘 보세요!'; P.hint = '한 무리에 검은 양이 몇 마리인지 보세요!';
+      return P;
+    }
+    const ab = [[1, 2], [2, 3], [3, 4], [1, 3], [3, 5], [2, 5]][ri(0, 5)], [a, b] = ab;
+    const k = (a + b) * (a + b <= 4 ? 2 : 1), n = ri(3, 6), T = n * k, A = T * b / (a + b);
+    same(n, k); P.cloud = 2; P.turn = 1; P.spd = 230;
+    P.q = { lines: [`넘어간 양을 해님 목장과 달님 목장에 ${a} : ${b}${[1, 3, 6, 7, 8].includes(b) ? '으로' : '로'} 나누어요.`, '달님 목장에는 몇 마리가 갈까요?'], ans: `${A}마리` };
+    P.q.opts = makeOpts(`${A}마리`, [T * a / (a + b), T / (a + b), A + k, T - 1, A - 2].filter((v) => v > 0 && v !== A).map((v) => `${v}마리`), (i) => `${A + i}마리`);
+    P.explain = `${k} × ${n} = ${T}마리, ${T} ÷ ${a + b} × ${b} = ${A}마리`;
+    P.head = '무리를 세어 모두 몇 마리인지 구해 두어요';
+    return P;
+  }
   const sheep = {
     title: '양 세기',
-    init() { const s = { round: 0, cursor: 0 }; this.newRound(s); return s; },
+    init() { const s = { round: 0, cursor: 0, g: gradeNow() }; this.newRound(s); return s; },
     newRound(s) {
-      const R = ROUNDS_SHEEP[s.round];
-      const real = ri(R.real[0], R.real[1]);
+      const P = sheepPlan(s.g, s.round);
       const kinds = [];
-      for (let i = 0; i < real; i++) kinds.push({ kind: 'sheep' });
-      for (let i = 0; i < R.cloud; i++) kinds.push({ kind: 'cloud' });
-      for (let i = 0; i < R.turn; i++) kinds.push({ kind: 'sheep', turn: true });
+      for (const gp of P.groups) {
+        // 검은 양 자리는 무리마다 섞어 둠
+        const dark = shuffle(Array.from({ length: gp.k }, (_, i) => i < gp.black));
+        kinds.push({ kind: 'sheep', k: gp.k, dark });
+      }
+      const avgK = P.groups.reduce((a, q) => a + q.k, 0) / Math.max(1, P.groups.length);
+      for (let i = 0; i < P.cloud; i++) kinds.push({ kind: 'cloud' });
+      for (let i = 0; i < P.turn; i++) { const k = s.g <= 1 ? 1 : P.groups[0].k; kinds.push({ kind: 'sheep', turn: true, k, dark: shuffle(Array.from({ length: k }, (_, j) => j < (P.groups[0].black || 0))) }); }
       shuffle(kinds);
       if (kinds[0].turn || kinds[0].kind === 'cloud') { const j = kinds.findIndex((q) => q.kind === 'sheep' && !q.turn); [kinds[0], kinds[j]] = [kinds[j], kinds[0]]; }
       let at = 1.2;
-      for (const q of kinds) { q.at = at; at += R.gap * (0.55 + Math.random() * 0.9); q.x = -70; q.st = 'wait'; q.f = 1; q.ph = Math.random() * 6; q.y = 360 + Math.random() * 40; q.pause = 0; }
-      Object.assign(s, { phase: 'intro', t: 0, actors: kinds, answer: real, mine: 0, opts: null, cursor: 0, spd: R.spd, msgT: 0 });
+      for (const q of kinds) {
+        q.at = at;
+        // 무리가 클수록 넉넉히 띄움(겹쳐 보이지 않게)
+        const wide = q.kind === 'sheep' && s.g > 1 ? this.groupW(q.k) : 0;
+        at += Math.max(P.gap * (0.6 + Math.random() * 0.8), (wide + 70) / P.spd);
+        q.x = -70 - wide / 2; q.st = 'wait'; q.f = 1; q.ph = Math.random() * 6; q.pause = 0; q.rec = false;
+      }
+      Object.assign(s, { phase: 'intro', t: 0, actors: kinds, plan: P, answer: P.q.ans, opts: P.q.opts, mine: 0, cursor: 0, spd: P.spd, memo: [], avgK });
     },
+    groupW(k) { return k > 10 ? 150 : Math.min(5, k) * 30; },
     update(s, dt, inp, tapId) {
       s.t += dt;
       const fx = W * 0.55;
@@ -190,18 +383,15 @@ const Mini = (() => {
           if (q.st === 'wait') { if (s.t >= q.at) q.st = 'go'; else { alive++; continue; } }
           if (q.st === 'gone') continue;
           alive++;
-          if (q.turn && q.st === 'go' && q.x >= fx - 110) { q.st = 'pause'; q.pause = 0.5; }
+          const half = s.g > 1 && q.kind === 'sheep' ? this.groupW(q.k) / 2 : 0;
+          if (q.turn && q.st === 'go' && q.x + half >= fx - 110) { q.st = 'pause'; q.pause = 0.5; }
           if (q.st === 'pause') { q.pause -= dt; if (q.pause <= 0) { q.st = 'back'; q.f = -1; } continue; }
           q.x += q.f * s.spd * dt;
-          if (q.x > W + 80 || q.x < -90) q.st = 'gone';
+          // 수첩(5학년 평균): 울타리를 다 넘은 무리의 수를 적어 줌
+          if (s.plan.memo && q.kind === 'sheep' && !q.turn && !q.rec && q.x - half > fx + 40) { q.rec = true; s.memo.push(q.k); Sound.note(84, 0.12, 'triangle', 0.08); }
+          if (q.x - half > W + 80 || q.x + half < -90) q.st = 'gone';
         }
-        if (!alive) {
-          s.phase = 'ask'; s.t = 0;
-          const set = new Set([s.answer]);
-          for (const d of shuffle([-2, -1, 1, 2, 3])) { if (set.size >= 4) break; if (s.answer + d > 0) set.add(s.answer + d); }
-          s.opts = shuffle([...set]);
-          s.cursor = 0;
-        }
+        if (!alive) { s.phase = 'ask'; s.t = 0; s.cursor = 0; }
         return;
       }
       if (s.phase === 'ask') {
@@ -210,7 +400,7 @@ const Mini = (() => {
         let pick = null;
         if (tapId && tapId.startsWith('o')) pick = +tapId.slice(1);
         if (inp.digit >= 1 && inp.digit <= 4) pick = inp.digit - 1;
-        if (pick == null && (inp.actP || inp.shootP)) pick = s.cursor;
+        if (pick == null && (inp.actP || inp.shootP) && s.t > 0.35) pick = s.cursor;
         if (pick != null) {
           s.picked = s.opts[pick];
           if (s.picked === s.answer) { s.phase = 'right'; Sound.play('yay'); sparkle(W / 2, 250, 30); } else { s.phase = 'wrong'; Sound.play('wrong'); }
@@ -218,17 +408,34 @@ const Mini = (() => {
         }
         return;
       }
-      if (s.phase === 'right' && s.t > 1.5) {
-        if (s.round >= ROUNDS_SHEEP.length - 1) { s.res = 'win'; s.winText = '양을 모두 정확하게 셌어요!'; }
+      if (s.phase === 'right' && s.t > 2.2) {
+        if (s.round >= ROUNDS_SHEEP.length - 1) { s.res = 'win'; s.winText = s.g <= 1 ? '양을 모두 정확하게 셌어요!' : `${s.g}학년 양 세기 문제를 모두 풀었어요!`; }
         else { s.round++; this.newRound(s); }
       }
-      if (s.phase === 'wrong' && s.t > 2.2) this.newRound(s);
+      if (s.phase === 'wrong' && s.t > 3.4) this.newRound(s);
+    },
+    drawGroup(c, q, y) {
+      const k = q.k, f = q.f;
+      if (k > 10) { // 큰 무리 = 양을 가득 태운 수레
+        c.save(); c.translate(q.x, y); if (f < 0) c.scale(-1, 1);
+        for (let i = 0; i < 4; i++) miniSheep(c, -48 + i * 30, -34 - (i % 2) * 8, 0.95, false, 1, T, q.ph + i);
+        Art.roundRect(c, -72, -40, 144, 34, 8); c.fillStyle = '#d98a4a'; c.fill(); c.lineWidth = 3; c.strokeStyle = '#7a4a1a'; c.stroke();
+        c.fillStyle = '#7a4a1a'; for (const wx of [-46, 46]) { c.beginPath(); c.arc(wx, -4, 13, 0, TAU); c.fill(); c.fillStyle = '#f3c78a'; c.beginPath(); c.arc(wx, -4, 6, 0, TAU); c.fill(); c.fillStyle = '#7a4a1a'; }
+        c.restore();
+        return;
+      }
+      const cols = Math.min(5, k), rows = Math.ceil(k / 5);
+      for (let i = 0; i < k; i++) {
+        const row = Math.floor(i / 5), col = i % 5, inRow = row === rows - 1 ? k - row * 5 : cols;
+        const sx = q.x + (col - (inRow - 1) / 2) * 30 * (f < 0 ? -1 : 1), sy = y - 22 * (rows - 1 - row) + row * 4;
+        miniSheep(c, sx, sy, 1.0, q.dark[i], f, T, q.ph + i * 1.3);
+      }
     },
     draw(c, s) {
       backdrop(c, '#7cc6ff', '#ffe9f2');
       c.fillStyle = '#9ad87e'; c.fillRect(0, 330, W, H - 330);
       c.fillStyle = '#86c86a'; for (let x = 0; x < W; x += 34) { c.beginPath(); c.arc(x, 332, 20, Math.PI, 0); c.fill(); }
-      header(c, `양 세기 · ${s.round + 1}/3`, s.round === 0 ? '울타리를 넘어가는 양을 세어요!' : '양만 세어요! 구름과 되돌아가는 양은 세지 않아요');
+      header(c, `양 세기 · ${s.round + 1}/3`, s.plan.head);
       const fx = W * 0.55;
       // 울타리
       c.fillStyle = '#fff2dc'; c.strokeStyle = '#8a6a4a'; c.lineWidth = 3;
@@ -239,54 +446,104 @@ const Mini = (() => {
         if (q.st === 'wait' || q.st === 'gone') continue;
         let arc = 0;
         const d = q.x - (fx - 80);
-        if (q.st === 'go' && d > 0 && d < 160) arc = Math.sin(d / 160 * Math.PI) * (q.kind === 'cloud' ? 40 : 100);
+        if (q.st === 'go' && d > 0 && d < 160) arc = Math.sin(d / 160 * Math.PI) * (q.kind === 'cloud' ? 40 : s.g > 1 ? 70 : 100);
         const y = 400;
         if (q.kind === 'cloud') Art2.cloud(c, q.x, y - 110 - arc, 36, { t: T + q.ph, facing: q.f, mood: 'grumpy' });
-        else Art2.mon(c, { type: 'sheep', st: q.st === 'pause' ? 'idle' : 'move', f: q.f, happy: true, ph: q.ph, z: 0 }, q.x, y - arc, 1.35, T * 1.6);
+        else if (s.g <= 1) Art2.mon(c, { type: 'sheep', st: q.st === 'pause' ? 'idle' : 'move', f: q.f, happy: true, ph: q.ph, z: 0 }, q.x, y - arc, 1.35, T * 1.6);
+        else {
+          this.drawGroup(c, q, y - arc);
+          // 무리 표지판: 몇 마리 무리인지(2학년 뛰어 세기·곱셈·평균에 씀)
+          if (s.plan.badge) { const top = y - arc - (q.k > 10 ? 96 : 30 + 22 * Math.ceil(q.k / 5)); Art.roundRect(c, q.x - 30, top - 16, 60, 30, 12); c.fillStyle = 'rgba(255,255,255,0.92)'; c.fill(); c.lineWidth = 2; c.strokeStyle = '#8a6a4a'; c.stroke(); txt(c, `${q.k}마리`, q.x, top, 17, '#5a3a10', 'center', null); }
+        }
         if (q.st === 'pause') txt(c, '?', q.x, y - 150, 30, '#fff36a');
       }
+      // 수첩(평균 문제)
+      if (s.plan.memo && (s.phase === 'run' || s.memo.length)) {
+        const mx = 20, my = 96, mw = Math.min(330, W * 0.36);
+        panel(c, mx, my, mw, 50, 14, 'rgba(255,253,240,0.96)', '#c9a24a');
+        txt(c, '수첩: ' + (s.memo.length ? s.memo.join(', ') : '…'), mx + 14, my + 26, 20, '#5a3a10', 'left', null);
+      }
       if (s.phase === 'intro') {
-        panel(c, W / 2 - 230, 130, 460, 150);
-        txt(c, s.round === 0 ? '양이 울타리를 넘을 때마다' : '헷갈리지 않게 조심!', W / 2, 172, 22, '#5a2a6a', 'center', null);
-        txt(c, '"+1" 버튼(♥)을 눌러 세어 보세요', W / 2, 206, 22, '#5a2a6a', 'center', null);
+        const hint = s.g <= 1 ? (s.round === 0 ? '양이 울타리를 넘을 때마다' : '헷갈리지 않게 조심!') : (s.plan.hint || '양이 무리 지어 울타리를 넘어요');
+        panel(c, W / 2 - 250, 130, 500, 150);
+        txt(c, hint, W / 2, 172, 22, '#5a2a6a', 'center', null);
+        txt(c, s.g <= 1 ? '"+1" 버튼(♥)을 눌러 세어 보세요' : '무리가 넘어갈 때마다 "+1"을 눌러 세어요', W / 2, 206, 22, '#5a2a6a', 'center', null);
         button(c, 'go', W / 2 - 80, 226, 160, 46, '시작!', { size: 22 });
       }
       if (s.phase === 'run') {
         const bx = W - 220, by = H - 108;
-        panel(c, 24, H - 90, 210, 66, 18);
-        txt(c, `내가 센 수: ${s.mine}`, 129, H - 57, 24, '#5a2a6a', 'center', null);
+        panel(c, 24, H - 90, 230, 66, 18);
+        txt(c, s.g <= 1 ? `내가 센 수: ${s.mine}` : `내가 센 무리: ${s.mine}`, 139, H - 57, 24, '#5a2a6a', 'center', null);
         c.save(); if (s.bump > 0) { c.translate(bx + 95, by + 40); c.scale(1.08, 1.08); c.translate(-(bx + 95), -(by + 40)); }
-        button(c, 'plus', bx, by, 190, 80, '+1 셌다!', { size: 28 }); c.restore();
+        button(c, 'plus', bx, by, 190, 80, s.g <= 1 ? '+1 셌다!' : '+1 무리!', { size: 28 }); c.restore();
         button(c, 'minus', bx - 96, by + 20, 80, 52, '-1', { c1: '#b9a6d6', c2: '#8a74b0', shadow: '#5e4a7e', size: 20 });
       }
       if (s.phase === 'ask' || s.phase === 'right' || s.phase === 'wrong') {
-        const pw = Math.min(640, W - 60), px = (W - pw) / 2;
-        panel(c, px, 120, pw, 230);
-        txt(c, '울타리를 넘어간 양은 몇 마리였을까요?', W / 2, 160, 24, '#5a2a6a', 'center', null);
-        if (s.mine) txt(c, `(내가 센 수: ${s.mine})`, W / 2, 192, 17, '#8a6a9a', 'center', null);
-        const bw = (pw - 60 - 3 * 14) / 4;
+        const L = s.plan.q.lines, pw = Math.min(700, W - 40), px = (W - pw) / 2, ph = 250 + (L.length - 1) * 30;
+        panel(c, px, 110, pw, ph);
+        L.forEach((line, i) => txt(c, line, W / 2, 146 + i * 32, line.length > 26 ? 20 : 23, '#5a2a6a', 'center', null));
+        const oy = 146 + L.length * 32;
+        if (s.mine) txt(c, s.g <= 1 ? `(내가 센 수: ${s.mine})` : `(내가 센 무리: ${s.mine})`, W / 2, oy, 17, '#8a6a9a', 'center', null);
+        const bw = (pw - 40 - 3 * 12) / 4, by2 = oy + 22;
         s.opts.forEach((v, i) => {
           const sel = s.phase !== 'ask' && v === s.picked, right = s.phase !== 'ask' && v === s.answer;
-          button(c, 'o' + i, px + 30 + i * (bw + 14), 222, bw, 70, `${v}마리`, { focus: s.phase === 'ask' && s.cursor === i, size: 26,
+          const lab = /^\d+$/.test(v) ? `${v}마리` : v;
+          button(c, 'o' + i, px + 20 + i * (bw + 12), by2, bw, 66, lab, { focus: s.phase === 'ask' && s.cursor === i, size: lab.length > 7 ? 18 : lab.length > 5 ? 21 : 25,
             c1: right ? '#9be39b' : sel ? '#c9b4e0' : undefined, c2: right ? '#3ccf7a' : sel ? '#8a74b0' : undefined, shadow: right ? '#1f8a4a' : sel ? '#5e4a7e' : undefined });
         });
-        if (s.phase === 'right') txt(c, `정답! 양은 ${s.answer}마리!`, W / 2, 322, 24, '#2a9a4a', 'center', '#fff', 4);
-        if (s.phase === 'wrong') txt(c, `아쉬워요! 정답은 ${s.answer}마리. 다시 세어 봐요!`, W / 2, 322, 22, '#c0306a', 'center', '#fff', 4);
+        const ey = by2 + 96;
+        if (s.phase === 'right') txt(c, '정답! ' + s.plan.explain, W / 2, ey, s.plan.explain.length > 30 ? 17 : 20, '#2a9a4a', 'center', '#fff', 4);
+        if (s.phase === 'wrong') txt(c, '아쉬워요! ' + s.plan.explain, W / 2, ey, s.plan.explain.length > 28 ? 17 : 20, '#c0306a', 'center', '#fff', 4);
       }
     },
   };
 
   // =========================================================
-  // 3. 눈금 맞추기 (0~50, 5씩)
+  // 3. 눈금 맞추기 (학년마다 눈금이 다름: 1학년 1씩 · 2학년 5씩 · 3학년 100씩 · 4학년 0.1씩 · 5학년 4분의 1씩 · 6학년 분수와 소수 섞어서)
   // =========================================================
+  // 눈금 i(1~10)의 글자: 문자열이거나 분수 {w, n, d}
+  function rulerLab(g, i) {
+    if (g <= 1) return String(i);
+    if (g === 2) return String(i * 5);
+    if (g === 3) return String(i * 100);
+    if (g === 4) return i === 10 ? '1' : '0.' + i;
+    if (g === 5) { const w = Math.floor(i / 4), r = i % 4, gg = gcd(r, 4); return r ? { w, n: r / gg, d: 4 / gg } : String(w); }
+    // 6학년: 홀수 눈금은 분수, 짝수 눈금은 소수(0.25씩)
+    const v = i * 0.25;
+    if (i % 2) { const w = Math.floor(i / 4), r = i % 4; return { w, n: r, d: 4 }; }
+    return String(v);
+  }
+  const RULER_HEAD = {
+    1: ['작은 수부터 차례로 눌러요: 1 → 2 → 3 → …', '이번엔 거꾸로! 10 → 9 → 8 → …'],
+    2: ['작은 수부터 차례로 눌러요: 5 → 10 → 15 → …', '이번엔 거꾸로! 50 → 45 → 40 → …'],
+    3: ['100씩 커져요: 100 → 200 → 300 → …', '이번엔 거꾸로! 1000 → 900 → 800 → …'],
+    4: ['0.1씩 커져요: 0.1 → 0.2 → 0.3 → …', '이번엔 거꾸로! 1 → 0.9 → 0.8 → …'],
+    5: ['4분의 1씩 커져요! 작은 수부터 차례로', '이번엔 거꾸로! 큰 수부터 차례로'],
+    6: ['분수와 소수가 섞였어요! 작은 수부터 차례로', '이번엔 거꾸로! 큰 수부터 차례로'],
+  };
+  // 분수 그리기: 대분수면 자연수 + 위아래 분수
+  function numTxt(c, L, x, y, size, col, stroke, lw = 4) {
+    if (typeof L !== 'object') { txt(c, L, x, y, size, col, 'center', stroke, lw); return; }
+    const fs = size * 0.62;
+    c.font = F(size); const ww = L.w ? c.measureText(String(L.w)).width + 4 : 0;
+    c.font = F(fs); const fw = Math.max(c.measureText(String(L.n)).width, c.measureText(String(L.d)).width) + 6;
+    const x0 = x - (ww + fw) / 2;
+    if (L.w) txt(c, String(L.w), x0 + ww / 2 - 2, y, size, col, 'center', stroke, lw);
+    const fx = x0 + ww + fw / 2;
+    txt(c, String(L.n), fx, y - fs * 0.6, fs, col, 'center', stroke, lw * 0.7);
+    txt(c, String(L.d), fx, y + fs * 0.62, fs, col, 'center', stroke, lw * 0.7);
+    if (stroke) { c.strokeStyle = stroke; c.lineWidth = 4.5; c.beginPath(); c.moveTo(fx - fw / 2 + 1, y); c.lineTo(fx + fw / 2 - 1, y); c.stroke(); }
+    c.strokeStyle = col; c.lineWidth = 2.2; c.beginPath(); c.moveTo(fx - fw / 2 + 2, y); c.lineTo(fx + fw / 2 - 2, y); c.stroke();
+  }
   const ruler = {
     title: '눈금 맞추기',
-    init() { const s = { round: 0, hearts: 3 }; this.newRound(s); return s; },
+    init() { const s = { round: 0, hearts: 3, g: gradeNow() }; this.newRound(s); return s; },
     newRound(s) {
-      const vals = []; for (let v = 5; v <= 50; v += 5) vals.push(v);
+      const vals = []; for (let v = 1; v <= 10; v++) vals.push(v);
       const order = s.round === 0 ? vals.slice() : vals.slice().reverse();
-      const tiles = shuffle(vals.slice()).map((v, i) => ({ v, i, placed: false, fly: 0, shake: 0 }));
-      Object.assign(s, { order, tiles, next: 0, cursor: 0, phase: 'play', t: 0, hearts: 3, flash: 0 });
+      const tiles = shuffle(vals.slice()).map((v, i) => ({ v, i, placed: false, fly: 0, shake: 0, lab: rulerLab(s.g, v) }));
+      const maxH = s.g <= 2 ? 4 : 3;
+      Object.assign(s, { order, tiles, next: 0, cursor: 0, phase: 'play', t: 0, hearts: maxH, maxH, flash: 0 });
     },
     tileRect(s, i) {
       const n1 = 5, row = i < n1 ? 0 : 1, col = row ? i - n1 : i, n = row ? s.tiles.length - n1 : n1;
@@ -294,7 +551,7 @@ const Mini = (() => {
       const x0 = (W - (n * tw + (n - 1) * gap)) / 2;
       return { x: x0 + col * (tw + gap), y: 300 + row * (th + 18), w: tw, h: th };
     },
-    slotX(v) { const x0 = 90, x1 = W - 90; return x0 + (v / 50) * (x1 - x0); },
+    slotX(v) { const x0 = 90, x1 = W - 90; return x0 + (v / 10) * (x1 - x0); },
     update(s, dt, inp, tapId) {
       s.t += dt; s.flash = Math.max(0, s.flash - dt * 3);
       for (const tl of s.tiles) { if (tl.placed && tl.fly < 1) tl.fly = Math.min(1, tl.fly + dt * 3); tl.shake = Math.max(0, tl.shake - dt * 3); }
@@ -326,56 +583,101 @@ const Mini = (() => {
     },
     draw(c, s) {
       backdrop(c, '#f6e3b4', '#e2c48a');
-      header(c, `눈금 맞추기 · ${s.round + 1}/2`, s.round === 0 ? '작은 수부터 차례로 눌러요: 5 → 10 → 15 → …' : '이번엔 거꾸로! 50 → 45 → 40 → …');
-      // 큰 자
+      header(c, `눈금 맞추기 · ${s.round + 1}/2`, (RULER_HEAD[s.g] || RULER_HEAD[2])[s.round]);
+      // 큰 자: 큰 눈금 10칸, 한 칸마다 작은 눈금 5개
       const x0 = 60, x1 = W - 60, y = 118;
       c.save(); Art.roundRect(c, x0, y, x1 - x0, 110, 12); const g = c.createLinearGradient(0, y, 0, y + 110); g.addColorStop(0, '#fff3b8'); g.addColorStop(1, '#ffd96a'); c.fillStyle = g; c.fill(); c.lineWidth = 4; c.strokeStyle = '#8a5b12'; c.stroke(); c.restore();
       c.strokeStyle = '#8a5b12'; c.lineWidth = 2;
-      for (let v = 0; v <= 50; v++) { const x = this.slotX(v); const hh = v % 5 === 0 ? 34 : 16; c.beginPath(); c.moveTo(x, y); c.lineTo(x, y + hh); c.stroke(); }
+      const sub = s.g === 2 ? 5 : s.g === 3 ? 2 : 1;   // 작은 눈금: 2학년 1 cm, 3학년 50씩, 나머지는 큰 눈금만
+      for (let k = 0; k <= 10 * sub; k++) { const x = this.slotX(k / sub); const hh = k % sub === 0 ? 34 : 16; c.beginPath(); c.moveTo(x, y); c.lineTo(x, y + hh); c.stroke(); }
       txt(c, '0', this.slotX(0), y + 64, 26, '#5a3a10', 'center', '#fff', 4);
-      for (let v = 5; v <= 50; v += 5) {
+      const ls = s.g >= 5 ? 24 : s.g === 3 ? 22 : 26;
+      for (let v = 1; v <= 10; v++) {
         const x = this.slotX(v), tl = s.tiles.find((q) => q.v === v);
         if (tl.placed) {
           const r = this.tileRect(s, tl.i), k = U.easeOutCubic(tl.fly);
           const tx = U.lerp(r.x + r.w / 2, x, k), ty = U.lerp(r.y + r.h / 2, y + 64, k);
           if (k >= 1) Art.glowFast(c, x, y + 64, 26, [255, 230, 120], 0.5 + s.flash * 0.4);
-          txt(c, String(v), tx, ty, 26, '#5a3a10', 'center', '#fff', 4);
-        } else { c.setLineDash([4, 4]); Art.roundRect(c, x - 20, y + 46, 40, 36, 8); c.strokeStyle = 'rgba(138,91,18,0.6)'; c.stroke(); c.setLineDash([]); }
+          numTxt(c, tl.lab, tx, ty, ls, '#5a3a10', '#fff', 4);
+        } else { c.setLineDash([4, 4]); Art.roundRect(c, x - 22, y + 44, 44, 40, 8); c.strokeStyle = 'rgba(138,91,18,0.6)'; c.stroke(); c.setLineDash([]); }
       }
-      txt(c, 'cm', x1 - 18, y + 98, 15, '#8a5b12', 'center', null);
+      if (s.g === 2) txt(c, 'cm', x1 - 18, y + 98, 15, '#8a5b12', 'center', null);
       // 왕자
       const prog = s.next / s.order.length;
       Art.drawChar(c, Art.CH.prince, W - 70, 290, { t: T, scale: 0.34, erased: s.round === 0 ? 1 - prog * 0.5 : 0.5 - prog * 0.5, expr: s.phase === 'clear' ? 'joy' : 'worried', facing: -1 });
       // 남은 하트
-      for (let i = 0; i < 3; i++) heartIcon(c, 40 + i * 30, 270, 11, i < s.hearts);
+      for (let i = 0; i < s.maxH; i++) heartIcon(c, 40 + i * 30, 270, 11, i < s.hearts);
       // 타일
       s.tiles.forEach((tl, i) => {
         if (tl.placed) return;
         const r = this.tileRect(s, i), sh = Math.sin(tl.shake * 30) * tl.shake * 8, foc = s.cursor === i;
-        button(c, 't' + i, r.x + sh, r.y, r.w, r.h, String(tl.v), { focus: foc, size: 30, c1: '#fff6c8', c2: '#ffc93c', shadow: '#a86a00' });
+        button(c, 't' + i, r.x + sh, r.y, r.w, r.h, tl.lab, { focus: foc, size: s.g === 3 ? 26 : 30, c1: '#fff6c8', c2: '#ffc93c', shadow: '#a86a00' });
       });
       if (s.phase === 'clear') txt(c, s.round === 0 ? '좋아요! 이번엔 거꾸로!' : '눈금 완성!', W / 2, 270, 30, '#ff5f9e', 'center', '#fff', 6);
     },
   };
 
   // =========================================================
-  // 4. 길이 재기
+  // 4. 길이 재기 (1~2학년 cm · 3학년 mm · 4학년 소수 cm · 5학년 어림하기 · 6학년 몇 배(비례))
   // =========================================================
   const OBJS = ['pencil', 'crayon', 'eraser', 'worm'];
   const fmt = (mm) => { const cm = Math.floor(mm / 10), r = mm % 10; return r ? (cm ? `${cm} cm ${r} mm` : `${r} mm`) : `${cm} cm`; };
+  const dec = (mm) => (mm % 10 ? (mm / 10).toFixed(1) : String(mm / 10));   // 47 → '4.7', 40 → '4'
+  const OBJ_NAME = { pencil: '연필', crayon: '크레파스', eraser: '지우개', worm: '꼬마 자벌레' };
   const measure = {
     title: '길이 재기',
-    init() { const s = { round: 0, right: 0 }; this.newRound(s); return s; },
+    init() { const s = { round: 0, right: 0, g: gradeNow() }; this.newRound(s); return s; },
     newRound(s) {
-      let st = 0, L;
-      if (s.round === 0) { L = ri(4, 10) * 10; }
-      else if (s.round === 1) { st = ri(1, 3) * 10; L = ri(3, 7) * 10; }
-      else if (s.round === 2) { L = ri(3, 9) * 10 + 5; }
-      else { st = ri(1, 3) * 10; L = ri(2, 6) * 10 + ri(1, 9); if (L % 10 === 5) L += 1; }
-      const cand = s.round === 1 ? [st + L, L + 10, L - 10, L + 20] : s.round === 2 ? [L - 5, L + 10, L - 10, L + 5] : s.round === 3 ? [st + L, L + 10, L - 10, L - (L % 10)] : [L - 10, L + 10, L + 20, L - 20];
-      const set = new Set([L]); for (const v of cand) { if (set.size >= 4) break; if (v > 0 && v <= 130) set.add(v); }
-      let k = 20; while (set.size < 4) { set.add(L + k); k += 10; }
-      Object.assign(s, { st, L, obj: OBJS[s.round % OBJS.length], opts: shuffle([...set]), cursor: 0, phase: 'q', t: 0, picked: null });
+      const g = s.g, r = s.round, obj = OBJS[r % OBJS.length], nm = OBJ_NAME[obj];
+      let st = 0, L, ans, opts, q = `이 ${nm}의 길이는 얼마일까요?`, sub = '자의 눈금을 읽어 길이를 알아봐요', exp;
+      const nz = r % 2 === 1;   // 1·3번째 문제는 0이 아닌 곳에서 시작
+      const startAt = () => ri(1, 3) * 10;
+      const cmOpts = (Lv, cand) => { const set = new Set([Lv]); for (const v of cand) { if (set.size >= 4) break; if (v > 0 && v <= 130) set.add(v); } let k = 20; while (set.size < 4) { set.add(Lv + k); k += 10; } return shuffle([...set]).map(fmt); };
+      if (g <= 2) {
+        if (g === 2 && nz) st = startAt();
+        L = ri(st ? 3 : 3, st ? 7 : 10) * 10;
+        ans = fmt(L); opts = cmOpts(L, st ? [st + L, L + 10, L - 10, L + 20] : [L - 10, L + 10, L + 20, L - 20]);
+        exp = st ? `${fmt(st + L)} − ${fmt(st)} = ${fmt(L)}` : `0에서 시작하니까 끝 눈금을 읽으면 ${fmt(L)}`;
+        if (g <= 1) { // 1학년은 cm를 아직 안 배움 → 자의 몇 칸만큼인지 세기
+          sub = '자의 큰 칸을 하나씩 세어 봐요'; q = `이 ${nm}의 길이는 자의 몇 칸일까요?`;
+          const n = L / 10; ans = `${n}칸`; opts = makeOpts(ans, [n - 1, n + 1, n + 2, n - 2].filter((v) => v > 0).map((v) => `${v}칸`), (i) => `${n + 2 + i}칸`);
+          exp = `0부터 끝까지 큰 칸이 ${n}칸`;
+        }
+      } else if (g === 3) {
+        // 예전 그대로(cm·mm)
+        if (r === 0) { L = ri(4, 10) * 10; } else if (r === 1) { st = startAt(); L = ri(3, 7) * 10; } else if (r === 2) { L = ri(3, 9) * 10 + 5; } else { st = startAt(); L = ri(2, 6) * 10 + ri(1, 9); if (L % 10 === 5) L += 1; }
+        const cand = r === 1 ? [st + L, L + 10, L - 10, L + 20] : r === 2 ? [L - 5, L + 10, L - 10, L + 5] : r === 3 ? [st + L, L + 10, L - 10, L - (L % 10)] : [L - 10, L + 10, L + 20, L - 20];
+        ans = fmt(L); opts = cmOpts(L, cand);
+        exp = st ? `${fmt(st + L)} − ${fmt(st)} = ${fmt(L)}` : `0에서 시작하니까 끝 눈금을 읽으면 ${fmt(L)}`;
+      } else {
+        if (nz) st = startAt();
+        do { L = ri(st ? 21 : 25, st ? 79 : 99); } while (L % 10 === 0 || (g === 6 && L % 2));
+        const read = st ? `${dec(st + L)} − ${dec(st)} = ${dec(L)} (cm)` : `길이 ${dec(L)} cm`;
+        if (g === 4) {
+          if (r === 2) { // mm로 답하기
+            q = `이 ${nm}의 길이는 몇 mm일까요?`; sub = '1 cm = 10 mm';
+            ans = `${L} mm`; opts = makeOpts(ans, [`${L / 10} mm`, `${L * 10} mm`, `${L + 10} mm`, `${L - 1} mm`], (i) => `${L + i} mm`);
+            exp = `${dec(L)} cm = ${L} mm`;
+          } else {
+            q = `이 ${nm}의 길이는 몇 cm일까요? (소수로)`; sub = st ? '앗, 0이 아닌 곳에서 시작해요!' : '1 mm = 0.1 cm';
+            ans = `${dec(L)} cm`; opts = makeOpts(ans, [L + 10, L - 10, L + 1, L - 1, st + L].filter((v) => v > 0 && v !== L).map((v) => `${dec(v)} cm`), (i) => `${dec(L + i * 2)} cm`);
+            exp = read;
+          }
+        } else if (g === 5) {
+          const way = ['반올림', '올림', '버림', '반올림'][r];
+          const A = way === '올림' ? Math.ceil(L / 10) : way === '버림' ? Math.floor(L / 10) : Math.floor((L + 5) / 10);
+          q = `길이를 ${way}하여 일의 자리까지 나타내면?`; sub = `${OBJ_NAME[obj]}의 길이를 재고 ${way}해요`;
+          ans = `${A} cm`; opts = makeOpts(ans, [Math.floor(L / 10), Math.ceil(L / 10), A + 1, A - 1, A + 2].filter((v) => v > 0).map((v) => `${v} cm`), (i) => `${A + 2 + i} cm`);
+          exp = `${read}, ${way}하면 ${A} cm`;
+        } else {
+          const f = [10, 20, 25, 50][ri(0, 3)], A = L * f / 10; // cm
+          q = `진짜 ${nm}의 길이는 그림의 ${f}배예요. 진짜 길이는?`; sub = `그림의 길이를 재고 ${f}배를 해요`;
+          ans = `${comma(A)} cm`; opts = makeOpts(ans, [A * 10, A / 10, (L + 10) * f / 10, (st + L) * f / 10, A + f].filter((v) => v > 0 && v !== A).map((v) => `${comma(v)} cm`), (i) => `${comma(A + i * f)} cm`);
+          exp = `${read}, ${dec(L)} × ${f} = ${comma(A)} (cm)`;
+        }
+        if (st && g !== 4) sub += ' (0이 아닌 곳에서 시작!)';
+      }
+      Object.assign(s, { st, L, obj, opts, ans, q, sub, exp, cursor: 0, phase: 'q', t: 0, picked: null });
     },
     update(s, dt, inp, tapId) {
       s.t += dt;
@@ -386,10 +688,10 @@ const Mini = (() => {
         if (tapId && tapId.startsWith('o')) pick = +tapId.slice(1);
         if (inp.digit >= 1 && inp.digit <= 4) pick = inp.digit - 1;
         if (pick == null && (inp.actP || inp.shootP)) pick = s.cursor;
-        if (pick != null) { s.picked = s.opts[pick]; s.ok = s.picked === s.L; if (s.ok) { s.right++; Sound.play('yay'); sparkle(W / 2, 390, 26); } else Sound.play('wrong'); s.phase = 'res'; s.t = 0; }
+        if (pick != null) { s.picked = s.opts[pick]; s.ok = s.picked === s.ans; if (s.ok) { s.right++; Sound.play('yay'); sparkle(W / 2, 390, 26); } else Sound.play('wrong'); s.phase = 'res'; s.t = 0; }
         return;
       }
-      if (s.phase === 'res' && (s.t > 3.2 || (s.t > 0.8 && (tapId === 'next' || inp.actP || inp.shootP)))) {
+      if (s.phase === 'res' && (s.t > 4 || (s.t > 0.8 && (tapId === 'next' || inp.actP || inp.shootP)))) {
         if (s.round >= 3) {
           if (s.right >= 3) { s.res = 'win'; s.winText = `4문제 중 ${s.right}문제 정답! 길이 재기 박사!`; }
           else { s.res = 'fail'; s.failText = `4문제 중 ${s.right}문제 맞혔어요. 3문제를 맞히면 통과!`; }
@@ -419,7 +721,7 @@ const Mini = (() => {
     },
     draw(c, s) {
       backdrop(c, '#d8f1ff', '#fffbea');
-      header(c, `길이 재기 · ${s.round + 1}/4`, s.st ? '앗, 0이 아닌 곳에서 시작해요! 잘 보고 재어 봐요' : '자의 눈금을 읽어 길이를 알아봐요');
+      header(c, `길이 재기 · ${s.round + 1}/4`, s.sub);
       const per = Math.min(46, (W - 120) / 12), x0 = (W - per * 12) / 2, ry = 250;
       // 자
       Art.roundRect(c, x0 - 16, ry, per * 12 + 32, 74, 8); c.fillStyle = '#fff3b8'; c.fill(); c.lineWidth = 3; c.strokeStyle = '#8a5b12'; c.stroke();
@@ -438,19 +740,18 @@ const Mini = (() => {
       c.setLineDash([]);
       // 선생님
       Art.drawChar(c, Art.CH.worm, 70, 214, { t: T, scale: 0.75, facing: 1, holding: true, expr: s.phase === 'res' ? (s.ok ? 'joy' : 'worried') : 'happy' });
-      const name = { pencil: '연필', crayon: '크레파스', eraser: '지우개', worm: '꼬마 자벌레' }[s.obj];
-      txt(c, `이 ${name}의 길이는 얼마일까요?`, W / 2, 112, 24, '#3a5a8a', 'center', '#fff', 5);
+      txt(c, s.q, W / 2 + 30, 112, s.q.length > 24 ? 21 : 24, '#3a5a8a', 'center', '#fff', 5);
       const pw = Math.min(700, W - 60), px = (W - pw) / 2, bw = (pw - 3 * 14) / 4;
       s.opts.forEach((v, i) => {
-        const sel = s.phase === 'res' && v === s.picked, right = s.phase === 'res' && v === s.L;
-        button(c, 'o' + i, px + i * (bw + 14), 362, bw, 64, fmt(v), { focus: s.phase === 'q' && s.cursor === i, size: 23,
+        const sel = s.phase === 'res' && v === s.picked, right = s.phase === 'res' && v === s.ans;
+        button(c, 'o' + i, px + i * (bw + 14), 362, bw, 64, v, { focus: s.phase === 'q' && s.cursor === i, size: v.length > 9 ? 19 : 23,
           c1: right ? '#9be39b' : sel ? '#c9b4e0' : '#9fd6ff', c2: right ? '#3ccf7a' : sel ? '#8a74b0' : '#4a8fe8', shadow: right ? '#1f8a4a' : sel ? '#5e4a7e' : '#2a5aa8' });
       });
-      txt(c, `맞힌 문제 ${s.right}`, W - 90, 452, 18, '#5a3a10', 'center', null);
+      if (s.phase !== 'res') txt(c, `맞힌 문제 ${s.right}`, W - 90, 452, 18, '#5a3a10', 'center', null);
       if (s.phase === 'res') {
-        const exp = s.st ? `${fmt(s.st + s.L)} − ${fmt(s.st)} = ${fmt(s.L)}` : `0에서 시작하니까 끝 눈금을 읽으면 ${fmt(s.L)}`;
-        panel(c, W / 2 - 300, 446, 600, 70, 18, 'rgba(255,255,255,0.96)', s.ok ? '#3ccf7a' : '#ff6fa8');
-        txt(c, (s.ok ? '정답! ' : '아쉬워요! ') + exp, W / 2, 481, 21, s.ok ? '#1f8a4a' : '#c0306a', 'center', null);
+        const pw2 = Math.min(660, W - 40), line = (s.ok ? '정답! ' : '아쉬워요! ') + s.exp;
+        panel(c, W / 2 - pw2 / 2, 446, pw2, 70, 18, 'rgba(255,255,255,0.96)', s.ok ? '#3ccf7a' : '#ff6fa8');
+        txt(c, line, W / 2, 481, line.length > 30 ? 18 : 21, s.ok ? '#1f8a4a' : '#c0306a', 'center', null);
       }
     },
   };
@@ -461,20 +762,26 @@ const Mini = (() => {
   const TONES = [72, 76, 79, 84];
   const simon = {
     title: '거울 기억',
-    init() { const s = { seq: [ri(0, 3), ri(0, 3), ri(0, 3)], miss: 0, lit: [0, 0, 0, 0], cursor: 0 }; this.show(s, 1.0); return s; },
+    // 학년마다 처음 길이·끝 길이·빠르기(4학년 = 예전: 3개 → 6개)
+    init() {
+      const G = { 1: [2, 4, 0.78], 2: [3, 5, 0.7], 3: [3, 6, 0.64], 4: [3, 6, 0.62], 5: [4, 7, 0.54], 6: [4, 8, 0.48] }[gradeNow()] || [3, 6, 0.62];
+      const s = { seq: [], st: G[0], end: G[1], sp0: G[2], miss: 0, lit: [0, 0, 0, 0], cursor: 0 };
+      for (let i = 0; i < G[0]; i++) s.seq.push(ri(0, 3));
+      this.show(s, 1.0); return s;
+    },
     show(s, delay) { Object.assign(s, { phase: 'show', i: 0, t: -delay, pos: 0 }); },
     light(s, k, dur = 0.42) { s.lit[k] = dur; Sound.note(TONES[k], dur + 0.1, 'sine', 0.2); Sound.note(TONES[k] + 12, dur, 'triangle', 0.05); },
     mx(i) { const gap = Math.min(190, (W - 160) / 4); return W / 2 + (i - 1.5) * gap; },
     update(s, dt, inp, tapId) {
       for (let k = 0; k < 4; k++) s.lit[k] = Math.max(0, s.lit[k] - dt);
       s.t += dt;
-      const sp = s.seq.length >= 5 ? 0.5 : 0.62;
+      const sp = Math.max(0.4, s.seq.length >= 5 ? s.sp0 - 0.12 : s.sp0);
       if (s.phase === 'show') {
         if (s.t >= 0 && s.i < s.seq.length && s.t >= s.i * sp) { this.light(s, s.seq[s.i], sp * 0.7); s.i++; }
         if (s.i >= s.seq.length && s.t >= s.seq.length * sp + 0.2) { s.phase = 'input'; s.pos = 0; s.t = 0; }
         return;
       }
-      if (s.phase === 'clear') { if (s.t > 1.0) { if (s.seq.length >= 6) { s.res = 'win'; s.winText = '거울 문이 열려요!'; } else { s.seq.push(ri(0, 3)); this.show(s, 0.3); } } return; }
+      if (s.phase === 'clear') { if (s.t > 1.0) { if (s.seq.length >= s.end) { s.res = 'win'; s.winText = '거울 문이 열려요!'; } else { s.seq.push(ri(0, 3)); this.show(s, 0.3); } } return; }
       if (s.phase === 'wrong') { if (s.t > 1.1) this.show(s, 0.2); return; }
       if (s.phase !== 'input') return;
       if (inp.leftP) { s.cursor = (s.cursor + 3) % 4; Sound.play('tick'); }
@@ -494,7 +801,7 @@ const Mini = (() => {
     },
     draw(c, s) {
       backdrop(c, '#24103a', '#4a2a72');
-      header(c, `거울 기억 · ${s.seq.length - 2}/4`, '거울이 빛나는 순서를 기억했다가 똑같이 눌러요!');
+      header(c, `거울 기억 · ${s.seq.length - s.st + 1}/${s.end - s.st + 1}`, '거울이 빛나는 순서를 기억했다가 똑같이 눌러요!');
       const by = 360;
       for (let i = 0; i < 4; i++) {
         const x = this.mx(i), lit = Math.min(1, s.lit[i] * 4);
@@ -555,5 +862,5 @@ const Mini = (() => {
   }
   return { start, update, draw, get active() { return !!cur; }, get name() { return cur ? cur.name : ''; }, cancel() { cur = null; }, heroCh: null,
     // 테스트용
-    _cur() { return cur; } };
+    _cur() { return cur; }, _plan: (g, r) => sheepPlan(g, r), _games: GAMES };
 })();

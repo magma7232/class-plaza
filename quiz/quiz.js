@@ -10,7 +10,7 @@
  * - 하루 6문제까지(드문드문). 처음에 맞힌 문제 2개마다 선물 상자(맞힌 그때 gift.js에 'plaza-gift', 하루 3개까지).
  * - 카드를 닫을 때 'plaza-quiz' 신호 {correct, second, grade, subject, game}를 보내요 → 게임이 받아서 게임 속 보너스를 줄 수 있어요.
  *   correct: 처음 고른 답이 정답 · second: 힌트를 보고 두 번째에 맞힘
- * - 학년: 기본 4학년(DEFAULT_GRADE). 주소에 ?grade=3 을 붙여 한 번 열면 그 기기에 기억(localStorage plaza.quizGrade).
+ * - 학년: window.PLAZA_GRADE()(back.js·광장 grade.js — 선생님이 광장에서 고른 학년, 주소 ?grade=3). 없으면 예전처럼 ?grade·plaza.quizGrade·기본 4학년(DEFAULT_GRADE).
  *   다른 학교·학년에서 쓸 때는 아래 DEFAULT_GRADE 숫자 하나만 바꾸면 돼요. 문제는 quiz/bank.js.
  * - 끄기: 주소 ?quiz=0, 또는 게임의 <script src="back.js" data-quiz="off">.
  *   말풍선 자리: data-quiz-pos="right-middle" 처럼(아래 POS 이름), 지금 게임들의 자리는 아래 GAME_POS.
@@ -26,7 +26,8 @@
  */
 (function () {
   'use strict';
-  if (window.PLAZA_QUIZ) return;
+  var STUB = window.PLAZA_QUIZ && window.PLAZA_QUIZ.__stub ? window.PLAZA_QUIZ : null;   // back.js가 먼저 둔 '꼭 푸는 문제' 줄 서기(quiz.js가 늦게 와도 문제를 건너뛰지 않게)
+  if (window.PLAZA_QUIZ && !STUB) return;
   var me = document.currentScript;
   var BASE = (me && me.src) || location.href;
   var Q = new URLSearchParams(location.search);
@@ -75,7 +76,12 @@
   var FILE = fileKey();
   var GAME = { jangteo3d: 'jangteo', pyramid_run: 'pyramid' }[FILE] || FILE;   // 'plaza-quiz' 신호의 game(gift.js와 같은 이름)
   var backTag = document.querySelector('script[src*="back.js"]');
-  if (Q.get('quiz') === '0' || (backTag && backTag.getAttribute('data-quiz') === 'off')) { window.PLAZA_QUIZ = { off: true }; return }
+  var PASS = function () { return { correct: true, first: false, tries: 0, skipped: true } };   // 퀴즈를 끈 판·문제 모음을 못 받은 판: 꼭 푸는 문제는 그냥 통과(게임이 막히지 않게)
+  if (Q.get('quiz') === '0' || (backTag && backTag.getAttribute('data-quiz') === 'off')) {
+    window.PLAZA_QUIZ = { off: true, ask: function () { return Promise.resolve(PASS()) } };
+    if (STUB) STUB.__q.splice(0).forEach(function (x) { x[1](PASS()) });
+    return;
+  }
 
   // 기기 저장소가 막힌 브라우저(시크릿 창 등)에서는 이 페이지 동안만 기억해요(하루 한도·선물이 그래도 지켜지게)
   var MEM = {}, LS = (function () { try { localStorage.setItem('__pq', '1'); localStorage.removeItem('__pq'); return localStorage } catch (e) { return null } })();
@@ -84,6 +90,7 @@
   function jdel(k) { delete MEM[k]; try { LS && LS.removeItem(k) } catch (e) { } }
   function today() { return new Date().toDateString() }
   function grade() {
+    if (window.PLAZA_GRADE) { var pg = parseInt(window.PLAZA_GRADE(), 10); if (pg >= 1 && pg <= 6) return pg }   // 학년 공통 약속(back.js·grade.js, 2026-11-25)
     var g = parseInt(Q.get('grade'), 10);
     if (g >= 1 && g <= 6) { jput('plaza.quizGrade', g); return g }
     g = parseInt(jget('plaza.quizGrade', 0), 10);
@@ -380,6 +387,7 @@
   window.addEventListener('pointermove', function (e) { e.buttons && (lastIn = Date.now()) }, { capture: true, passive: true });
   function tick(sec, force) {
     if (ov) return;
+    if (window.PLAZA_QUIZ_GATES) { if (phase === 'bubble') { hideBubble(false); phase = 'wait' } return }   // 꼭 푸는 문제로 바꾼 게임: 고르는 말풍선(❓)은 안 띄움
     if (!force && (document.visibilityState === 'hidden' || Date.now() - lastIn > 8000)) return;
     if (phase === 'bubble') {
       if (bub && bub.hidden) return;   // 게임이 바빠서 숨긴 동안은 시간이 안 가요
@@ -410,24 +418,25 @@
     opt = opt || {};
     if (ov) return false;
     if (!window.QUIZ_BANK) { loadBank(function (ok) { ok && openQuiz(opt) }); return false }
-    var g = opt.grade >= 1 && opt.grade <= 6 ? opt.grade : grade();
+    var g = opt.grade >= 1 && opt.grade <= 6 ? opt.grade : grade(), gate = opt.gate || null;
     var pk = pickQuestion(g, opt.index);
     if (!pk) return false;
     hideBubble(false);
     style();
     var it = pk.item, order = shuffle(4);
-    cur = { g: g, i: pk.i, s: it.s, item: it, order: order, tries: 0, done: false, correct: false, second: false, gift: '', t0: Date.now() };
+    cur = { g: g, i: pk.i, s: it.s, item: it, order: order, tries: 0, done: false, correct: false, second: false, gift: '', t0: Date.now(), gate: gate };
     ov = el('div'); ov.id = 'pqOv';
     guard(ov);
     var card = el('div'); card.id = 'pqCard';
     var top = el('div', 'pq-top');
-    top.appendChild(el('span', 'pq-tag', '✨ 반짝이 퀴즈 · ' + g + '학년'));   // 꿈 요정 반짝이(사랑둥이 대모험)가 내는 문제 — 이야기·게임·퀴즈가 한 세계로(2026-11-24)
+    top.appendChild(el('span', 'pq-tag', (gate ? (gate.icon || '🔑') + ' 꼭 푸는 문제 · ' : '✨ 반짝이 퀴즈 · ') + g + '학년'));   // 꿈 요정 반짝이(사랑둥이 대모험)가 내는 문제 — 이야기·게임·퀴즈가 한 세계로(2026-11-24)
     top.appendChild(el('span', 'pq-tag s', it.s));
     var x = el('button', 'pq-x', '나중에 ✕'); x.type = 'button';
     x.addEventListener('click', function () { closeQuiz() });
-    top.appendChild(x);
+    if (!gate) top.appendChild(x);   // 꼭 푸는 문제는 '나중에'가 없어요
     card.appendChild(top);
-    var rw = reward(); cur.rw = rw;
+    if (gate && gate.why) card.appendChild(el('div', 'pq-rw', (gate.icon || '🔑') + ' ' + gate.why + (gate.big ? ' · 한 번에 맞히면 ' + gate.big : '')));
+    var rw = gate ? null : reward(); cur.rw = rw;
     if (rw) { top.insertBefore(el('span', 'pq-tag rw', '맞히면 ' + rw.icon), x); card.appendChild(el('div', 'pq-rw', '맞히면 ' + rw.icon + ' ' + rw.big)); }   // 좁거나 낮은 화면은 위 칸의 작은 표시만(카드가 한 화면에 들어가게)
     card.appendChild(el('div', 'pq-q', it.q));
     var cs = el('div', 'pq-cs');
@@ -480,9 +489,9 @@
       sparkle(b, cur.correct ? 18 : 10);
       chime(cur.correct);
       var l = log();
-      l.n++;
+      if (!cur.gate) l.n++;   // 꼭 푸는 문제는 하루 퀴즈 수·선물 상자에 안 셈
       var giftLine = '';
-      if (cur.correct) {
+      if (cur.correct && !cur.gate) {
         l.ok++;
         if (l.ok % GIFT_EVERY === 0 && l.gift < GIFT_MAX && giftOk()) {
           // 맞힌 그때 바로 줘요(카드를 닫기 전에 '모두 광장으로'·창 닫기가 있어도 잃지 않게). 선물 카드는 퀴즈 카드 위에 떠요
@@ -491,11 +500,12 @@
           if (G.log().n > before) { l.gift++; cur.gift = 'q' + l.gift; giftLine = '🎁 선물 상자를 받았어요!' }
         } else if (l.n < DAY_MAX && l.gift < GIFT_MAX && giftOk()) giftLine = '⭐ 한 문제 더 맞히면 선물 상자!';
       }
-      saveLog(l);
+      if (!cur.gate) saveLog(l);
       msg.innerHTML = '';
       msg.appendChild(el('div', 'pq-big', cur.correct ? '⭕ 정답!' : '👍 맞았어요!'));
+      if (cur.gate && (cur.correct ? cur.gate.big : cur.gate.small)) msg.appendChild(el('div', 'pq-got', (cur.gate.icon || '🔑') + ' ' + (cur.correct ? cur.gate.big : cur.gate.small)));
       if (cur.rw) msg.appendChild(el('div', 'pq-got', cur.rw.icon + ' ' + (cur.correct ? cur.rw.big : cur.rw.small)));
-      msg.appendChild(el('div', 'pq-sub', cur.correct ? (giftLine || stars(l)) : '힌트를 잘 보고 풀었어요.'));
+      if (!cur.gate) msg.appendChild(el('div', 'pq-sub', cur.correct ? (giftLine || stars(l)) : '힌트를 잘 보고 풀었어요.'));
       finish();
     } else {
       b.classList.add('no'); b.disabled = true;
@@ -507,9 +517,9 @@
       } else {
         cur.done = true;
         for (var j = 0; j < btns.length; j++) { btns[j].disabled = true; if (cur.order[j] === 0) btns[j].classList.add('ok') }
-        var l2 = log(); l2.n++; saveLog(l2);
+        if (!cur.gate) { var l2 = log(); l2.n++; saveLog(l2); }
         msg.innerHTML = '';
-        msg.appendChild(el('div', 'pq-hint', '정답은 ‘' + cur.item.c[0] + '’예요. 괜찮아요, 다음에 또 도전해요!'));
+        msg.appendChild(el('div', 'pq-hint', '정답은 ‘' + cur.item.c[0] + '’예요. ' + (cur.gate ? '정답을 기억하고 계속 가요!' : '괜찮아요, 다음에 또 도전해요!')));
         finish();
       }
     }
@@ -530,7 +540,7 @@
     go.addEventListener('click', function () { closeQuiz() });
     ov.querySelector('#pqCard').appendChild(go);
     clearTimeout(closeT);
-    closeT = setTimeout(function () { closeQuiz() }, CLOSE_SEC * 1000);
+    closeT = setTimeout(function () { closeQuiz() }, (cur && cur.gate ? (cur.correct ? 3 : 8) : CLOSE_SEC) * 1000);   // 꼭 푸는 문제는 게임 흐름을 위해 빨리 닫힘(맞힘 3초·정답 보기 8초)
   }
   function closeQuiz() {
     if (!ov) return;
@@ -541,6 +551,12 @@
     window.removeEventListener('keyup', keyGuard, true);
     resume();
     active = 0; target = rnd(); phase = 'wait';
+    if (c && c.gate) {   // 꼭 푸는 문제: 게임에 결과를 돌려줌('plaza-quiz' 신호는 안 보냄 — 보상이 두 번 되지 않게)
+      var res = { correct: true, first: !!c.correct, tries: c.tries, subject: c.s, grade: c.g, revealed: !c.correct && !c.second };   // revealed: 두 번 틀려 정답을 보여 준 것(덧붙인 값 — 힌트 보고 두 번째에 맞힌 것과 가를 때)
+      try { c.gate.resolve(res) } catch (e) { }
+      setTimeout(nextAsk, 0);
+      return;
+    }
     if (c && c.done) {
       fire('plaza-quiz', { correct: c.correct, second: c.second, grade: c.g, subject: c.s, game: GAME, reward: c.correct ? 'big' : c.second ? 'small' : null });
     }
@@ -573,6 +589,33 @@
     } catch (e) { }
   }
 
+  // ---------- 꼭 푸는 문제(2026-11-25 선생님: "하다 보면 어쩔 수 없이 문제를 풀어야 하고, 풀었을 때 이점이 있게") ----------
+  // window.PLAZA_QUIZ.ask({game, why, icon, grade?, big?, small?}) → Promise {correct, first, tries, subject, grade, revealed}
+  //   - 그 학년(PLAZA_GRADE) 문제 카드. '나중에 ✕' 없음. 틀리면 힌트 뒤 한 번 더, 두 번 틀리면 정답을 보여 주고 correct:true·first:false로 끝(게임이 막히지 않게)
+  //   - 처음에 맞히면 first:true → 게임이 큰 이점, 아니면 작은 이점. why·icon은 카드 위에(예: '🧩 쪽지 조각을 찾으려면'), big/small은 받을 이점 글(선택)
+  //   - 하루 퀴즈 수·선물 상자에 안 셈(최근에 낸 문제는 안 겹치게). 혼자 판은 그동안 게임 멈춤, 친구와 연결된 판은 안 멈춤(고르는 퀴즈와 같은 규칙)
+  //   - 여러 번 부르면 줄을 서서 하나씩. 고르는 퀴즈 카드가 열려 있으면 그것을 닫고 바로
+  //   - 퀴즈를 끈 판(?quiz=0)·문제 모음을 못 받은 판은 {correct:true, first:false, tries:0, skipped:true}로 바로 통과
+  //   - 게임이 window.PLAZA_QUIZ_GATES = true 를 두면 고르는 말풍선(❓)은 안 띄움
+  var askQ = [];
+  function ask(o) {
+    o = o || {};
+    return new Promise(function (resolve) { askQ.push({ o: o, resolve: resolve }); if (!(ov && cur && cur.gate)) nextAsk() });
+  }
+  function nextAsk() {
+    if (ov && cur && cur.gate) return;
+    var a = askQ.shift();
+    if (!a) return;
+    loadBank(function (ok) {
+      if (ov && cur && cur.gate) { askQ.unshift(a); return }
+      if (ov) closeQuiz();   // 고르는 퀴즈 카드가 떠 있으면 닫고(결과 없음) 꼭 푸는 문제를 먼저
+      var g = a.o.grade >= 1 && a.o.grade <= 6 ? a.o.grade : undefined;
+      if (!ok || !openQuiz({ grade: g, gate: { why: a.o.why || '', icon: a.o.icon || '', big: a.o.big || '', small: a.o.small || '', game: a.o.game || GAME, resolve: a.resolve } })) {
+        a.resolve(PASS()); setTimeout(nextAsk, 0);
+      }
+    });
+  }
+
   // ---------- 시험 손잡이 ----------
   window.PLAZA_QUIZ = {
     game: GAME,
@@ -580,6 +623,8 @@
     ff: function (sec) { tick(sec || 1, true) },
     show: function () { loadBank(function (ok) { ok && showBubble() }) },
     open: openQuiz,
+    ask: ask,
+    asking: function () { return !!(ov && cur && cur.gate) },
     answer: function (k) { choose(k) },
     correctIndex: function () { return cur ? cur.order.indexOf(0) : -1 },
     close: closeQuiz,
@@ -588,7 +633,8 @@
     busy: busy,
     state: function () {
       return { phase: phase, hidden: !!(bub && bub.hidden), active: active, target: target, bubbleLeft: bub ? bubLeft : 0, grade: grade(), log: log(), paused: pausedBy, held: held ? held.length : -1, coop: coop(), bank: bankState,
-        cur: cur ? { grade: cur.g, index: cur.i, subject: cur.s, q: cur.item.q, tries: cur.tries, done: cur.done, correct: cur.correct } : null };
+        cur: cur ? { grade: cur.g, index: cur.i, subject: cur.s, q: cur.item.q, tries: cur.tries, done: cur.done, correct: cur.correct, gate: !!cur.gate } : null, asks: askQ.length };
     }
   };
+  if (STUB) STUB.__q.splice(0).forEach(function (x) { ask(x[0]).then(x[1]) });   // quiz.js가 오기 전에 부른 꼭 푸는 문제
 })();

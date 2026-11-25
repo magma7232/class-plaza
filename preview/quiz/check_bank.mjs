@@ -38,7 +38,7 @@ let total = 0;
 for (let g = 1; g <= 6; g++) {
   const list = B[g];
   if (!Array.isArray(list)) { fail(`${g}학년 문제가 없어요`); continue; }
-  const allowed = g <= 2 ? SUBJ.low : SUBJ.high;
+  const allowed = g <= 2 ? SUBJ.low : g >= 5 ? SUBJ.high.concat('실과') : SUBJ.high;   // 실과는 5~6학년(2026-11-25)
   const count = {};
   const seen = new Map();
   list.forEach((it, i) => {
