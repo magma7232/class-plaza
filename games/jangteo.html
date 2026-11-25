@@ -1605,6 +1605,7 @@ function createTutorial(api){
 #tutBar.hide{display:none}
 #tutBar span{background:#3f8fe0;color:#fff;border:3px solid #22160c;border-radius:999px;padding:2px 14px;font-size:clamp(13px,2.5vh,18px);box-shadow:0 3px 0 #22160c}
 #tutBar button{pointer-events:auto;font-family:inherit;font-size:clamp(13px,2.5vh,18px);background:#fff;color:#22160c;border:3px solid #22160c;border-radius:999px;padding:2px 14px;box-shadow:0 3px 0 #22160c}
+body.tutQ #tutOv,body.tutQ #tutBar{visibility:hidden}
 body.tutDemo .pad{visibility:hidden}
 body.tutPractice .pad{opacity:.4}
 body.tutPractice .pad.tutLit{opacity:1;animation:tutPulse .7s ease-in-out infinite alternate}
@@ -1617,6 +1618,10 @@ body.tutPractice .pad.tutLit{opacity:1;animation:tutPulse .7s ease-in-out infini
   const bar = document.createElement('div'); bar.id = 'tutBar'; bar.className = 'hide';
   bar.innerHTML = '<span></span><button id="tutNext">다음 연습으로 ▶</button><button id="tutSkip">건너뛰기 ▶▶</button>';
   document.body.appendChild(ov); document.body.appendChild(bar);
+  // 꼭 푸는 문제 카드(quiz.js #pqOv)가 떠 있는 동안 안내 친구·말풍선·위 띠를 숨김. 카드가 뜨면 게임 장면(rAF)이 멈추므로 그림판 쪽이 아니라 '카드가 붙었나'를 지켜봄
+  const quizOpen = () => { try { return !!document.getElementById('pqOv') || !!(window.PLAZA_QUIZ && PLAZA_QUIZ.asking && PLAZA_QUIZ.asking()); } catch (e){ return false; } };
+  const qSync = () => document.body.classList.toggle('tutQ', quizOpen());
+  try { new MutationObserver(qSync).observe(document.body, {childList: true}); } catch (e){}
   const tb = ov.querySelector('.tb'), fc = ov.querySelector('.guy'), fg = fc.getContext('2d'), tl = ov.querySelector('.tl'), tx = ov.querySelector('.tx'), dots = ov.querySelector('.dots'), goB = ov.querySelector('.nx');
   const tag = bar.querySelector('span'), skipB = bar.querySelector('#tutSkip'), nextB = bar.querySelector('#tutNext');
   nextB.style.display = 'none';
@@ -1882,25 +1887,33 @@ body.tutPractice .pad.tutLit{opacity:1;animation:tutPulse .7s ease-in-out infini
     else if (T.phase === 'end' && now() >= T.at) finish(false);
   }
   // 화살표·반짝이(게임의 2D 그림판 위에): 짚는 칸 위에서 통통 튀는 화살표 + 바닥 빛 고리
+  let mask = null, mctx = null;
   function draw(ctx, t){
     if (!T) return;
     const tg = T.phase === 'demo' ? (T.sub ? T.tgt : null) : T.cur && T.cur.tgt;
     const D = T.phase === 'demo' ? DEMO[T.i] : null;
     const card = D && D.card ? api.cardRect() : null;
-    // 화면을 어둡게 하고 할 곳만 동그랗게 밝게(2026-11-25 선생님 그림처럼) — 흐림 효과 없이 가볍게
+    // 화면을 어둡게 하고 할 곳만 동그랗게 밝게(2026-11-25 선생님 그림처럼). 연습하는 동안 내내(짚는 곳이 없는 틈에도 깜빡이지 않게), 문제 카드가 떠 있으면 끔
     const tc = tg ? api.toScreen(tg.x + .5, tg.y + .5, 0.8) : null;
-    if (card || tg){
+    qSync();
+    if (T.phase !== 'end' && !quizOpen()){
       const Wd = innerWidth, Hd = innerHeight, p = P(), me = api.toScreen(p.x, p.y, 0.6), RU = Math.max(24, api.unit() * .95) * (small() ? 1.15 : 1);
-      // 한 겹만(낡은 패드: 화면 전체 반투명을 한 번만 칠함). 구멍마다 '그 구멍 바깥'으로 잘라 두고(잘라 낸 곳이 겹쳐 쌓임) 한 번 칠함 → 구멍끼리 겹쳐도 밝게 합쳐짐
-      ctx.save(); ctx.fillStyle = `rgba(0,0,0,${T.phase === 'demo' ? .5 : .58})`;
-      const hole = f => { ctx.beginPath(); ctx.rect(0, 0, Wd, Hd); f(); ctx.clip('evenodd'); };
-      if (card){ const m = 7; hole(() => ctx.rect(card.x - m, card.y - m, card.w + m * 2, card.h + m * 2)); }
-      if (tc) hole(() => { ctx.moveTo(tc.x + RU * 1.6, tc.y); ctx.arc(tc.x, tc.y, RU * 1.6, 0, Math.PI * 2); });
-      hole(() => { ctx.moveTo(me.x + RU * 1.05, me.y); ctx.arc(me.x, me.y, RU * 1.05, 0, Math.PI * 2); });   // 내 요리사도 보이게
-      ctx.fillRect(0, 0, Wd, Hd); ctx.restore(); ctx.save();
+      const A = .62, F = 1.3;   // 진하기, 부드러운 가장자리(구멍 반지름의 몇 배까지 서서히 어두워짐)
+      // 가로세로 절반 크기의 가림막 한 장: 검게 칠하고 구멍만 둥근 그러데이션으로 지움(destination-out → 구멍끼리 겹쳐도 밝게 합쳐짐) → 화면에 한 번 그림. 흐림 효과 없이 가볍게
+      const k = .5, mw = Math.max(1, Math.ceil(Wd * k)), mh = Math.max(1, Math.ceil(Hd * k));
+      if (!mask){ mask = document.createElement('canvas'); mctx = mask.getContext('2d'); }
+      if (mask.width !== mw || mask.height !== mh){ mask.width = mw; mask.height = mh; }
+      mctx.globalCompositeOperation = 'source-over'; mctx.clearRect(0, 0, mw, mh);
+      mctx.fillStyle = `rgba(0,0,0,${A})`; mctx.fillRect(0, 0, mw, mh);
+      mctx.globalCompositeOperation = 'destination-out';
+      const cut = (x, y, r) => { x *= k; y *= k; r *= k; const g = mctx.createRadialGradient(x, y, r, x, y, r * F); g.addColorStop(0, '#000'); g.addColorStop(1, 'rgba(0,0,0,0)'); mctx.fillStyle = '#000'; mctx.beginPath(); mctx.arc(x, y, r, 0, Math.PI * 2); mctx.fill(); mctx.fillStyle = g; mctx.beginPath(); mctx.arc(x, y, r * F, 0, Math.PI * 2); mctx.fill(); };
+      if (tc) cut(tc.x, tc.y, RU * 1.6);
+      cut(me.x, me.y, RU * 1.05);   // 내 요리사도 보이게
+      if (card){ const m = 7; mctx.fillStyle = '#000'; mctx.fillRect((card.x - m) * k, (card.y - m) * k, (card.w + m * 2) * k, (card.h + m * 2) * k); }
+      mctx.globalCompositeOperation = 'source-over';
+      ctx.drawImage(mask, 0, 0, mw, mh, 0, 0, mw / k, mh / k);
       // 구멍 가장자리: 얇은 금빛 테(흐림 대신 가볍게 '여기!'를 보여 줌)
-      if (tc){ ctx.strokeStyle = 'rgba(255,224,120,.85)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(tc.x, tc.y, RU * 1.6, 0, Math.PI * 2); ctx.stroke(); }
-      ctx.restore();
+      if (tc){ ctx.save(); ctx.strokeStyle = 'rgba(255,224,120,.85)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(tc.x, tc.y, RU * 1.6, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
     }
     place(tc ? tc.y + Math.max(24, api.unit()) * 1.6 : (card ? null : null));
     if (card) arrow(ctx, card.x + card.w / 2, card.y + card.h + 14 + Math.abs(Math.sin(t * 5)) * 10, true, t);
@@ -1929,7 +1942,7 @@ body.tutPractice .pad.tutLit{opacity:1;animation:tutPulse .7s ease-in-out infini
     section(i){ if (T && T.phase === 'practice'){ api.clearOrders(); T.si = i - 1; nextSection(); } },   // 점검용: 그 연습으로 바로
     get active(){ return !!T; },
     get lock(){ return !!T && T.phase === 'demo'; },   // 보여 주는 동안 조이스틱·단추 잠금
-    get state(){ return T && {phase: T.phase, i: T.i, sub: T.sub, sec: T.secs ? T.secs[T.si] && T.secs[T.si].key : null, si: T.si, key: T.cur ? T.cur.key : '', text: lastText, tgt: T.cur && T.cur.tgt ? [T.cur.tgt.type, T.cur.tgt.x, T.cur.tgt.y] : null, skip: skipB.style.display !== 'none'}; }
+    get state(){ return T && {phase: T.phase, i: T.i, sub: T.sub, sec: T.secs ? T.secs[T.si] && T.secs[T.si].key : null, si: T.si, key: T.cur ? T.cur.key : '', text: lastText, tgt: T.cur && T.cur.tgt ? [T.cur.tgt.type, T.cur.tgt.x, T.cur.tgt.y] : null, skip: skipB.style.display !== 'none', ts: (() => { const g = T.phase === 'demo' ? (T.sub ? T.tgt : null) : T.cur && T.cur.tgt; if (!g) return null; const q = api.toScreen(g.x + .5, g.y + .5, 0.8); return [Math.round(q.x), Math.round(q.y), Math.round(Math.max(24, api.unit() * .95) * (small() ? 1.15 : 1) * 1.6)]; })()}; }
   };
 }
 function tutClean(){ running = false; orders = []; holdB = holdBkey = false; reset('peace'); running = false; }
