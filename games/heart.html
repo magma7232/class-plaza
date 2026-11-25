@@ -367,10 +367,10 @@ img{-webkit-user-drag:none}
       <button id="bShow" class="btn mint">스킬 구경하기</button>
       <div class="toggles">
         <button id="tPick" class="tg">능력 얻기: <b>자동으로</b></button>
-        <button id="tSnd" class="tg">소리: <b>켜짐</b></button>
+        <button id="tDiff" class="tg">난이도: <b>상</b></button><button id="tSnd" class="tg">소리: <b>켜짐</b></button>
       </div>
     </div>
-    <div class="foot">버그 헌터즈 새 디자인 데모 · 하트 친구들과 투덜이들을 웃게 만들어요</div>
+    
   </section>
 
   <section id="select" class="screen hide">
@@ -436,10 +436,112 @@ window.PLAZA_QUIZ_GATES = true;   // 꼭 푸는 문제만(LEVEL UP·보물 상�
     }
     var b = bag.pop();
     if (!b || !b.c || b.c.length < 2) return null;
-    return { k: 'mc', q: b.q, o: b.c.slice(), a: 0, e: b.hint ? b.hint + ' (정답: ' + b.c[0] + ')' : '정답은 「' + b.c[0] + '」예요.', c: 'g' };
+    return { k: 'mc', h: b.hint || '', q: b.q, o: b.c.slice(), a: 0, e: b.hint ? b.hint + ' (정답: ' + b.c[0] + ')' : '정답은 「' + b.c[0] + '」예요.', c: 'g' };
   };
 })();
-</script><script src="../peerjs.min.js"></script>
+</script><style>#stL,#result .sb .btn{white-space:nowrap}#mbox .nog{margin-top:6px;font-size:14px;line-height:1.4;color:#b0306a;font-weight:700}</style><script>
+/* 하트 특공대 어렵게·난이도 (heart_inject.py, 2026-11-25) */
+(function () {
+  var NAMES = { 1: '하', 2: '중', 3: '상', 4: '최상' };
+  // hp 투덜이 체력 · dmg 받는 피해 · rate 나오는 빠르기 · boss 보스 체력 · xg 레벨업 곡선(5번째 레벨업부터 한 번마다 필요한 하트 ×xg)
+  var DK = { 1: { hp: 0.5, dmg: 0.35, rate: 0.75, boss: 0.55, xg: 1.06 },
+    2: { hp: 0.7, dmg: 0.45, rate: 0.82, boss: 0.75, xg: 1.12 },
+    3: { hp: 0.85, dmg: 0.55, rate: 0.88, boss: 0.9, xg: 1.18 },
+    4: { hp: 1.1, dmg: 0.8, rate: 1, boss: 1.2, xg: 1.24 } };
+  function own() {
+    var d = 0;
+    try { d = parseInt(new URLSearchParams(location.search).get('diff'), 10); } catch (e) {}
+    if (!(d >= 1 && d <= 4)) { try { d = parseInt(localStorage.getItem('heart-diff'), 10); } catch (e) {} }
+    return d >= 1 && d <= 4 ? d : 3;
+  }
+  // 친구랑 하면 방장 난이도(__heartHostD)
+  window.HEART_D = function () { var h = window.__heartHostD; return h >= 1 && h <= 4 ? h : own(); };
+  window.HEART_DN = function () { return NAMES[window.HEART_D()]; };
+  window.HEART_DK = function () { return DK[window.HEART_D()] || DK[3]; };
+  window.HEART_MAXL = 15;                      // 최고 LEVEL
+  window.HEART_RV = { T: 3, R: 48, hp: 0.7, drop: 1.5, guard: 0.2 };  // 부활: 3초 동안 몸이 닿을 만큼(가운데끼리 48) 붙어 있기, 체력 70%, 떨어지면 1초에 1.5초씩 줄어듦(2초면 처음부터)
+  window.HEART_XK = function (lv) { return lv <= 4 ? 1 : Math.pow(window.HEART_DK().xg, lv - 4); };
+  // LEVEL 8~15: 원래 식(제곱으로 커짐)을 LEVEL 7까지 쓰고, 그 뒤는 LEVEL마다 10%씩(끝까지 갈 수는 있게)
+  window.HEART_KH = function (k) { return k <= 6 ? 1 + 0.5 * k + 0.12 * k * k : 8.32 * (1 + 0.1 * (k - 6)); };
+  window.HEART_KB = function (k) { return k <= 6 ? 1 + 0.62 * k + 0.08 * k * k : 7.6 * (1 + 0.1 * (k - 6)); };
+  // 꼭 푸는 문제(PLAZA_QUIZ.ask) 보상 기준: 한 번에 맞힘, 1~3학년은 힌트 보고 두 번째도, 정답을 보여 준 것(revealed)은 없음, 못 받은 퀴즈(skipped)는 통과
+  window.HEART_QOK = function (r) {
+    if (!r || r.skipped) return true;
+    if (r.revealed || !r.correct) return false;
+    return !!r.first || (window.HEART_G ? window.HEART_G() : 4) <= 3;
+  };
+  // 처음 화면 난이도 단추
+  function bindDiff() {
+    var b = document.getElementById('tDiff'); if (!b) return;
+    var show = function () { b.querySelector('b').textContent = NAMES[own()]; };
+    show();
+    b.onclick = function () { var d = own() % 4 + 1; try { localStorage.setItem('heart-diff', String(d)); } catch (e) {} show(); try { Snd.sfx('click'); } catch (e) {} };
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindDiff); else bindDiff();
+  // 기절한 친구 둘레: 땅에 '여기 붙어요' 고리(ph 0) + 깨우는 중이면 남은 초(ph 1)
+  window.HEART_RVZONE = function (g, p, t, ph) {
+    var R = window.HEART_RV.R, u = Math.min(1, (p.rv || 0) / window.HEART_RV.T);
+    worldT(g);
+    if (ph === 0) {
+      g.save(); g.setLineDash([10, 8]); g.lineDashOffset = -t * 30; g.lineWidth = 4;
+      g.strokeStyle = 'rgba(255,255,255,' + (0.6 + 0.3 * Math.sin(t * 5)) + ')';
+      g.beginPath(); g.ellipse(p.x, p.y, R, R * 0.8, 0, 0, TAU); g.stroke();
+      g.setLineDash([]); g.lineWidth = 2.5; g.strokeStyle = 'rgba(47,194,140,0.9)'; g.stroke();
+      if (u > 0) { g.fillStyle = 'rgba(95,224,160,' + (0.18 + 0.3 * u) + ')'; g.beginPath(); g.ellipse(p.x, p.y, R * u, R * 0.8 * u, 0, 0, TAU); g.fill(); }
+      g.restore();
+    } else if (u > 0) {
+      var n = Math.max(1, Math.ceil(window.HEART_RV.T - p.rv));
+      put(g, FX.word(String(n), '#ffffff', '#1f8a5a', 30), p.x, p.y - 27, 1);
+    }
+  };
+  // 모두 기절: 끝 화면(혼자·방장은 2.7초 뒤 기록 화면, 친구 기기는 방장의 'end'를 받아서)
+  window.HEART_OVER = function () {
+    var G = Game.G; G.over = true;
+    var tt = document.getElementById('toast'); if (tt) tt.classList.remove('in');   // '기절했어요! …' 알림이 큰 제목을 가리지 않게
+    UI.banner('아쉬워요! 모두 기절했어요', '괜찮아요! 힘을 모아 다시 도전해요', 'fail', 2.6);
+    if (!G.guest) setTimeout(function () {
+      if (!G.on || !G.over || (G.modal && G.modal.k === 'result')) return;
+      try { UI.close(); } catch (e) {}
+      UI.result();
+    }, 2700);
+  };
+  // LEVEL 15를 깸: 최종 스테이지 완료
+  window.HEART_ALLCLEAR = function () {
+    var G = Game.G; G.allClear = true;
+    UI.banner('최종 스테이지 완료!', 'LEVEL 15까지 동화 마을을 모두 지켜 냈어요!', 'clear', 4);
+    if (!G.guest) try { var me = G.me; FX.confetti(me.x, me.y - 80, 60, 420); FX.stars(me.x, me.y - 80, 'gold', 14, 240); Snd.sfx('clear'); } catch (e) {}
+    for (var i = 0; i < G.players.length; i++) { G.players[i].cheer = 4; G.players[i].happy = 4; }
+    if (!G.guest) setTimeout(function () { if (G.on && G.allClear && !(G.modal && G.modal.k === 'result')) { try { UI.close(); } catch (e) {} UI.result(); } }, 4200);
+  };
+  // 기록 화면 제목
+  window.HEART_RTITLE = function () {
+    var G = Game.G, t = document.getElementById('rTitle'), sm = document.querySelector('#result .rh small');
+    if (!t || !sm) return;
+    if (!sm.dataset.d) sm.dataset.d = sm.textContent;
+    if (G.allClear) { t.textContent = '최종 스테이지 완료!'; sm.textContent = 'LEVEL 15까지 모두 지켜 냈어요! 정말 멋져요!'; }
+    else if (G.over) { t.textContent = '아쉬워요! 모두 기절했어요'; sm.textContent = '괜찮아요! 「다시 하기」로 처음부터 도전해요'; }
+    else sm.textContent = sm.dataset.d;
+  };
+  // 기록 화면이 낮은 화면(휴대폰 가로 390px)에서 위아래가 잘렸다(원래부터) → 화면에 맞게 줄임
+  function fitResult() {
+    var bx = document.querySelector('#result .rbox'), r = document.getElementById('result');
+    if (!bx || !r || r.classList.contains('hide')) return;
+    bx.style.transform = ''; var h = bx.offsetHeight, w = bx.offsetWidth;
+    var k = Math.min(1, (innerHeight - 10) / h, (innerWidth - 8) / w);
+    bx.style.transform = k < 1 ? 'scale(' + k.toFixed(3) + ')' : '';
+  }
+  addEventListener('resize', fitResult);
+  var rt0 = window.HEART_RTITLE;
+  window.HEART_RTITLE = function () { rt0(); setTimeout(fitResult, 0); };
+})();
+</script><style>@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,d09GMgABAAAAAAEAAA0AAAAAAigAAACzAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcEAZgAAQRCAoBKgE2AiQDBAsEAAQgBQYHIBtpAfgfCbatmvWClmEYXjCIiH7st/e+GDbdO4lMMkueIBVCkVbwTCP+SIhEkvjrjRG1Z40DyYsONuAAJBBJwGMbQG8GHJjkFQFB36RpWVnb2dfVhFoBQd+IMUCzYdSiXJRjbGtOLACdWtqdnfVo7vm8MVvx3cgrArkqT5hVQKRW4yCgAACgCYAgls72Joan44tvXRrD8GF5H17muwRAWwEha5cBAQCkbE0QAAEAAG0NoN67AA==) format('woff2');unicode-range:U+d7a3}
+@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,d09GMgABAAAAAAMQAA0AAAAABQwAAALCAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcEAZgADQRCAqFMIQbATYCJAMICwYABCAFBgcgG44DAMbofzP3QUJEOXWtqHx1BlonleQEKuKeqZvaWxpNkQUWaSJh2V+2h0aJZiGshfM8McncQZ1pnqg1nKfyGgSAGm7wAMkrKKuDEjIAsFoBAOCEWuhh5mW0LzFDDlAC1QZAqe+RToixAsAJwMgp9/LCwR1oob2sSfhN98MHGkk2UicKL1BAB3RhBxpEMBm8gAwh4Q5YrcoqJiAAoJB5ywCcsA3IADAAPgD4DQDgEyYgL8bHT1cvOIizyez5hOddpTmOKzS6Zdv8l81ynjVv7lynlpl2LUvV3USh87Jj/q3L7NdUrqXuE5faLT2uFq4XLN/uIs6fP4f48vwcgdKa4p7wNy3zpJhL9q0r7Lf277JfFzZzq7qhfsU2+1ZwfkvHUL3UVAU1N9evZeny1W84t/x4gCCIooPgIC53EAnvKK1YYdIMbLGbuTVAJJVn84TmJYeLelZoTKvsZ81zBjd3CNeaslaNyVHnSwolKR/iHcTldtrlW/2EFrsWDq0tnRtA0JbZm9pvJ6PcCSv11xBf1iWkKPLys91u57yGOyaetYXGLTU7ZMiWJV01/8lBjy+9LDmLHm48ysyGboM0aqn6oPmixdslujPFep3YNHUkqyIeNGsTE9+m++NxRk7LL4JReXHIx08fLUbLJ4zpPnahA9uXHnEnevPb/47Oaxy62snMm7xYnSPXcfvj41kapVxvjuqiVHUZ2kUZdWnr7l2s7Z5eBTkGMqbePqB7R7vLkydNTmQJI1fJNO4hoxtW1WnZsZ1HuMnvu+hdDHKVN8vJ5V0iLx5c6GQxJysV9o29ObO22lyl5JwcdAyhU4P60zHa7tFDulD2jrYEAAACgCBn35V5TGdD2jelK/0SAC5sz60DgBdhe03wtN6g/tAMAAYUAIDgw8oZDBS5DSAIBUVdQAH4BACFD2BqCUAzoCFm3YYYAA==) format('woff2');unicode-range:U+b700}
+@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,d09GMgABAAAAAARUAA0AAAAABvwAAAQDAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcEAZgADwRCAqJFIZxATYCJAMMCwgABCAFBgcgG/AEAC4L4jHeohJnF0EzW1NDpK8n/SD/Se+/c2fy8iGiWrbJUqhEpy+MAPUN1mULZlvPZirrB+rXHqBJ1shJ+PF3PyK/7kYTUjO5ebDuoBWO9PxfU//ZHR4lHtmRnkhELCJ9b0KzCQ5oGElHK8ASGbBPNxleTkgU68n8vVDXgABowhq2oOTUhiaWOgQAUBSAxClpQ9d3WOBONI2lApjEKQeQNa5RLQKRARgBqRJzQuxZx3a23X/K7RX4zTvxgUbQNs7ZgT0YcEF8YAwOUlSAOyTmCWwWIUOpdbILClpqnkCKAj1Ai4D4RGius2YXMcDazpP9gwbqKjrR6W2yRD4RieAZlFwewZi3WoGmtPX4ViCdPGmFWKtVscsmTlSpaJmNttG5zgFukciWDVKF2kd+HJQ2WPf44TUUTxZt4FSO5qjeAe1FovOrkIbFNCcwcjnFAAliiJWQXb7/Wu5shy+SU2Zr1NmXeWucEDsphqEYO2W/HzHLbLZCrPRXnaPPvcpfS6LJrdw2x2FfNE94FoZMwSb5LiCpARdcQ2jyLJ5mWYEULXQhWyDbgCRaC3XRNotDIUWI5auf8EWKZEIzoPtwNfis2QTdYRe2Mevs5iirUkVoci1+LiE2WmZx3DNXEjbujFddi3Zce+BF4myEVlPy41Fnn8YtMPswdh/7+QggYYih86p3tUk0X7GaxTYeas6pqFBJLdqALU/ScWcFK2WHWrw/3UKuXy6IDnM1CMred74nSDC8Vnn6q8NDTUbWE1KkXiW8Rcu2t4ZrMDrI1TdMz9yR+CnIlWtTf7j+MtfZhqaW69W26QUGx5ErT09W2FvG/Q/2f+v/UajXVHmaFY4u3qJHYzI6w4RRIqv8I7NfeRr83pvVkakp+SYmVKd4nflq7/Ngnc4X4stjTcHP1w59+tfctes2ofsPVx88efnEjwfx8bH7u5qLulye6Jy+4YPlc61KfEM2ffA0CrW7HXlN5moGpj6iz58eMdWRXznJldRu58L65zy1tpu6eur8vRK3GvaIeD4vMH1ZpjpdcMeWCTzCSf4sMzhivnEhSn1biIuh/2MdNVHbIOlHeS0YUa0/dHDCcJWf2nWpZiLAMn8ptlj78O1YZ/WOMFHjmcX3ZY8cLzsYlz7YdqjPs0NvCozspt87nJDD9OK1u7mqiaXffF7te4PLctSPXa6ZlBcnhawbrsy+6W78Zk/1ZLamDX9ozxe0T7hZegVXpNSvqef76MWzte0Rfiw74fSXEPu51RrqdmbRxaNbXnp+/da3EhKN5v9N5h79Td2Kv4TUL+xJahqneOF9aBvLVsl9uC0AESxS/h1osQwYBktAgGnOLkDuIhSPhTfN8RF8IUEoERxsym4EAgAAAA==) format('woff2');unicode-range:U+b367,U+cce4}
+@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,d09GMgABAAAAAAPgAA0AAAAABigAAAOPAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcEAZgADwRCAqHQIVzATYCJAMKCwgABCAFBgcgG3AEAI7Ctm0TUSEcgSdTPIzgn2c/d9/EPC601SGmSazh8VMnbURNNA7Zk0mJhEz6Q3jaXTNQSJ9MCqbelrcx/9fU+3ZBR0lHeqQnEokdqyaezWxvllhNE4Spt+7VhXjZ1xO6GwEeclgAO7vT8oASNgDzPwBwMh8BbLvNagtXAHmw1CizAAb2lZbx8RyAEBzUnm5VAgc2nNg3hlj9D+KXtYX3NEo3lNdBCQpMYB3EQJDicpSBIxaWLM3/JkhnJLht3lWRUDQLgu4DB+AEzQC0/goPWF+z9fc5jkS4lApbU1NiBymLTRqSh13pJCkzpEump/UPRpObXdmHHYFb1151x3Ec1WNscdh1yYUlNsKmjKb22KksohnQDGYOodO9KMZg6GFDrEtpPB4fClukpwJaRTC5/YZFo0ErjW/IdpRJ9HFcH2cCDICTrfYQ0tiGdEO2vcQY5+p1LdpmMgOPr1myhaZ0kj47fQUYKJd77G34YtWpuoTJ1GPsUJmpbTOgsVhUaKey2aRqfdoYZ+qDfHyxqqgoa0hXreubKNOtgQbKQQF9sWEhlccnYz0uF9Ur6iVHD8OWy8RiTGXbwADFwAGTMJo6ZsLiQakAA9VnEs9aLTWQCqGdSmWTjnRJhhoArxJijjK4C/0uClSlihIoARIL7uutaxFckU/Y3l/eYpYJHXGe5D14MG7naq44lJ8afyMeAn+bHZfe2qL1ndqbhIGKrmX7I+tDiwMJ5asViJ0a/bVIxEh+pH1pcaiuP1TNusSlarGTstLxaERXU+OCKYGseAJK2vA6XDlwHd9YaUaunE0p9ggWHjVGJJ3lVRGloqoWFWoqci4R9z4/Xo2XWltLtywWHztZusKmjFvpWBtxeGbMnBhbnxUEWS/rso4yIe/X6EukHLpMWaIZb/i7Y0+akVVbI/MzWivpWxeWUaeAZ9RA/TTUChgYPKOre3dvmCXFSE0RWJKIpzFhsAJ5UglXO8V1b8m2ZXgFQFOtZN09YX9tXZgY+wHZkCCviDxDFOQVvC47K57pLdb/D3wjpywvH3O63lBt6FDT2iBF3bpNARFSB2dkkb4GCwLPaCDdvTHR78jtoe6jeq6IxHCn98UmU08g1LGCFwAAAkT7iOT2u0rNsK9KpsgLAPxui80DAP7c9iwGduZlqwkiB8CBhZPqhzQiGDB2CwDE9SyW86BboFBZIyu3BpgrlHFghc/cig8AAAA=) format('woff2');unicode-range:U+b0c8,U+be7c}
+@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,d09GMgABAAAAAALQAA0AAAAABLQAAAKCAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcEAZgADQRCAqEWINgATYCJAMICwYABCAFBgcgG1MDIMaHz7PeTzJK6gGAhU7rdslkqCV5o3p0U+8tjabIAos0kbGFtp1hltmcujwxSbfJVAohSZGYX69BALAwgwVIXEJaHrTBAIBaDQAAJRNBglxmaFuyChoAtYQqApDaxqQCPkUFDAFEMelWVjh+MLWDtlIH4Tfdgg8sjmynzqEVKCAIjXqgQZRmYEUYINnBVLV6SeL3ggBAQJ7bpQAACgDAKLkdPgZgtVeigjzdG/klZ5ew7JK9o6MGrb29XYSoVKaqPsOuLsO2dfUMxy09Yy90dHRD2a4PXgDfcfVTpjd8Nv/AnWBhg7EQn4w6HLwbMrrRoHWjHs/r8ev11l+244eHRw1aO027Dhkeuhe67pBjW9u6dfrCBv3C0b0mrSpD1x3WxRxp7RIwHLQfMRZ6QLFKvr1dj2eXzBv7pgGpWbJEj9fj2wFeCaiUgqAv7OG4dXu4pSOzP5l0EVWXQWubQesom5NT5T3RR5sorL52TV/WaMcRA84MCkpiRcsUPv7L3V5GeSn7RS8NNF3fH4qUSWQSaSDDaZoZSTinRa92dSqfrExO9HU98NXK/cp68RfDqFhnA/bn73VTPl3/1bZu7kLh8tWRQ3uP7/nxLCrK+UBZYcQYkUKc99dEX3XLd92U5yduniq2MHH57+eVpcpiClgNF8PwxqnnyNe5pTZMAiGmWTuEexL5732pJf5s/SZeR5p9fYkfTbloiTVEEEkj46f6KMgqmak2Jk0s1DfU8DGSSaVaUsMQhQ4AAAQAQQzv/Ui7Uhr2TduUfg8A1/bG5gHAO7fDS2GhfktLaBaAJigAAAE+ne9CoGBWAIJEirqGBCgJAAq3weQSQNAEDS31HvgA) format('woff2');unicode-range:U+ba4b}
+@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,d09GMgABAAAAAAK4AA0AAAAABIwAAAJqAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcEAZgADQRCAqEMINcATYCJAMICwYABCAFBgcgG08DIAYe+N9Ff24Na8Y1C9G10GDJL4vvNf830771oqJJYdgLLNJExrbCtWitm4JnZzjpQKcgnG6TEYQe0URs1tPLCEAhJakRFSvXbIgLG4BlAYCk9OCDz21yBjEbO0iG1BSokWaiNfmDALgAdvlaadNy6MoDOa1VlD9ydz6qSLFJOlmnRYIF5FpDRgzMRlpgg0R55ZBlTU6ucggAW5QjP1zAgA08uAT8PgB+KZftnrlPdI2+pOD81YrH2JF57cbkjWOLksR3qqZ53VSFxzAisVhkYYo4pY2o5qGpmqdhbELrW9HDjOrRKBXH6xWlbTJMQupVM5pENdfo0QXa/Pn6UbL5cTW65sy7aV5PVIFrRv0okdBWb1MUg3J6cceOtZHYwoWLhBg37m17nQ/UpvHtWU62oubNRs72TIYyNmOV2TfOWKuXTLY/N0s8uiXL5xF1trbe1k+9rC2vW3ZvRKqkpJr24GXEV64Pa/pnfKcE+o27WuVapyy7vj+u+yTgT5+vAh0mNS/QOkMV35lfJ2d772Tc+NX9ady4L50btNB0t55qlR6KoUjO1FlyJenf0ja7bHKl3MTrk5PblYobO3rm29wF5fpPgnZXVRpVxZXHVTbov/RUqhfYvlp7eqzINS2bO1fx8sVzuYP+vPrtRMwoJosVQvWUzDDMeXmO6ik18rMUaNdZlKowTVQRdr1voWd/vHpu9XDZigTrD+7csZErfOfMCdLWBQABCMpb/7aWbOMv+d2VQn4FcHFHhYYAL3PuM9GsS3JQTgk4kAAQ8OGsTAIY7QwC1pJ0kcrgC0DiEvJJAWgHMmLWdvID) format('woff2');unicode-range:U+d2c0}
+@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,d09GMgABAAAAAAPAAA0AAAAABfwAAANxAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcEAZgADwRCAqHFIVRATYCJAMMCwgABCAFBgcgG1AEUZSKzSjAx2HcbBWKpoiXEFyxMBb7ePj/NdZ98weVKCLJvZG8dUKiEppXDqFRCY1IEtud4d9L8wqlddArQG+7bL5szjsW4LUD8QVh4KZaYEUXIwsw0ETOBzznY6JZyGfvC40mBNOdKhJ+Jv/+Ov6xQKUWbWJ9c/9QuRyKAuDY1WrXlvPUHQdJk11kGdjL/TgzhRSQ4KrVg44OTxcfXApJBsW0n1TljYbFdXa57JAxwVQ2S8Lg3ABYaoTslqgokHR2dOaxlB5i167DtihFObFCHL1CyX8lX3+dhamqp5mDWjPC8DEGYxgFDsEVcrkAKDBi4sGDNI5YLDYbn+8fBtRj75nHrnBsbAw/+tCQZ85bJwF3gBSZT7AgxCEfye2zYEYVFDnXABBqi2ZQegyHUCDA2YJ4EY6hNA9VoiCEeRRFikjehOkYC/ZhEmyGzy+umnlBCB8DCryBgoFH8kWrk7Oa/N6+KdO109n0RVceBcbFZsceAeoxevHhzYc6Dx6kIAwboXkTtClNm0IBwrZgVs0UOZzxcYIrBBTJW2+kIYR4e/TKnGOsA2uDdTSfokR9HYvSU7igj8UeQug1HE4J2Bj/ggLCblLDEBoluF2hkAJpolMDunRh4291MnSMXp/RbhjIVnDL2tfSAuVULsOleh1kgnju8lQ6OyM/FhAOMvp+dryvSSwnvUK9q+Gaxj+a1jMfXTGLc9rtHGjwvSx3ih699+pn+aK5pTS6sDkUO7kGfltukHycwK6S0ocCz39tIRSkUWVUwmDY1OAFqELO/3+6pQMlLBNOdKaDEZitKkUBNGAIFm+VU5UP7nT9JBGkDyx9wn3kS8U5ypHXiaTX5T4a6OjUIZMnSNkAuaSmbKCSOJMl1osyT9sZv8koSXOfTqCndEBudIKsiYyijOJzVa0CDRPZix9UWRpPt6kVAmVjj4zUJJQ4NetT6wVW3t9ipWJzECiYbZCZOIEdxaWRwPPPWggFOVVCVcJY7wX4aYvqWLWnTpUoqw3ntWhLG6G6mMHgmcANnc57HAMDPM1LAteoHR/fevY+b9duNzVw639M6f/QVXkP19xqxtEqYjiQAgJh9XLk+va8zue9XDu9h2dx8CG82pyg6RcvKTkZoVTmpPTdtDgG8DsjwDhlzzaTn0GWoGRyRWoyKFEqYSoeOAEA) format('woff2');unicode-range:U+c5d4,U+c644}
+@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,d09GMgABAAAAAASEAA0AAAAAB2gAAAQ2AAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcEAZgAEQRCAqJcIdZATYCJAMQCwoABCAFBgcgG2QFAObn2fb+uaJOwUiwX2WtMmRr+L+NV6Wuux04py4SR4kjG+lEoh5pXXRu8NvtYsNXcSVIiuBtF6psyYy0ur5/2MWAAAAHA5gA5eaXdgQBcAEA3G4AAABMXASS3GYu5oP+AR4Ah+F0BYCSOI16Q7QXARoBbJVd5ukJe1dOPDQT83QnwndsOLyBsWgt50jVEzgAL4g5VepGSnEh0iHwat1m5cStJw/NdLu/bDv8WRCfvAjQaAG53SB1cyOP4CbREeB6Z/WuABhwAAtJiZgvbhfuPYa2Wq3qukBLKy5htiNEV9M1qGYHwVrV1ipHqs1Dweog2CNEb9ahtuqAOjBfMliqKitVjeVWJ1ndfAV0NqEYnBmEM4fjbdXVNZTdLiWWYrewlNo0yLkZ5aTToQC7i2MEskFGufwcWmsdcHCzZcUUzpA2P76aRGOsdsLhUFvBPOdZDC5hLHjrZv/liF5BudgAgt1C0NXIhhBiGNK5Wmerr6fRykNqthCsgxIjESOqEU7dSKpmB2VnCYLdxB6JtNNlAcyVx6ghRSBmWUppq2p9U604XmXWEo4tHaeoj2MCQjF1U4BFMVnrGNJcC2A2730xTTqX19cjHk3X1FB2F8FasErb2geslTDEopSIwWxqU9CyS24vY91FQ+3F0KUnY1sPBzt361Z7119GtE9Ng76mRgesoPYU2NlebIArV2q4YqLreQhZvVzVulSjqazlvxqqarVVTetW3eoGB77e1uapdm1CwqCrFMtHasRXJVG8u1kH3k/R4Vyjlx7zbPbzlKMQh3DtuIur2JqFslBOb71I4lE6YlbDgWWzDmTr+vqEEdUXFEJcp9cIvZpiz+4rEGp0dZNcunW8trFpcX2F1L7zB7qZdMG/YyPb0m25nXFeMJU2ZNoR9HFeD2/uVIT0bddZr0jk37eUdI/D7bDF4tkWQ0dv3iCJoZ2nDOkvR/48M6/te3G2RurxKCGkLU/sKSE4bdrwg5HEeDZrk1YgwAMEGiKY2fuU5PXrO6WI5q3l8ffy1Qew5hEhYVlRTeOkQh/Z3dhM8rhc/nH9vSmBxDRBUI+lE6/8t7ahvFEoH3v3r8ycw9TGuUSkMEDsL1O8QCSBjXEuSb4WTsVntmvb1L14uFSAU1TWwGv7z3ndVSKJSexRxizepQLZ2GOPEmXtkTx+8ZTBToJ8fau3LDIS+RBvUTcgQcoci0o/fOukeNy6TienGbNlRbxSpRF6lJYrei+oWEo++rJ3jfROhncSp0NwYhcyNS6qz9ixYSeqXG3FnAlKPXGlYBYa4qHUFdn++mfdO3Rg3vz2XZVKrQrzU2pHcM+DcyMbnd3z48XVfaSpnwR67CmXz2zO6Qi8xZPQnSyo3DcxA4YDAB84ncbvxxGKIEDWAxDIIC7nDORjAUBh3igeC4UAgQtNgHVFQDwfMJByb4JoAA==) format('woff2');unicode-range:U+ac74,U+b8cc,U+c57c}</style><script src="../peerjs.min.js"></script>
 <script src="../peer-config.js"></script>
 <script>/* ---- util.js ---- */
 /* 공통 도우미 · 조이스틱 */
@@ -1281,14 +1383,14 @@ const DATA = (() => {
     const pool = L === 1 ? [[0, 5], [1, 4], [2, 3], [3, 1.2]] : L === 2 ? [[4, 4], [6, 3], [7, 2.5], [9, 3], [8, 0.8], [0, 2]] : [[0, 2], [1, 2], [2, 2], [3, 1.5], [4, 2.5], [6, 2], [7, 2], [8, 1.2], [9, 2]];
     return {
       L, boss: odd ? 'clock' : 'devil', pool,
-      title: (L > 2 ? '더 세진 ' : '') + (odd ? '째깍째깍 장난감 섬' : '보랏빛 하트 구름섬'),
-      hpMul: (1 + 0.5 * k + 0.12 * k * k) * window.HEART_GK().hp, dmgMul: (1 + 0.15 * k) * window.HEART_GK().dmg, xpMul: 1 + 0.25 * k,
-      rate0: 1.5 * (1 + 0.24 * k) * window.HEART_GK().rate, rate1: 3.4 * (1 + 0.24 * k) * window.HEART_GK().rate, cap: 70 + 14 * Math.min(k, 4),
+      title: (L >= window.HEART_MAXL ? '최종 스테이지 · ' : L > 7 ? '도전 스테이지 · ' : L > 2 ? '더 세진 ' : '') + (odd ? '째깍째깍 장난감 섬' : '보랏빛 하트 구름섬'),
+      hpMul: window.HEART_KH(k) * window.HEART_GK().hp * window.HEART_DK().hp, dmgMul: (1 + 0.15 * k) * window.HEART_GK().dmg * window.HEART_DK().dmg, xpMul: 1 + 0.25 * k,
+      rate0: 1.5 * (1 + 0.24 * k) * window.HEART_GK().rate * window.HEART_DK().rate, rate1: 3.4 * (1 + 0.24 * k) * window.HEART_GK().rate * window.HEART_DK().rate, cap: 70 + 14 * Math.min(k, 4),
       elites: L === 1 ? [26] : L === 2 ? [18, 36] : [12, 26, 40],
-      bossHp: Math.round(BOSS[odd ? 'clock' : 'devil'].hp * (1 + 0.62 * k + 0.08 * k * k) * window.HEART_GK().hp), rage: L >= 3, gr: window.HEART_G(),
+      bossHp: Math.round(BOSS[odd ? 'clock' : 'devil'].hp * window.HEART_KB(k) * window.HEART_GK().hp * window.HEART_DK().boss), rage: L >= 3, gr: window.HEART_G(), df: window.HEART_D(),
     };
   }
-  const need = (lv) => Math.round(6 + 6 * lv + 0.7 * lv * lv);
+  const need = (lv) => Math.round((6 + 6 * lv + 0.7 * lv * lv) * (window.HEART_XK ? window.HEART_XK(lv) : 1));
 
   // ── 4학년 체육 안전 + 학교 예절 문제(버그 헌터즈 문제 은행에서 골라 옴). 정답은 항상 첫 번째 보기.
   const Q = [];
@@ -1738,9 +1840,9 @@ const Game = (() => {
   function hurt(p, dmg) {
     if (p.down || p.inv > 0) return;
     if (G.cfg.show && p === G.me) { p.flash = 0.12; p.inv = 0.3; return; }
-    p.hp -= dmg; p.inv = 0.6; p.hurtT = 0.4; p.flash = 0.16;
+    p.hp -= dmg * (G.players.some((q) => q.down && q !== p && Math.hypot(q.x - p.x, (q.y - p.y) * 1.25) < window.HEART_RV.R) ? window.HEART_RV.guard : 1); p.inv = 0.6; p.hurtT = 0.4; p.flash = 0.16;
     if (p === G.me) { G.cam.sh = Math.min(12, G.cam.sh + 5); Snd.sfx('hurt'); emit('hurt'); }
-    if (p.hp <= 0) { p.hp = 0; p.down = true; p.rv = 0; FX.stars(p.x, p.y - 30, 'gold', 6, 120); FX.puff(p.x, p.y - 10, 6, 50); if (p === G.me) { Snd.sfx('down'); emit('toast', '기절했어요! 친구가 와서 깨워 줄 거예요'); } if (G.players.every((q) => q.down)) fail('down'); }
+    if (p.hp <= 0) { p.hp = 0; p.down = true; p.rv = 0; FX.stars(p.x, p.y - 30, 'gold', 6, 120); FX.puff(p.x, p.y - 10, 6, 50); if (p === G.me) { Snd.sfx('down'); emit('toast', '기절했어요! 친구가 3초 동안 꼭 붙어 있으면 깨어나요'); } if (G.players.every((q) => q.down)) gameOver(); }
   }
   function healP(p, v, show) { const m = maxHp(p), b = p.hp; p.hp = Math.min(m, p.hp + v); if (show && p.hp - b >= 1) FX.heal(p.x, p.y - 70, p.hp - b); }
 
@@ -1873,7 +1975,7 @@ const Game = (() => {
     return b;
   }
   function bossDown(b) {
-    if (b.dead) return; b.dead = true; b.hp = 0; b.dt = 0; b.st = 'down'; b.go = false; b.ringing = false; G.freeze = 0.25; G.cam.sh = 14;
+    if (b.dead || G.phase === 'over') return; b.dead = true; b.hp = 0; b.dt = 0; b.st = 'down'; b.go = false; b.ringing = false; G.freeze = 0.25; G.cam.sh = 14;
     FX.flash(b.x, b.y - 100, 'gold', 260, 0.9, true); FX.ring(b.x, b.y - 60, 'gold', 40, 380, 0.9); FX.ring(b.x, b.y - 60, 'pink', 20, 300, 0.8); FX.confetti(b.x, b.y - 120, 70, 420); FX.hearts(b.x, b.y - 100, 14);
     G.hz.length = 0; Snd.sfx('clear'); if (b.kind === 'devil') Snd.sfx('trans');
     for (const e of G.enemies) if (!e.dead && !e.boss) { e.dead = true; e.dt = 0; dropGems(e.x, e.y, 1); FX.hearts(e.x, e.y - 20, 1); }
@@ -1954,7 +2056,7 @@ const Game = (() => {
   }
   addEventListener('plaza-quiz', (e) => {
     const d = (e && e.detail) || {};
-    if (!G.on || !(d.correct || d.second)) return;
+    if (!G.on || !d.correct) return;   // 2026-11-25: 맞혔을 때만(힌트 뒤 맞힘은 보상 없음)
     if (G.guest) { try { Net.send({ t: 'quiz', big: !!d.correct }); } catch (er) { /* */ } return; }
     quizPow(G.me, !!d.correct);
   });
@@ -1996,7 +2098,7 @@ const Game = (() => {
     for (const e of tmpA) { if (e.dead) continue; const dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1, R = 70 + e.r * 1.4; if (d < R + 60) { const w = (R + 60 - d) / (R + 60); ax += dx / d * w * 2.2; ay += dy / d * w * 2.2; } }
     const b = G.boss; if (b && !b.dead) { const dx = p.x - b.x, dy = p.y - b.y, d = Math.hypot(dx, dy) || 1, melee = p.W.note || p.W.bubble, busy = b.st !== 'rest' && b.st !== 'chase', want = melee && !busy && b.lift < 40 ? 150 : 240; if (d < want) { ax += dx / d * (want - d) / 70; ay += dy / d * (want - d) / 70; } else if (melee && !busy && d < 520 && !downs.length) { mx = -dx / d; my = -dy / d; } }
     for (const h of G.hz) { if (h.k === 'circle' || h.k === 'drop' || h.k === 'bomb') { const dx = p.x - h.x, dy = p.y - h.y, d = Math.hypot(dx, dy) || 1; if (d < h.r + 30) { ax += dx / d * 2.5; ay += dy / d * 2.5; } } else if (h.k === 'band') { const c = Math.cos(h.a), s = Math.sin(h.a), rx = p.x - h.x, ry = p.y - h.y, along = rx * c + ry * s, side = -rx * s + ry * c; if (along > -40 && along < h.L + 40 && Math.abs(side) < h.w / 2 + 30) { const sg = side >= 0 ? 1 : -1; ax += -s * sg * 3; ay += c * sg * 3; } } else if (h.k === 'shot') { const dx = p.x - h.x, dy = p.y - h.y, d = Math.hypot(dx, dy) || 1; if (d < 70) { ax += dx / d * 1.5; ay += dy / d * 1.5; } } }
-    const k = downs.length ? 0.35 : 1; out.x = mx + ax * k; out.y = my + ay * k; const l = Math.hypot(out.x, out.y); if (l > 1) { out.x /= l; out.y /= l; }
+    const k = downs.length ? (md < 30 ? 0 : 0.35) : 1; out.x = mx + ax * k; out.y = my + ay * k; const l = Math.hypot(out.x, out.y); if (l > 1) { out.x /= l; out.y /= l; }
     return out;
   }
 
@@ -2018,6 +2120,12 @@ const Game = (() => {
     for (const p of G.players) { p.down = false; p.hp = maxHp(p); p.inv = 1; }
     if (G.cfg.show) { G.phase = 'free'; Snd.music('field'); return; }
     G.phase = 'intro'; G.phaseT = 2.8; Snd.music('field'); emit('level', G.lv);
+  }
+  function gameOver() {
+    if (G.phase === 'over' || G.phase === 'clear' || G.phase === 'done' || G.phase === 'fail' || G.cfg.show) return;
+    G.phase = 'over'; G.over = true; G.hz.length = 0; G.shots.length = 0; G.queue.length = 0; Snd.sfx('no'); Snd.music('');
+    for (const e of G.enemies) if (!e.dead && !e.boss) { e.dead = true; e.dt = 0; }
+    emit('over');
   }
   function fail(why) {
     if (G.phase === 'fail' || G.phase === 'clear') return;
@@ -2046,7 +2154,7 @@ const Game = (() => {
       return;
     }
     if (G.phase === 'boss') { G.bossT -= dt; spawning(dt, 0.35); if (G.bossT <= 0) fail('time'); return; }
-    if (G.phase === 'clear') { G.phaseT -= dt; if (G.phaseT <= 0) { for (const p of G.players) { p.down = false; p.hp = maxHp(p); } startLevel(G.L + 1); } return; }
+    if (G.phase === 'clear') { G.phaseT -= dt; if (G.phaseT <= 0) { for (const p of G.players) { p.down = false; p.hp = maxHp(p); } if (G.L >= window.HEART_MAXL) { G.phase = 'done'; G.allClear = true; emit('allclear'); } else startLevel(G.L + 1); } return; }
     if (G.phase === 'fail') { G.phaseT -= dt; if (G.phaseT <= 0) retry(); return; }
     if (G.phase === 'free') { G.waveT = Math.min(G.waveT + dt, DATA.WAVE_S * 0.6); spawning(dt, 0.8); }
   }
@@ -2056,23 +2164,23 @@ const Game = (() => {
   function update(dt) {
     if (!G.on) return;
     if (G.modal && !(G.net && (G.modal.k === 'lvup' || G.modal.k === 'chest'))) return;
-    if (G.queue.length && !window.__heartAsking && (!G.modal || (G.queue[0].p && G.queue[0].p.net)) && (G.phase === 'wave' || G.phase === 'boss' || G.phase === 'free' || G.phase === 'clear')) { const ev = G.queue.shift(); if (ev.p && ev.p.net) { emit('remote', ev); return; } if (ev.k === 'lvup' && G.cfg.show) return; if (ev.k === 'chest' && !G.cfg.pick && !ev.asked && !G.net && ev.p === G.me && window.PLAZA_QUIZ && window.PLAZA_QUIZ.ask) { ev.asked = true; window.__heartAsking = true; const run = window.__heartRun; Promise.resolve(window.PLAZA_QUIZ.ask({ game: 'heart', why: '보물 상자를 열려면 문제를 풀어요!', icon: '🎁', big: '능력 하나 + 체력 가득', small: '능력 하나', grade: window.HEART_G() })).catch(() => ({ skipped: true })).then((r) => { window.__heartAsking = false; if (!G.on || run !== window.__heartRun) return; if (r && r.first) { ev.p.hp = maxHp(ev.p); FX.pop(ev.p.x, ev.p.y - 120, '체력 가득!', '#7dffb0', '#1f6a3a', 24, 1.1); } G.queue.unshift(ev); }); return; } if (ev.k === 'chest' && !G.cfg.pick) { const o = options(ev.p, 1)[0]; apply(ev.p, o); emit('gain', o, '보물 상자!'); return; } G.modal = ev; emit('modal', ev); return; }
+    if (G.queue.length && (!window.__heartAsking || (G.queue[0].p && G.queue[0].p.net)) && (!G.modal || (G.queue[0].p && G.queue[0].p.net)) && (G.phase === 'wave' || G.phase === 'boss' || G.phase === 'free' || G.phase === 'clear')) { const ev = G.queue.shift(); if (ev.p && ev.p.net) { emit('remote', ev); return; } if (ev.k === 'lvup' && G.cfg.show) return; if (ev.k === 'chest' && !G.cfg.pick && !ev.asked && ev.p === G.me && window.PLAZA_QUIZ && window.PLAZA_QUIZ.ask) { ev.asked = true; window.__heartAsking = true; const run = window.__heartRun; Promise.resolve(window.PLAZA_QUIZ.ask({ game: 'heart', why: '보물 상자를 열려면 문제를 풀어요!', icon: '🎁', big: '능력 하나 + 체력 가득', small: '능력 하나', grade: window.HEART_G() })).catch(() => ({ skipped: true })).then((r) => { window.__heartAsking = false; if (!G.on || run !== window.__heartRun) return; if (!window.HEART_QOK(r)) { emit('toast', '아쉬워요! 문제를 못 맞혀서 보물 상자가 열리지 않았어요'); return; } if (r && r.first) { ev.p.hp = maxHp(ev.p); FX.pop(ev.p.x, ev.p.y - 120, '체력 가득!', '#7dffb0', '#1f6a3a', 24, 1.1); } G.queue.unshift(ev); }); return; } if (ev.k === 'chest' && !G.cfg.pick) { const o = options(ev.p, 1)[0]; apply(ev.p, o); emit('gain', o, '보물 상자!'); return; } G.modal = ev; emit('modal', ev); return; }
     if (G.freeze > 0) { G.freeze -= dt; return; }
     G.t += dt; G.stats.time += dt;
     rebuild();
     for (const p of G.players) {
       p.inv -= dt; p.hurtT -= dt; p.flash -= dt; p.happy -= dt; p.cheer -= dt; p.blinkT -= dt; if (p.blinkT < -0.12) p.blinkT = rand(2, 5);
-      if (p.down) { const helpers = G.players.filter((q) => !q.down && Math.hypot(q.x - p.x, q.y - p.y) < 75).length; if (helpers) { p.rv += dt * (1 + 0.5 * (helpers - 1)); if (p.rv >= 2.2) { p.down = false; p.hp = maxHp(p) * 0.5; p.inv = 1.6; FX.ring(p.x, p.y - 20, 'mint', 10, 100, 0.6); FX.sparkle(p.x, p.y - 30, 'mint', 10, 120, 0.6); FX.hearts(p.x, p.y - 40, 4); Snd.sfx('revive'); if (p === G.me) emit('toast', '친구가 깨워 줬어요!'); } } else p.rv = Math.max(0, p.rv - dt * 0.4); p.vx = p.vy = 0; continue; }
+      if (p.down) { const helpers = G.players.filter((q) => !q.down && Math.hypot(q.x - p.x, (q.y - p.y) * 1.25) < window.HEART_RV.R).length; if (helpers) { p.rv += dt; if (p.rv >= window.HEART_RV.T) { p.down = false; p.rv = 0; p.hp = maxHp(p) * window.HEART_RV.hp; p.inv = 1.6; FX.ring(p.x, p.y - 20, 'mint', 10, 100, 0.6); FX.sparkle(p.x, p.y - 30, 'mint', 10, 120, 0.6); FX.hearts(p.x, p.y - 40, 4); Snd.sfx('revive'); if (p === G.me) emit('toast', '친구가 깨워 줬어요!'); } } else p.rv = Math.max(0, p.rv - dt * window.HEART_RV.drop); p.vx = p.vy = 0; continue; }
       if (p.net) netDrive(p, dt); else {
       let d = mv; if (p.bot || G.cfg.auto) botMove(p, dt, d); else Input.dir(d);
-      if (G.modal && p === G.me) { d.x = d.y = 0; p.inv = Math.max(p.inv, 0.25); }
+      if ((G.modal || window.__heartAsking) && p === G.me) { d.x = d.y = 0; p.inv = Math.max(p.inv, 0.25); }
       const s = spd(p) * (p.bot ? 0.94 : 1), ax = d.x * s, ay = d.y * s, k = Math.min(1, dt * 16); p.vx += (ax - p.vx) * k; p.vy += (ay - p.vy) * k;
       p.x += p.vx * dt; p.y += p.vy * dt; pushDecor(p, PR); clampIsl(p, 0.965);
       const sp2 = Math.hypot(p.vx, p.vy); p.mv = lerp(p.mv, Math.min(1, sp2 / 120), Math.min(1, dt * 10)); p.ph += dt * (6 + 7 * Math.min(1, sp2 / 170)) * (p.mv > 0.05 ? 1 : 0);
       if (Math.abs(p.vx) > 12) p.face = p.vx > 0 ? 1 : -1;
       }
       const rg = 0.7 * (p.P.clover || 0); if (rg) healP(p, rg * dt);
-      if (G.phase !== 'intro' && G.phase !== 'fail') for (const id in p.W) WF[id](p, p.W[id] - 1, dt);
+      if (G.phase !== 'intro' && G.phase !== 'fail' && G.phase !== 'over') for (const id in p.W) WF[id](p, p.W[id] - 1, dt);
     }
     for (let i = G.botGain.length - 1; i >= 0; i--) { const b = G.botGain[i]; if (G.t >= b.at) { G.botGain.splice(i, 1); const o = options(b.p, 1)[0]; apply(b.p, o); b.p.lv++; } }
     updShots(dt); updEnemies(dt); if (G.boss) updBoss(G.boss, dt); updHazards(dt); updGems(dt); updPhase(dt); FX.update(dt);
@@ -2114,13 +2222,13 @@ const Game = (() => {
     }
     for (const id of [...sentGems.keys()]) if (!seen.has(id)) { GD.push(id); sentGems.delete(id); }
     const md = G.modal && G.modal.k === 'pause' ? 'pause' : G.modal && G.modal.k === 'cq' ? 'cq' : '';
-    return { t: 's', full: full ? 1 : 0, T: R2(G.t), ph: G.phase, L: G.L, gr: window.HEART_G(), wt: R2(G.waveT), bt: R2(G.bossT), k: G.stats.kills, md, P, PW, E, B, S, H, GA, GM, GD, IT: G.items.map((it) => [it.k, R1(it.x), R1(it.y)]) };
+    return { t: 's', full: full ? 1 : 0, T: R2(G.t), ph: G.phase, L: G.L, gr: window.HEART_G(), df: window.HEART_D(), wt: R2(G.waveT), bt: R2(G.bossT), k: G.stats.kills, md, P, PW, E, B, S, H, GA, GM, GD, IT: G.items.map((it) => [it.k, R1(it.x), R1(it.y)]) };
   }
   function lobPos(s) { if (s.t < 0) return; const u = s.t / s.T; if (u >= 1) { s.t = -9; return; } s.x = lerp(s.x0, s.x1, u); s.y = lerp(s.y0, s.y1, u); s.z = 4 * s.h * u * (1 - u) + 24 * (1 - u); }
   function netApply(d) {
     const me = G.me, mi = G.players.indexOf(me);
     if (Math.abs(G.t - d.T) > 0.5) G.t = d.T; else G.t += (d.T - G.t) * 0.2;
-    G.phase = d.ph; G.L = d.L; if (d.gr) window.__heartHostG = d.gr; if (!G.lv || G.lv.L !== d.L || G.lv.gr !== window.HEART_G()) G.lv = DATA.LV(d.L); G.waveT = d.wt; G.bossT = d.bt; G.stats.kills = d.k; G.netPause = d.md === 'pause';
+    G.over = d.ph === 'over'; G.allClear = d.ph === 'done'; G.phase = d.ph; G.L = d.L; if (d.gr) window.__heartHostG = d.gr; if (d.df) window.__heartHostD = d.df; if (!G.lv || G.lv.L !== d.L || G.lv.gr !== window.HEART_G() || G.lv.df !== window.HEART_D()) G.lv = DATA.LV(d.L); G.waveT = d.wt; G.bossT = d.bt; G.stats.kills = d.k; G.netPause = d.md === 'pause';
     d.P.forEach((a, i) => {
       const p = G.players[i]; if (!p) return;
       if (p !== me) { p.nx = a[0]; p.ny = a[1]; p.vx = a[2]; p.vy = a[3]; p.face = a[4]; }
@@ -2128,7 +2236,7 @@ const Game = (() => {
       p.hp = a[5]; p.down = !!a[6]; p.rv = a[7]; p.inv = a[8]; p.hurtT = a[9]; p.flash = a[10]; p.happy = a[11]; p.cheer = a[12]; p.lv = a[13]; p.xp = a[14]; p.need = a[15]; p.orb = a[16]; p.busy = !!a[17]; p.bot = !!a[18];
       if (p === me) {
         if (p.hp < hp0 - 0.5 && !p.down) { G.cam.sh = Math.min(12, G.cam.sh + 5); Snd.sfx('hurt'); emit('hurt'); }
-        if (p.down && !dn0) { Snd.sfx('down'); emit('toast', '기절했어요! 친구가 와서 깨워 줄 거예요'); }
+        if (p.down && !dn0) { Snd.sfx('down'); emit('toast', '기절했어요! 친구가 3초 동안 꼭 붙어 있으면 깨어나요'); }
         if (!p.down && dn0) { Snd.sfx('revive'); emit('toast', '친구가 깨워 줬어요!'); }
       }
     });
@@ -2275,7 +2383,7 @@ const Game = (() => {
     drawPointers(g, W2, H2, rs);
   }
   function drawPlayer(g, p, t) {
-    if (p.down) { (p === G.me && window.ME2D ? Render.heroDownMe : Render.heroDown)(g, p.hero, p.x, p.y, HSC, t, p.rv / 2.2); return; }
+    if (p.down) { if (G.on) window.HEART_RVZONE(g, p, t, 0); (p === G.me && window.ME2D ? Render.heroDownMe : Render.heroDown)(g, p.hero, p.x, p.y, HSC, t, Math.min(1, p.rv / window.HEART_RV.T)); if (G.on) window.HEART_RVZONE(g, p, t, 1); return; }
     const blink = p.blinkT < 0, mood = p.hurtT > 0 ? 'hurt' : p.happy > 0 ? 'happy' : blink ? 'blink' : 'smile';
     const A0 = g.globalAlpha; g.globalAlpha = A0 * (p.inv > 0 && p.hurtT < 0.2 && !G.cfg.show ? (Math.sin(t * 40) > 0 ? 0.55 : 1) : 1);
     (p === G.me && window.ME2D ? Render.heroMe : Render.hero)(g, p.hero, p.x, p.y, HSC, { t, mv: p.mv, ph: p.ph, face: p.face, mood, flash: p.flash, cheer: p.cheer > 0, seed: p.seed, vx: p.vx });
@@ -2353,7 +2461,7 @@ const Game = (() => {
   /* ── 시작 ── */
   function start(hero, cfg) {
     Object.assign(G.cfg, cfg || {}); G.on = true; G.t = 0; G.stats = { kills: 0, ok: 0, n: 0, maxL: 1, time: 0 }; G.queue.length = 0; G.modal = null; G.botGain.length = 0; G.gems.length = 0; G.items.length = 0; G.enemies.length = 0; G.freeze = 0;
-    G.net = !!(cfg && cfg.net); if (!(cfg && cfg.guest)) window.__heartHostG = 0; window.__heartAsking = false; window.__heartRun = (window.__heartRun || 0) + 1; G.guest = !!(cfg && cfg.guest); G.netPause = false; G.topLv = 1; G.sndP = G.net ? [] : null;
+    G.net = !!(cfg && cfg.net); if (!(cfg && cfg.guest)) { window.__heartHostG = 0; window.__heartHostD = 0; } window.__heartAsking = false; G.over = false; G.allClear = false; window.__heartRun = (window.__heartRun || 0) + 1; G.guest = !!(cfg && cfg.guest); G.netPause = false; G.topLv = 1; G.sndP = G.net ? [] : null;
     if (G.guest) {
       // 친구 기기: 방장 기기가 정한 순서 그대로 하트 친구들을 세워요
       G.players = cfg.guest.list.map((a, i) => { const p = mkPlayer(a.hero, !!a.bot, i); p.nick = a.nick || p.name; p.nid = a.id; p.nx = p.x; p.ny = p.y; return p; });
@@ -2370,7 +2478,7 @@ const Game = (() => {
   }
   function stop() { G.on = false; G.modal = null; Snd.music('title'); }
   function cqApply(rate) {
-    const b = G.boss; if (!b || b.dead) return; const dmg = b.max * (0.06 + 0.12 * rate);
+    const b = G.boss; if (!b || b.dead) return; if (rate <= 0) { b.rage = true; FX.pop(b.x, b.y - 250, '약점을 못 찾았어요!', '#b48cff', '#3d1d70', 30, 1.4); return; } const dmg = b.max * (0.06 + 0.12 * rate);
     b.stun = 2.5 + 2.5 * rate; b.weak = 6; b.rage = true; b.st = 'rest'; b.stT = 0.5; b.go = false; b.ringing = false; b.lift = 0;
     G.hz.length = 0; hitEnemy(b, dmg, G.me, 0, 0, 0); FX.flash(b.x, b.y - 100, 'pink', 220, 0.6, true); FX.ring(b.x, b.y - 80, 'pink', 30, 260, 0.7); FX.stars(b.x, b.y - 140, 'gold', 14, 220); FX.pop(b.x, b.y - 250, '약점 공격!', '#ff6fae', '#6a1040', 36, 1.5); G.cam.sh = 12; Snd.sfx('ult');
   }
@@ -2442,7 +2550,7 @@ const UI = (() => {
     E('rAgain').onclick = () => { Snd.sfx('go'); E('result').classList.add('hide'); if (Net.mode !== 'solo') Net.again(); else begin(sel); };
     E('rHome').onclick = () => { Snd.sfx('click'); E('result').classList.add('hide'); if (Net.mode !== 'solo') Net.home(); else home(); };
     for (const b of document.querySelectorAll('#show [data-s]')) b.onclick = () => { Snd.sfx('click'); if (b.dataset.s === 'end') result(); else Game.summon(b.dataset.s); };
-    G.ev = { modal: openModal, level: onLevel, boss: onBoss, clear: onClear, fail: onFail, toast, hurt: hurtFlash, gain: gainChip };
+    G.ev = { modal: openModal, level: onLevel, boss: onBoss, clear: onClear, fail: onFail, over: () => window.HEART_OVER(), allclear: () => window.HEART_ALLCLEAR(), toast, hurt: hurtFlash, gain: gainChip };
     sndIcon();
   }
   function sndIcon() { E('bSnd').classList.toggle('off', Snd.muted); E('pSnd').textContent = Snd.muted ? '소리 켜기' : '소리 끄기'; }
@@ -2476,8 +2584,8 @@ const UI = (() => {
     const rows = E('friends').children; let j = 0; for (const p of G.players) { if (p === G.me) continue; const r = rows[j++]; if (!r) continue; r.querySelector('i').style.width = (p.hp / Game.maxHp(p) * 100) + '%'; r.classList.toggle('down', p.down); }
     E('kN').textContent = G.stats.kills;
     let msg = '', tm = '';
-    if (G.phase === 'intro') msg = '준비!'; else if (G.phase === 'wave') { msg = '투덜이들이 몰려와요!'; tm = mmss((DATA.WAVE_S - G.waveT) * 1000); } else if (G.phase === 'boss') { msg = '보스를 물리쳐요!'; tm = mmss(G.bossT * 1000); } else if (G.phase === 'clear') msg = 'LEVEL 클리어!'; else if (G.phase === 'fail') msg = '다시 도전!'; else if (G.phase === 'free') msg = '스킬 구경 중 — 마음껏 시험해 봐요';
-    E('stL').textContent = G.cfg.show ? '구경하기' : 'LEVEL ' + G.L; E('stT').textContent = tm; E('stT').classList.toggle('hurry', G.phase === 'boss' && G.bossT < 20); E('stMsg').textContent = msg;
+    if (G.phase === 'intro') msg = '준비!'; else if (G.phase === 'wave') { msg = '투덜이들이 몰려와요!'; tm = mmss((DATA.WAVE_S - G.waveT) * 1000); } else if (G.phase === 'boss') { msg = '보스를 물리쳐요!'; tm = mmss(G.bossT * 1000); } else if (G.phase === 'clear') msg = 'LEVEL 클리어!'; else if (G.phase === 'fail') msg = '다시 도전!'; else if (G.phase === 'over') msg = '모두 기절했어요'; else if (G.phase === 'done') msg = '최종 스테이지 완료!'; else if (G.phase === 'free') msg = '스킬 구경 중 — 마음껏 시험해 봐요';
+    E('stL').textContent = G.cfg.show ? '구경하기' : 'LEVEL ' + G.L + ' · ' + window.HEART_DN(); E('stT').textContent = tm; E('stT').classList.toggle('hurry', G.phase === 'boss' && G.bossT < 20); E('stMsg').textContent = msg;
     const b = G.boss, show = b && !b.dead && b.st !== 'enter';
     E('bossBar').classList.toggle('hide', !show); if (show) { E('bossHp').style.width = (b.hp / b.max * 100).toFixed(1) + '%'; E('bossName').textContent = b.name + (b.rage ? ' (화남!)' : ''); E('bossBar').classList.toggle('weak', b.weak > 0); }
   }
@@ -2489,7 +2597,7 @@ const UI = (() => {
   function hurtFlash() { const h = E('hurt'); h.classList.remove('in'); void h.offsetWidth; h.classList.add('in'); }
   function onLevel(lv) { banner('LEVEL ' + lv.L, lv.title + ' — 투덜이들을 웃게 만들어요!', 'lvl', 2.6); Snd.sfx('lvl', 0.6); }
   function onBoss(b) { banner(b.name + ' 등장!', G.cfg.show ? '마음껏 스킬을 시험해 봐요' : '1분 30초 안에 물리치면 다음 LEVEL!', 'boss', 2.4); }
-  function onClear(b) { if (!G.cfg.show) try { window.dispatchEvent(new CustomEvent('minigame-clear', { detail: { game: 'heart', level: G.L, team: G.players.filter((p) => !p.bot).length, guest: !!G.guest } })); } catch (e) { /* 반 별: 같이 한 방은 방장 기기가 팀 몫으로 하나 보내요 */ } banner('LEVEL ' + G.L + ' 클리어!', b.kind === 'clock' ? '시계왕이 새근새근 잠들었어요' : '외로웠던 악마둥이가 하늘빛 하트로 돌아왔어요!', 'clear', 3.8); for (const p of G.players) { p.cheer = 3; p.happy = 3; } }
+  function onClear(b) { if (!G.cfg.show) try { window.dispatchEvent(new CustomEvent('minigame-clear', { detail: { game: 'heart', level: G.L, team: G.players.filter((p) => !p.bot).length, guest: !!G.guest } })); } catch (e) { /* 반 별: 같이 한 방은 방장 기기가 팀 몫으로 하나 보내요 */ } banner('LEVEL ' + G.L + ' 클리어!', G.L === 7 ? '다음 이야기가 열렸어요! LEVEL 15까지 계속 도전!' : G.L >= window.HEART_MAXL ? '마지막 보스까지 물리쳤어요!' : b.kind === 'clock' ? '시계왕이 새근새근 잠들었어요' : '외로웠던 악마둥이가 하늘빛 하트로 돌아왔어요!', 'clear', 3.8); for (const p of G.players) { p.cheer = 3; p.happy = 3; } }
   function onFail(why) { banner(why === 'time' ? '시간이 다 됐어요!' : '모두 기절했어요!', '얻은 능력은 그대로! 다시 도전해요', 'fail', 2.8); }
 
   /* ── 모달(퀴즈·카드) ── */
@@ -2497,7 +2605,7 @@ const UI = (() => {
   function openModal(ev) {
     cur = ev; const m = E('modal'); m.classList.remove('hide'); m.className = ''; clearTimeout(modalTimer); clearInterval(qTimer);
     if (ev.k === 'lvup') quiz(ev, '힘내기 퀴즈!', '정답을 맞히면 새 능력을 얻어요');
-    else if (ev.k === 'chest') { if (window.PLAZA_QUIZ && window.PLAZA_QUIZ.ask && !G.net) { m.classList.add('hide'); const evc = ev; Promise.resolve(window.PLAZA_QUIZ.ask({ game: 'heart', why: '보물 상자를 열려면 문제를 풀어요!', icon: '🎁', big: '능력 하나 + 체력 가득', small: '능력 하나', grade: window.HEART_G() })).catch(() => ({ skipped: true })).then((r) => { if (cur !== evc) return; m.classList.remove('hide'); m.classList.add('gold'); if (r && r.first) Net.heal(evc.p, 999); grant(evc.p, r && r.first ? '정답! 체력 가득 — 능력을 하나 골라요' : '보물 상자! 능력을 하나 골라요'); }); } else { m.classList.add('gold'); grant(ev.p, '보물 상자! 능력을 하나 골라요'); } }
+    else if (ev.k === 'chest') { if (window.PLAZA_QUIZ && window.PLAZA_QUIZ.ask) { m.classList.add('hide'); const evc = ev; Promise.resolve(window.PLAZA_QUIZ.ask({ game: 'heart', why: '보물 상자를 열려면 문제를 풀어요!', icon: '🎁', big: '능력 하나 + 체력 가득', small: '능력 하나', grade: window.HEART_G() })).catch(() => ({ skipped: true })).then((r) => { if (!G.on) return; const busy = cur !== evc || (G.modal && G.modal.k === 'cq'); if (!window.HEART_QOK(r)) { if (!busy) close(); toast('아쉬워요! 문제를 못 맞혀서 보물 상자가 열리지 않았어요'); return; } if (r && r.first) { if (G.guest) Net.send({ t: 'chestfull' }); else Net.heal(evc.p, 999); } if (busy) { const o = Game.options(evc.p, 1)[0]; Net.apply(evc.p, o); gainChip(o, '보물 상자!'); return; } m.classList.remove('hide'); m.classList.add('gold'); grant(evc.p, r && r.first ? '정답! 체력 가득 — 능력을 하나 골라요' : '보물 상자! 능력을 하나 골라요'); }); } else { m.classList.add('gold'); grant(ev.p, '보물 상자! 능력을 하나 골라요'); } }
     else if (ev.k === 'cq') classQuiz(ev.b);
   }
   function close() { clearTimeout(modalTimer); clearInterval(qTimer); E('modal').classList.add('hide'); box().onclick = null; box().innerHTML = ''; cur = null; G.modal = null; }
@@ -2509,15 +2617,17 @@ const UI = (() => {
   function quiz(ev, title, sub) {
     const q = DATA.nextQ(), order = q.k === 'ox' ? [0, 1] : shuffle(q.o.map((_, i) => i));
     box().innerHTML = `<div class="mh"><span class="badge">LEVEL UP</span><b>${title}</b><small>${sub}</small></div>` + qHtml(q, order);
-    let done = false;
+    let done = false, tried = false;
     const answer = (oi) => {
-      if (done) return; done = true; clearInterval(qTimer); const ok = oi === q.a; G.stats.n++; if (ok) G.stats.ok++;
+      if (done) return;
+      if (oi >= 0 && oi !== q.a && !tried && q.o.length > 2 && window.HEART_G() <= 3) { tried = true; Snd.sfx('no'); const wb = box().querySelector('.opt[data-i="' + oi + '"]'); if (wb) { wb.disabled = true; wb.classList.add('wrong'); } box().appendChild(el('div', 'fb no', '<b>한 번 더!</b><span class="qf">' + esc(q.h ? '힌트: ' + q.h : '틀린 보기를 빼고 다시 골라 봐요') + '</span>')); box().scrollTop = box().scrollHeight; timer(window.HEART_GK().qt, () => answer(-1)); if (G.cfg.auto) modalTimer = setTimeout(() => answer(Math.random() < 0.6 ? q.a : -1), 500); return; }
+      box().querySelectorAll('.fb').forEach((f) => f.remove()); done = true; clearInterval(qTimer); const ok = oi === q.a; G.stats.n++; if (ok) G.stats.ok++;
       for (const b of box().querySelectorAll('.opt')) { const i = +b.dataset.i; b.disabled = true; if (i === q.a) b.classList.add('right'); else if (i === oi) b.classList.add('wrong'); else b.classList.add('dim'); }
       const fb = el('div', 'fb ' + (ok ? 'ok' : 'no'), `<b>${ok ? '정답이에요!' : oi < 0 ? '시간이 다 됐어요' : '아쉬워요!'}</b><span class="qf">${esc(q.e)}</span>`); box().appendChild(fb);
       Snd.sfx(ok ? 'ok' : 'no');
       if (ok && G.cfg.pick) modalTimer = setTimeout(() => grant(ev.p, '정답! 능력을 하나 골라요'), G.cfg.auto ? 200 : 450);
       else if (ok) { const o = Game.options(ev.p, 1)[0]; Net.apply(ev.p, o); fb.appendChild(gainRow(o)); box().onclick = close; modalTimer = setTimeout(close, G.cfg.auto ? 300 : 1500); }
-      else { Net.heal(ev.p, 20); const nx = el('button', 'btn small', '꿀사탕 먹고 다시 힘내기 (+20)'); nx.onclick = close; box().appendChild(nx); modalTimer = setTimeout(close, G.cfg.auto ? 400 : 4200); }
+      else { fb.appendChild(el('div', 'nog', '이번엔 능력 강화가 없어요. 다음 문제는 꼭 맞혀 봐요!')); const nx = el('button', 'btn small', '계속하기'); nx.onclick = close; box().appendChild(nx); box().scrollTop = box().scrollHeight; modalTimer = setTimeout(close, G.cfg.auto ? 400 : 4200); }
     };
     box().onclick = null; for (const b of box().querySelectorAll('.opt')) b.onclick = (e) => { e.stopPropagation(); answer(+b.dataset.i); };
     timer(window.HEART_GK().qt, () => answer(-1));
@@ -2614,13 +2724,13 @@ const UI = (() => {
   function result() {
     Net.onResult(); E('netWait').classList.add('hide');
     const s = G.stats, me = G.me; G.modal = { k: 'result' };
-    E('rPt').src = (window.ME2D && window.ME2D.pt) || pts[me.hero]; E('rTitle').textContent = me.nick && me.nick !== '나' ? me.nick + '의 모험 기록' : '오늘의 모험 기록'; E('rL').textContent = G.cfg.show ? '-' : 'LEVEL ' + Math.max(G.L, 1); E('rT').textContent = mmss(s.time * 1000); E('rK').textContent = s.kills; E('rQ').textContent = s.n ? s.ok + ' / ' + s.n : '-';
+    E('rPt').src = (window.ME2D && window.ME2D.pt) || pts[me.hero]; E('rTitle').textContent = me.nick && me.nick !== '나' ? me.nick + '의 모험 기록' : '오늘의 모험 기록'; window.HEART_RTITLE(); E('rL').textContent = G.cfg.show ? '-' : 'LEVEL ' + Math.max(G.L, 1) + ' (' + window.HEART_DN() + ')'; E('rT').textContent = mmss(s.time * 1000); E('rK').textContent = s.kills; E('rQ').textContent = s.n ? s.ok + ' / ' + s.n : '-';
     const sk = E('rS'); sk.innerHTML = ''; for (const id in me.W) sk.appendChild(skillIcon(id, me.W[id], 'w')); for (const id in me.P) sk.appendChild(skillIcon(id, me.P[id], 'p'));
     E('result').classList.remove('hide'); E('hud').classList.add('hide'); E('show').classList.add('hide'); Snd.music('title'); Snd.sfx('clear', 0.6);
     Game.stop(); G.modal = { k: 'result' };
   }
   function visibility() { if (document.hidden && G.on && !G.modal && !G.guest) pause(true); }
-  return { init, hud, screen, banner, toast, pause, result, home, visibility, cfg, icons, pts, begin, netModal, cqGuest, cqReveal, cqRemote, cqMarkRemote };
+  return { init, hud, screen, banner, toast, pause, result, home, visibility, cfg, icons, pts, begin, netModal, cqGuest, cqReveal, cqRemote, cqMarkRemote, close };
 })();
 
 /* ---- net.js ---- */
@@ -2636,7 +2746,7 @@ const Net = (() => {
   const okBrowser = typeof Peer === 'function' && typeof RTCPeerConnection === 'function';
   const peerOpts = () => Object.assign({}, window.PEER_OPTS || {});
   const num = (v) => typeof v === 'number' && isFinite(v);
-  const PERSONAL = new Set(['기절했어요! 친구가 와서 깨워 줄 거예요', '친구가 깨워 줬어요!']);
+  const PERSONAL = new Set(['기절했어요! 친구가 3초 동안 꼭 붙어 있으면 깨어나요', '친구가 깨워 줬어요!']);
   const GLOBAL_SND = new Set(['boss', 'clear', 'trans', 'stomp', 'warn', 'bell', 'spring', 'tele', 'chest', 'revive', 'go', 'ult', 'cheer']);
   const FX_CAP = { dmg: 24, sparkle: 24, hearts: 16, puff: 16, burst: 16, stars: 16 };
   // 방장 기기에서 생긴 효과·소리·알림을 모아 두었다가 화면 상태와 함께 보내요
@@ -2661,6 +2771,7 @@ const Net = (() => {
     wrap('boss', (b) => ({ name: b.name, kind: b.kind }));
     wrap('clear', (b) => ({ kind: b.kind }));
     wrap('fail', (why) => why || 'down');
+    wrap('over', () => 1); wrap('allclear', () => 1);
     wrap('toast', (m) => (PERSONAL.has(m) ? null : m));
     ev.remote = remoteEv;
   }
@@ -2699,7 +2810,7 @@ const Net = (() => {
   // ---------- 방장: 친구 기기에서 온 것 ----------
   function remoteEv(ev) {
     const p = ev.p, c = S.conns[p.net];
-    if (ev.k === 'lvup' && c && c.open) { c.send({ t: 'lvup' }); return; }
+    if ((ev.k === 'lvup' || (ev.k === 'chest' && window.PLAZA_QUIZ && window.PLAZA_QUIZ.ask && !window.PLAZA_QUIZ.off)) && c && c.open) { c.send({ t: ev.k }); return; }
     const o = Game.options(p, 1)[0]; Game.apply(p, o);
     if (c && c.open) c.send({ t: 'gain', o: { kind: o.kind, id: o.id, lv: o.lv, name: o.name, desc: o.desc }, label: ev.k === 'chest' ? '보물 상자!' : '' });
   }
@@ -2714,6 +2825,7 @@ const Net = (() => {
     const p = G.on ? G.players.find((q) => q.net === c._id) : null;
     if (d.t === 'in') { if (p && num(d.x) && num(d.y)) { p.nx = d.x; p.ny = d.y; p.nvx = num(d.vx) ? d.vx : 0; p.nvy = num(d.vy) ? d.vy : 0; p.busy = !!d.b; } }
     else if (d.t === 'ap') { if (p) applyFrom(p, d.o); }
+    else if (d.t === 'chestfull') { if (p) Game.healP(p, 999, true); }
     else if (d.t === 'heal') { if (p) Game.healP(p, Math.max(0, Math.min(30, +d.v || 0)), true); }
     else if (d.t === 'cqa') { if (p) UI.cqRemote(p.idx, !!d.ok); }
     else if (d.t === 'quiz') { if (p) Game.quizPow(p, !!d.big); }
@@ -2830,7 +2942,7 @@ const Net = (() => {
     rec = false; UI.begin(S.hero, { net: true, humans, nick: S.nick });
     X.length = SN.length = U.length = M.length = 0; G.sndP = [];
     const list = G.players.map((p) => ({ hero: p.hero, nick: p.nick, bot: !!p.bot, id: p === G.me ? 'h' : p.net || null }));
-    hsend({ t: 'start', list, L: G.L, gr: window.HEART_G() });
+    hsend({ t: 'start', list, L: G.L, gr: window.HEART_G(), df: window.HEART_D() });
     S.started = true; S.full = true; S.snapT = 0; rec = true; S.screen = null;
   }
 
@@ -2865,6 +2977,7 @@ const Net = (() => {
       case 'start': guestStart(d); break;
       case 's': if (S.started && G.on) guestSnap(d); break;
       case 'lvup': if (S.started && G.on) { if (G.modal) S.pend.push({ k: 'lvup', p: G.me }); else UI.netModal({ k: 'lvup', p: G.me }); } break;
+      case 'chest': if (S.started && G.on) { if (G.modal) S.pend.push({ k: 'chest', p: G.me }); else UI.netModal({ k: 'chest', p: G.me }); } break;
       case 'gain': if (G.on && d.o) G.ev.gain(d.o, d.label || ''); break;
       case 'cq': if (G.on) { if (G.modal && G.modal.k === 'lvup') S.pend.unshift({ k: 'lvup', p: G.me }); UI.cqGuest(d); } break;
       case 'cqm': UI.cqMarkRemote(d.i); break;
@@ -2879,6 +2992,7 @@ const Net = (() => {
     if (me < 0) return;
     E('result').classList.add('hide'); waitOverlay(false); S.pend.length = 0;
     if (d.gr) window.__heartHostG = d.gr;
+    if (d.df) window.__heartHostD = d.df;
     UI.begin(d.list[me].hero, { guest: { list: d.list, me }, nick: d.list[me].nick });
     S.started = true; S.lastSnap = performance.now(); S.screen = null;
   }

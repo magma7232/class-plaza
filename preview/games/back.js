@@ -454,7 +454,7 @@
     // '끝까지 깼다'의 뜻(게임마다): 중간 단계를 깼다는 신호는 세지 않아요. 마무리 이야기(story.js)도 이것을 물어봐요
     var FINAL = {
       sarang: function (d) { return !d.boss || d.boss === "devil"; }, // 사랑둥이 대모험: 마지막 악마둥이
-      heart: function (d) { return (d.level | 0) >= 2; },              // 하트 특공대: LEVEL 2 악마둥이(LEVEL 1은 시계왕, 그 뒤는 더 센 되풀이)
+      heart: function (d) { return (d.level | 0) >= 7; },              // 하트 특공대: LEVEL 7(2026-11-25 선생님: 7단계까지 가야 다음 이야기, 최고 15)
       jangteo3d: function (d) { return !!d.final; },                  // 뚝딱 장터 3D: 모험 주방 바닷속·하늘·우주를 끝까지
       jelly: function (d) { return !!d.final; }, giant: function (d) { return !!d.final; }, magnet: function (d) { return !!d.final; }, pyramid_run: function (d) { return !!d.final; }
     };
