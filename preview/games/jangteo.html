@@ -241,10 +241,16 @@ function workType(s){
   return null;
 }
 function resetPot(pot){ pot.items = []; pot.state = 'idle'; pot.cook = 0; pot.doneT = 0; }
+// 3D판과 같은 규칙(2026-11-25): 탄 냄비 들고 쓰레기통에 버리기(빈 냄비는 저절로 화구로), 음식을 들고 접시 앞에서 담기, 타기 전 경고
+function potHome(h){ if (!h || h.t !== 'pot') return null; const s = st[h.sy] && st[h.sy][h.sx]; return s && s.type === 'stove' ? s : null; }
+const fakePlate = h => { const t = {t:'plate', c:[]}; return plateAccept(t, JSON.parse(JSON.stringify(h))) ? t : null; };
+let burnSeen = false;
+function burnNote(){ if (burnSeen || (tut && tut.active)) return; burnSeen = true; toast = {text: '탔어요! 냄비를 들고 쓰레기통에 버리고 다시 만들어요', t: 5}; }
 
 const R = (kind, msg) => ({kind, msg});
 function doA(p, s){
   const h = p.hold;
+  if (h && h.t === 'pot' && s.type !== 'trash' && s.type !== 'stove') return R('bad', '탄 냄비는 쓰레기통에 버려요');
   switch (s.type){
     case 'box': {
       const it = {t:'ing', id:s.ing, cut:false};
@@ -256,7 +262,7 @@ function doA(p, s){
     case 'counter': {
       if (!h){ if (s.item){ p.hold = s.item; s.item = null; return R('pick'); } return null; }
       if (!s.item){ s.item = h; p.hold = null; return R('place'); }
-      if (s.item.t === 'plate' && h.t !== 'plate'){ if (plateAccept(s.item, h)){ p.hold = null; return R('place'); } return R('bad', '접시에 더 못 담아요'); }
+      if (s.item.t === 'plate' && h.t !== 'plate'){ if (plateAccept(s.item, h)){ p.hold = null; if (h.t === 'dish'){ p.hold = s.item; s.item = null; } return R('place'); } return R('bad', '접시에 더 못 담아요'); }
       if (h.t === 'plate' && s.item.t !== 'plate'){ if (plateAccept(h, s.item)){ s.item = null; return R('place'); } return R('bad', '접시에 더 못 담아요'); }
       return R('bad', '자리가 차 있어요');
     }
@@ -274,6 +280,9 @@ function doA(p, s){
     }
     case 'stove': {
       const pot = s.pot;
+      if (h && h.t === 'pot'){ if (potHome(h) === s && pot.state === 'away'){ pot.state = 'burnt'; p.hold = null; return R('place'); } return R('bad', '탄 냄비는 쓰레기통에 버려요'); }
+      if (pot.state === 'away') return R('bad', '냄비를 쓰레기통에 비우면 돌아와요');
+      if (!h && pot.state === 'burnt'){ p.hold = {t:'pot', sx:s.x, sy:s.y}; pot.state = 'away'; return R('pick'); }
       if (h && h.t === 'plate'){
         if (pot.state === 'done' || pot.state === 'burnt'){
           if (h.c.length) return R('bad', '빈 접시가 필요해요');
@@ -301,11 +310,13 @@ function doA(p, s){
     case 'plates': {
       if (!h){ p.hold = {t:'plate', c:[]}; return R('pick'); }
       if (h.t === 'plate' && !h.c.length){ p.hold = null; return R('place'); }
+      { const fp = fakePlate(h); if (fp){ plateAccept(fp, h); p.hold = fp; return R('place'); } }   // 음식을 들고 와서 접시에 담기
       return R('bad', '손이 꽉 찼어요');
     }
     case 'trash': {
       if (!h) return null;
-      if (h.t === 'plate'){ if (!h.c.length) return R('bad', '빈 접시예요'); h.c = []; return R('trash'); }
+      if (h.t === 'pot'){ const hs = potHome(h); if (hs) resetPot(hs.pot); p.hold = null; addFloat('냄비가 돌아갔어요', s.x + .5, s.y - .5, '#2f8f3a'); return R('trash'); }
+      if (h.t === 'plate'){ if (!h.c.length) return R('bad', '빈 접시예요'); h.c = []; return R('trash'); }   // 2D판은 접시가 끝없이 있어 설거지가 없어요
       p.hold = null; return R('trash');
     }
     case 'serve': {
@@ -324,11 +335,11 @@ function labelA(p, s){
   const h = p.hold;
   if (!s) return '';
   switch (s.type){
-    case 'box': return !h ? '집기' : (h.t === 'ing' && h.id === s.ing && !h.cut) ? '되돌리기' : (h.t === 'plate') ? '담기' : '';
-    case 'counter': if (!h) return s.item ? '집기' : ''; if (!s.item) return '놓기'; return (s.item.t === 'plate') !== (h.t === 'plate') ? '담기' : '';
-    case 'board': if (!h) return s.items.length ? '집기' : ''; return h.t === 'plate' ? (s.items.length === 1 ? '담기' : '') : '올리기';
-    case 'stove': if (h && h.t === 'plate') return (s.pot.state === 'done' || s.pot.state === 'burnt') ? '담기' : ''; if (h && h.t === 'ing') return '넣기'; return (!h && s.pot.state === 'idle' && s.pot.items.length) ? '빼기' : '';
-    case 'plates': return !h ? '접시' : '';
+    case 'box': if (h && h.t === 'pot') return ''; return !h ? '집기' : (h.t === 'ing' && h.id === s.ing && !h.cut) ? '되돌리기' : (h.t === 'plate') ? '담기' : '';
+    case 'counter': if (h && h.t === 'pot') return ''; if (!h) return s.item ? '집기' : ''; if (!s.item) return '놓기'; return (s.item.t === 'plate') !== (h.t === 'plate') ? '담기' : '';
+    case 'board': if (h && h.t === 'pot') return ''; if (!h) return s.items.length ? '집기' : ''; return h.t === 'plate' ? (s.items.length === 1 ? '담기' : '') : '올리기';
+    case 'stove': if (h && h.t === 'pot') return s.pot.state === 'away' && potHome(h) === s ? '놓기' : ''; if (s.pot.state === 'away') return ''; if (!h && s.pot.state === 'burnt') return '냄비 들기'; if (h && h.t === 'plate') return (s.pot.state === 'done' || s.pot.state === 'burnt') ? '담기' : ''; if (h && h.t === 'ing') return '넣기'; return (!h && s.pot.state === 'idle' && s.pot.items.length) ? '빼기' : '';
+    case 'plates': return !h ? '접시' : (fakePlate(h) ? '담기' : '');
     case 'trash': return h ? '버리기' : '';
     case 'serve': return h && h.t === 'plate' ? '내기' : '';
   }
@@ -505,7 +516,10 @@ function update(dt){
     } else if (pot.state === 'done'){
       pot.doneT += dt;
       if (Math.random() < dt * 3) burst(x + .5, y + .05, 'steam', 1, '#ffffff');
-      if (pot.doneT > mode.burn){ pot.state = 'burnt'; sfx('bad'); addFloat('앗, 탔어요!', x + .2, y - .5, '#555'); }
+      const bk = isFinite(mode.burn) ? pot.doneT / mode.burn : 0;
+      if (bk > .55 && Math.random() < dt * (bk > .8 ? 6 : 2.5)) burst(x + .5, y + .05, 'smoke', 1, bk > .8 ? '#777777' : '#bdbdbd');
+      if (bk > .5){ pot.bubT = (pot.bubT || 0) - dt; if (pot.bubT <= 0){ sfx('boil'); pot.bubT = bk > .8 ? .22 : .5; } }
+      if (bk >= 1){ pot.state = 'burnt'; sfx('bad'); addFloat('앗, 탔어요!', x + .2, y - .5, '#555'); burnNote(); }
     } else if (pot.state === 'burnt'){
       if (Math.random() < dt * 5) burst(x + .5, y + .05, 'smoke', 1, '#555555');
     }
@@ -672,6 +686,7 @@ function drawPlate(c, p, x, y, s){
 }
 function drawItem(c, it, x, y, s){
   if (!it) return;
+  if (it.t === 'pot'){ c.save(); c.lineWidth = 2.5; c.strokeStyle = OUT; c.beginPath(); c.ellipse(x, y, s * .42, s * .3, 0, 0, 7); fs(c, '#5a5d63'); c.fillStyle = '#2b2522'; c.beginPath(); c.ellipse(x, y - s * .04, s * .32, s * .2, 0, 0, 7); c.fill(); c.restore(); return; }
   if (it.t === 'plate') drawPlate(c, it, x, y + s * .12, s);
   else icon(c, it.id, it.cut, x, y, s * .8);
 }
@@ -882,6 +897,7 @@ function hintBubble(cx, y, text){
 }
 function drawPot(s, cx, cy){
   const pot = s.pot, w = T * .66, h = T * .44, y = cy - T * .02;
+  if (pot.state === 'away') return;   // 탄 냄비를 들고 감
   ctx.save(); ctx.lineWidth = 2.5; ctx.strokeStyle = OUT;
   rr(ctx, cx - w / 2 - T * .09, y - h * .2, T * .12, T * .1, 3); fs(ctx, '#5a5d66');
   rr(ctx, cx + w / 2 - T * .03, y - h * .2, T * .12, T * .1, 3); fs(ctx, '#5a5d66');
@@ -898,8 +914,8 @@ function drawPot(s, cx, cy){
   ctx.restore();
   if (pot.state === 'cooking') bar(cx, cy - T * .58, pot.cook, '#f07a2e');
   if (pot.state === 'done'){
-    const warn = isFinite(mode.burn) && pot.doneT > mode.burn * .5;
-    if (warn) bar(cx, cy - T * .58, 1 - pot.doneT / mode.burn, Math.sin(now * 14) > 0 ? '#d9412b' : '#ffd43b');
+    const bk = isFinite(mode.burn) ? pot.doneT / mode.burn : 0;   // 반쯤 지나면 노랑 막대, 80% 넘으면 빨강 깜빡
+    if (bk > .5) bar(cx, cy - T * .58, 1 - bk, bk > .8 ? (Math.sin(now * 14) > 0 ? '#d9412b' : '#ffd43b') : '#ffd43b');
     else { ctx.save(); ctx.lineWidth = 2.5; ctx.strokeStyle = OUT; ctx.beginPath(); ctx.arc(cx, cy - T * .6, T * .14, 0, 7); fs(ctx, '#3fae49');
       ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(cx - T * .06, cy - T * .6); ctx.lineTo(cx - T * .01, cy - T * .55); ctx.lineTo(cx + T * .07, cy - T * .66); ctx.stroke(); ctx.restore(); }
   }
@@ -1055,7 +1071,7 @@ function sfx(type){
   if (net.mode === 'host') netEv(['s', type]);
   if (!AC || muted) return;
   const tones = {pick:[[620,.07,'triangle']], place:[[420,.07,'triangle']], trash:[[220,.12,'triangle']], chop:[[1100,.03,'square']],
-    serve:[[660,.12,'sine'],[880,.12,'sine'],[1175,.2,'sine']], bad:[[200,.14,'sawtooth']], done:[[880,.1,'sine'],[1320,.16,'sine']], ding:[[1500,.25,'sine']]};
+    serve:[[660,.12,'sine'],[880,.12,'sine'],[1175,.2,'sine']], bad:[[200,.14,'sawtooth']], done:[[880,.1,'sine'],[1320,.16,'sine']], ding:[[1500,.25,'sine']], boil:[[260,.05,'sine'],[340,.05,'sine']]};
   let t = AC.currentTime;
   for (const [f, d, w] of tones[type] || []){
     const o = AC.createOscillator(), g = AC.createGain();
@@ -1472,7 +1488,7 @@ function dropGuest(conn){
   delete net.conns[id];
   net.lobby = net.lobby.filter(g => g.id !== id);
   const p = players.find(q => q.id === id);
-  if (p){ players = players.filter(q => q !== p); if (running) addFloat(p.name + ' 나갔어요', p.x, p.y - 1, '#7a5236'); }
+  if (p){ players = players.filter(q => q !== p); { const hs = potHome(p.hold); if (hs && hs.pot.state === 'away') hs.pot.state = 'burnt'; } if (running) addFloat(p.name + ' 나갔어요', p.x, p.y - 1, '#7a5236'); }
   try { conn.close(); } catch (e){}
   if (net.mode === 'host') sendLobby();
 }
@@ -1720,8 +1736,8 @@ body.tutPractice .pad.tutLit{opacity:1;animation:tutPulse .7s ease-in-out infini
     const j = junk(x => isIng(x, 'eomuk') || isIng(x, 'tteok') || isIng(x, 'sauce') || emptyPlate(x)); if (j) return j;
     const pot = usedPot();
     if (pot.pot.state === 'cooking' || pot.pot.state === 'done'){
-      if (!emptyPlate(h)) return step('plate-tteok', '보글보글 끓는 동안 접시를 가져와요', '접시 가져오기', plateSrc());
-      return pot.pot.state === 'done' ? step('dish-tteok', '다 끓었어요! 접시에 떡볶이를 담아요', '접시에 담아요', pot) : step('wait-tteok', '보글보글… 다 끓을 때까지 기다려요', '조금만 기다려요', pot);
+      if (!emptyPlate(h)) return step('plate-tteok', '보글보글 끓는 동안 접시를 가져와요. 오래 두면 타요!', '접시 가져오기', plateSrc());
+      return pot.pot.state === 'done' ? step('dish-tteok', '다 끓었어요! 오래 두면 타요. 얼른 접시에 담아요', '접시에 담아요', pot) : step('wait-tteok', '보글보글… 다 끓을 때까지 기다려요', '조금만 기다려요', pot);
     }
     return potStep();
   }
@@ -1742,6 +1758,7 @@ body.tutPractice .pad.tutLit{opacity:1;animation:tutPulse .7s ease-in-out infini
     const h = H();
     if (plateWith(h, 'kimbap')) return step('serve-kimbap', '김밥을 손님에게 서빙해요!', '주문한 손님에게!', serveFor('kimbap'));
     const dishB = boardWith(i => i.t === 'dish' && i.id === 'kimbap');
+    if (h && h.t === 'dish' && h.id === 'kimbap') return step('rack-kimbap', '김밥을 든 채로 접시에 가서 담아요', '접시에 담아요', plateSrc());   // 음식을 들고 접시 앞에서 눌러도 담겨요(2026-11-25)
     if (dishB){
       if (emptyPlate(h)) return step('dish-kimbap', '접시에 김밥을 담아요', '접시에 담아요', dishB);
       const j = junk(() => false); if (j) return j;
@@ -1774,6 +1791,16 @@ body.tutPractice .pad.tutLit{opacity:1;animation:tutPulse .7s ease-in-out infini
     return step('get-' + id, (id === 'danmuji' ? '김밥에는 단무지·시금치·김·밥! ' : '') + eul(nm) + ' 집어요', eul(nm) + ' 집어요', box(id));
   }
 
+  // 쓰레기통 연습(2026-11-25 선생님: "쓰레기통이 뭔지 한 번 배워야 활용함"): 오래 끓여 탄 냄비를 들고 쓰레기통에 → 빈 냄비는 저절로 화구로
+  function trashStep(){
+    const h = H();
+    if (h && h.t === 'pot') return step('pot-trash', '냄비째 쓰레기통에 버려요. 빈 냄비는 저절로 돌아가요', '쓰레기통에 버려요', one('trash'));
+    const b = all('stove').find(s => s.pot.state === 'burnt');
+    if (!b) return null;
+    const j = junk(() => false); if (j) return j;
+    return step('pot-lift', '앗, 떡볶이를 너무 오래 둬서 탔어요! 냄비를 들어요', '탄 냄비 들기', b);
+  }
+
   // ---------- 진행 ----------
   let T = null;   // 지금 하는 연습 {phase:'demo'|'practice'|'end', ...}
   const now = () => performance.now() / 1000;
@@ -1792,6 +1819,8 @@ body.tutPractice .pad.tutLit{opacity:1;animation:tutPulse .7s ease-in-out infini
     {who: 'sarang', t: '김을 담아요', s: '김 담기', ing: 'gim', go: () => box('gim'), check: () => H() && H().c && H().c.some(i => i.id === 'gim')},
     {who: 'sarang', t: '참치도 담아요', s: '참치 담기', ing: 'tuna', go: () => box('tuna'), check: () => H() && H().c && H().c.some(i => i.id === 'tuna')},
     {who: 'sarang', t: '손님에게 서빙해요', s: '손님에게!', ing: '*', go: () => serveFor('jumeokbap'), check: () => !orderOf('jumeokbap')},
+    {who: 'sarang', t: '앗, 필요 없는 시금치를 집었어요', s: '잘못 집었어요', go: () => box('spinach'), check: () => isIng(H(), 'spinach')},
+    {who: 'sarang', t: '필요 없는 건 쓰레기통에 버려요!', s: '쓰레기통에!', go: () => one('trash'), check: () => !H()},
     {who: 'kong', t: '맛있대요! 이제 {name} 차례예요', s: '이제 해 봐요!', wait: 2.8}
   ];
   function standFor(s){   // 칸 옆 빈자리 중 요리사에게서 가장 가까운 곳(걸음 수로)
@@ -1840,7 +1869,9 @@ body.tutPractice .pad.tutLit{opacity:1;animation:tutPulse .7s ease-in-out infini
   function sections(){
     const L = [{key: 'tteok', label: '🍢 떡볶이', setup: () => api.addOrder('tteokbokki', true), step: tteokStep, done: () => !orderOf('tteokbokki') && !api.quizBusy()}];
     if (one('sink') && one('ret')) L.push({key: 'wash', label: '🧽 설거지', setup: () => api.hurryPlates(), step: washStep, done: () => !washStep() && !api.platesComing()});   // 2D판은 접시가 끝없이 있어 설거지가 없어요
+    const trash = {key: 'trash', label: '🗑️ 쓰레기통', setup: () => api.burnPot(), step: trashStep, done: () => !trashStep()};
     if (api.grade() >= 2) L.push({key: 'kimbap', label: '🍙 김밥', setup: () => api.addOrder('kimbap', false), step: kimbapStep, done: () => !orderOf('kimbap') && !api.quizBusy()});
+    if (api.burnPot) L.push(trash);
     return L;
   }
   function startPractice(){
@@ -2003,12 +2034,15 @@ tut = createTutorial({
     if (i === 1 && !h) player.hold = {t: 'plate', c: []};
     else if (i >= 2 && i <= 4 && h && h.t === 'plate') h.c.push({t: 'ing', id: ['rice', 'gim', 'tuna'][i - 2], cut: false});
     else if (i === 5){ const o = orders.find(q => q.rid === 'jumeokbap' && !q.served); if (o){ serveOrder(o, player); player.hold = null; } }
+    else if (i === 6) player.hold = {t: 'ing', id: 'spinach', cut: false};
+    else if (i === 7) player.hold = null;
   },
+  burnPot(){ const s = dynList.find(q => q.type === 'stove'); if (s){ resetPot(s.pot); s.pot.state = 'burnt'; } },
   toScreen: (x, y, h) => ({x: ox + x * T, y: oy + y * T - h * T * .45}), unit: () => T, cardRect: () => hudCard0, cardSlots: () => hudSlots,
   joyBox: () => ({x1: Math.min(70, W * .07) * 2 + 30}),   // 조이스틱 오른쪽 끝: 말풍선이 가리지 않게
   focus(){}, platesComing: () => false, hurryPlates(){},
   quizBusy(){ if (quizPend > 0) return true; try { return !!(window.PLAZA_QUIZ && window.PLAZA_QUIZ.asking && window.PLAZA_QUIZ.asking()); } catch (e){ return false; } },
-  tidy(){ for (const s of dynList){ if (s.type === 'counter') s.item = null; else if (s.type === 'board'){ s.items = []; s.progress = 0; } else if (s.type === 'stove') resetPot(s.pot); } },   // 다음 연습 전에 주방 정리
+  tidy(){ if (player.hold && player.hold.t === 'pot') player.hold = null; for (const s of dynList){ if (s.type === 'counter') s.item = null; else if (s.type === 'board'){ s.items = []; s.progress = 0; } else if (s.type === 'stove') resetPot(s.pot); } },   // 다음 연습 전에 주방 정리
   cheer(){ if (net.mode !== 'host') sfx('serve'); burst(player.x, player.y, 'star', 12, '#ffd43b'); },
   ding(){ if (net.mode !== 'host') sfx('pick'); },
   pulseB(on){ btnB.classList.toggle('tutPulse', !!on); },
