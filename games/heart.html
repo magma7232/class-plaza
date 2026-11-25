@@ -1908,6 +1908,19 @@ const Game = (() => {
       else { FX.flash(it.x, it.y - 20, 'gold', 140, 0.6, true); FX.confetti(it.x, it.y - 30, 30, 300); Snd.sfx('chest'); G.queue.push({ k: 'chest', p }); }
     }
   }
+  window.PLAZA_QUIZ_REWARD = { icon: '🆙', big: '바로 LEVEL UP! 새 능력 + 체력 가득', small: '체력 가득 + 경험치 절반' };
+  function quizPow(p, big) {   // 방장(혼자) 기기에서만: 친구 기기의 퀴즈는 Net으로 방장에게 와서 그 친구 몫으로 줌(검토: 친구 기기에서 바꾸면 방장 소식에 덮였음)
+    if (!p || p.down || !G.on) return;
+    healP(p, 999, true); FX.hearts(p.x, p.y - 40, 6, 'red');
+    gainXp(p, big ? Math.max(1, p.need - p.xp) : Math.ceil(p.need * 0.5));
+    if (p === G.me) emit('toast', big ? '퀴즈 정답! 🆙 바로 LEVEL UP + 체력 가득!' : '퀴즈를 끝까지 풀었어요! 체력 가득 + 경험치');
+  }
+  addEventListener('plaza-quiz', (e) => {
+    const d = (e && e.detail) || {};
+    if (!G.on || !(d.correct || d.second)) return;
+    if (G.guest) { try { Net.send({ t: 'quiz', big: !!d.correct }); } catch (er) { /* */ } return; }
+    quizPow(G.me, !!d.correct);
+  });
   function gainXp(p, v) {
     if (G.cfg.show) return; p.xp += v;
     while (p.xp >= p.need) { p.xp -= p.need; p.lv++; p.need = DATA.need(p.lv); G.queue.push({ k: 'lvup', p }); FX.pillar(p.x, p.y); FX.ring(p.x, p.y - 10, 'gold', 20, 120, 0.7); FX.stars(p.x, p.y - 40, 'gold', 8, 160); FX.pop(p.x, p.y - 110, 'LEVEL UP!', '#ffd34e', '#8a4a00', 26, 1.1); sfxP(p, 'lvl'); if (p.lv > (G.topLv || 1)) { G.topLv = p.lv; for (const b of G.players) if (b.bot) G.botGain.push({ p: b, at: G.t + rand(0.6, 2.6) }); } }
@@ -2353,7 +2366,7 @@ const Game = (() => {
     G.cam.x = ISL.cx + Math.sin(G.t * 0.07) * 120; G.cam.y = ISL.cy + 40 + Math.cos(G.t * 0.05) * 30;
   }
   const resume = () => { G.modal = null; };
-  return { G, start, stop, update, draw, options, apply, cqApply, summon, initWorld, maxHp, retry, healP, spd, lvOf, title, titleUpdate, resume, netSnap, netApply, guestUpdate };
+  return { G, start, stop, update, draw, options, apply, cqApply, summon, initWorld, maxHp, retry, healP, spd, lvOf, title, titleUpdate, resume, netSnap, netApply, guestUpdate, quizPow };
 })();
 
 /* ---- ui.js ---- */
@@ -2666,6 +2679,7 @@ const Net = (() => {
     else if (d.t === 'ap') { if (p) applyFrom(p, d.o); }
     else if (d.t === 'heal') { if (p) Game.healP(p, Math.max(0, Math.min(30, +d.v || 0)), true); }
     else if (d.t === 'cqa') { if (p) UI.cqRemote(p.idx, !!d.ok); }
+    else if (d.t === 'quiz') { if (p) Game.quizPow(p, !!d.big); }
     else if (d.t === 'bye') dropGuest(c);
   }
   function cqStart(d) { if (S.mode === 'host') hsend(Object.assign({ t: 'cq' }, d)); }

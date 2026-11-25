@@ -15,6 +15,12 @@
  * - 끄기: 주소 ?quiz=0, 또는 게임의 <script src="back.js" data-quiz="off">.
  *   말풍선 자리: data-quiz-pos="right-middle" 처럼(아래 POS 이름), 지금 게임들의 자리는 아래 GAME_POS.
  *   게임이 알려 줄 수 있는 것: window.PLAZA_QUIZ_NOPAUSE(친구 판이라 멈추면 안 됨) · window.PLAZA_QUIZ_BUSY(지금 퀴즈를 띄우면 안 됨), 값 또는 함수.
+ * ★ 2026-11-24 선생님: "문제를 풀면 확실한 어드밴티지가 있어서 학생들이 잘 풀고 싶어 하게" → **맞히면 그 게임에서 강한 아이템**.
+ *   게임이 window.PLAZA_QUIZ_REWARD = { icon: '⚡', big: '처음에 맞히면 받는 힘', small: '힌트 보고 맞히면 받는 힘' } (또는 이 모양을 돌려주는 함수)를 알려 주면
+ *   말풍선에 그림(⚡)이 붙고, 카드 위에 "맞히면 → …"이 보이고, 맞힌 뒤에 받은 힘을 크게 보여 줘요.
+ *   카드를 닫을 때 'plaza-quiz' 신호 detail.reward = 'big'(처음에 맞힘) | 'small'(힌트 보고 맞힘) | null(못 맞힘·그냥 닫음) → 게임이 그 힘을 줘요.
+ *   (correct·second는 예전 그대로라 예전 게임 코드도 그대로 돌아가요. small 글이 없으면 힌트 보고 맞혀도 big 힘의 절반쯤을 주는 게 게임의 몫)
+ *   말풍선은 더 자주(열심히 1분 30초~2분 10초), 하루 12문제까지.
  * 저장(이 기기): plaza.quizLog 오늘 푼 기록 · plaza.quizSeen 최근에 낸 문제 · plaza.quizGrade 학년
  * 시험 손잡이: window.PLAZA_QUIZ (ff(초)·show()·open()·answer(i)·next()·close()·state()·reset()), 주소 ?quizfast=1 은 5초 만에 말풍선
  */
@@ -26,9 +32,9 @@
   var Q = new URLSearchParams(location.search);
 
   var DEFAULT_GRADE = 4;         // 우리 반 4학년. 다른 학년이면 이 숫자만 바꿔요(1~6)
-  var ACTIVE_MIN = 120, ACTIVE_MAX = 180;   // 이만큼(초) 열심히 하면 말풍선
+  var ACTIVE_MIN = 90, ACTIVE_MAX = 130;    // 이만큼(초) 열심히 하면 말풍선(2026-11-24: 맞히면 강한 아이템이라 조금 더 자주)
   var BUBBLE_SEC = 90;           // 말풍선이 떠 있는 시간(초)
-  var DAY_MAX = 6;               // 하루에 푸는 퀴즈 수
+  var DAY_MAX = 12;              // 하루에 푸는 퀴즈 수
   var GIFT_EVERY = 2;            // 처음에 맞힌 문제 이만큼마다 선물 상자
   var GIFT_MAX = 3;              // 퀴즈 선물은 하루 3개까지(gift.js도 한 게임 하루 3개)
   var CLOSE_SEC = 15;            // 결과가 나온 뒤 이만큼 지나면 저절로 닫힘
@@ -164,6 +170,12 @@
     });
   }
   var pausedBy = '';
+  // 게임이 알려 준 '맞히면 받는 힘'(없으면 null)
+  function reward() {
+    var r = window.PLAZA_QUIZ_REWARD;
+    try { if (typeof r === 'function') r = r() } catch (e) { r = null }
+    return r && (r.big || r.small) ? { icon: String(r.icon || '⚡').slice(0, 4), big: String(r.big || r.small || ''), small: String(r.small || r.big || '') } : null;
+  }
   function fire(name, detail) { try { window.dispatchEvent(detail === undefined ? new Event(name) : new CustomEvent(name, { detail: detail })) } catch (e) { } }
   function pause() {
     fire('blur');   // back.js처럼: 누르고 있던 방향키·조이스틱을 놓아요
@@ -237,7 +249,7 @@
     '#pqOv *{box-sizing:border-box}' +
     '#pqCard{position:relative;width:520px;max-width:100%;max-height:100%;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain;background:#fffdf6;border-radius:24px;' +
     'padding:12px 16px 16px;color:#2b3a4f;box-shadow:0 14px 40px rgba(0,0,0,.35),inset 0 0 0 4px #e6dcff;animation:pqIn .35s cubic-bezier(.2,1.3,.4,1)}' +
-    '.pq-top{display:flex;align-items:center;gap:6px;font-size:15px;color:#6a55a8;line-height:1}' +
+    '.pq-top{display:flex;flex-wrap:wrap;row-gap:4px;align-items:center;gap:6px;font-size:15px;color:#6a55a8;line-height:1}' +   // 좁은 휴대폰: 보상 칩이 붙어도 ✕가 카드 밖으로 밀려나지 않게 줄바꿈(검토)
     '.pq-tag{background:#efe8ff;border-radius:999px;padding:6px 10px;white-space:nowrap;font-weight:700}.pq-tag.s{background:#ffefd9;color:#b0560f}' +
     '.pq-x{margin-left:auto;border:0;background:#eef1f6;border-radius:999px;padding:8px 12px;font:inherit;font-size:15px;color:#5a6a80;cursor:pointer;touch-action:manipulation;white-space:nowrap}' +
     '.pq-q{font-size:22px;font-weight:800;line-height:1.4;margin:10px 2px 12px;word-break:keep-all;overflow-wrap:break-word}' +
@@ -250,6 +262,9 @@
     '.pq-c.no{background:#f3f4f7;border-color:#d4d8e0;box-shadow:none;color:#a0a8b4;animation:pqShake .4s}.pq-c.no i{background:#d4d8e0;color:#fff}' +
     '.pq-c[disabled]{cursor:default}' +
     '.pq-msg{margin-top:10px;font-size:17px;font-weight:700;line-height:1.45;word-break:keep-all}.pq-msg:empty{display:none}' +
+    '#pqBub em{font-style:normal;font-size:18px;margin-left:1px;animation:pqGlow 1.2s ease-in-out infinite alternate}@keyframes pqGlow{from{transform:scale(1)}to{transform:scale(1.25)}}' +
+    '.pq-rw{margin:2px 0 8px;padding:7px 12px;border-radius:14px;background:linear-gradient(90deg,#fff1c2,#ffe3f1);color:#8a4b00;font-size:16px;font-weight:900;text-align:center}' +
+    '.pq-got{margin:4px auto 2px;padding:8px 14px;border-radius:14px;background:#fff1c2;color:#8a4b00;font-size:18px;font-weight:900;text-align:center;animation:pqPop .5s ease-out}@keyframes pqPop{0%{transform:scale(.6);opacity:0}70%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}' +
     '.pq-hint{background:#fff4cc;border-radius:14px;padding:8px 12px;color:#6e5200}' +
     '.pq-big{font-size:30px;font-weight:900;color:#e8590c;text-align:center;line-height:1.2;animation:pqPop .45s ease-out}' +
     '.pq-sub{text-align:center;color:#5a6a80;font-size:16px;margin-top:2px}' +
@@ -264,7 +279,10 @@
     // 낮은 화면(휴대폰 가로, 1024×600 패드의 주소창 등): 글자와 칸을 조금 줄여서 한 화면에
     '@media (max-height:460px){#pqCard{padding:8px 12px 10px;border-radius:18px}.pq-q{font-size:19px;margin:6px 2px 8px}.pq-c{min-height:44px;font-size:17px}' +
     '.pq-msg{font-size:16px;margin-top:6px}.pq-big{font-size:24px}.pq-go{padding:9px 24px;font-size:18px;margin-top:8px}.pq-top{font-size:13px}.pq-x{padding:6px 10px}}' +
-    '@media (max-width:360px){.pq-q{font-size:19px}.pq-c{font-size:17px}}';
+    '@media (max-width:360px){.pq-q{font-size:19px}.pq-c{font-size:17px}}' +
+    '.pq-tag.rw{background:#fff1c2;color:#8a4b00}@media (min-height:461px) and (min-width:381px){.pq-tag.rw{display:none}}' +
+    '@media (max-height:460px),(max-width:380px){.pq-rw{display:none}.pq-got{font-size:15px;padding:3px 10px;margin:2px auto 0}}' +
+    '@media (max-height:400px){.pq-got+.pq-sub{display:none}}';   // 아주 낮은 화면: 받은 힘을 보여 주면 아래 한 줄은 뺌(한 화면에 들어가게)
   function style() {
     if (document.getElementById('pqCss')) return;
     var s = document.createElement('style'); s.id = 'pqCss'; s.textContent = CSS;
@@ -337,7 +355,8 @@
     style();
     bub = document.createElement('button');
     bub.id = 'pqBub'; bub.type = 'button';
-    bub.innerHTML = '<b>?</b>퀴즈';
+    var rw = reward();
+    bub.innerHTML = '<b>?</b>퀴즈' + (rw ? '<em>' + rw.icon + '</em>' : '');
     bub.setAttribute('aria-label', '퀴즈 풀기');
     guard(bub);
     bub.addEventListener('click', function (e) { e.preventDefault(); if (!busy()) openQuiz() });
@@ -408,6 +427,8 @@
     x.addEventListener('click', function () { closeQuiz() });
     top.appendChild(x);
     card.appendChild(top);
+    var rw = reward(); cur.rw = rw;
+    if (rw) { top.insertBefore(el('span', 'pq-tag rw', '맞히면 ' + rw.icon), x); card.appendChild(el('div', 'pq-rw', '맞히면 ' + rw.icon + ' ' + rw.big)); }   // 좁거나 낮은 화면은 위 칸의 작은 표시만(카드가 한 화면에 들어가게)
     card.appendChild(el('div', 'pq-q', it.q));
     var cs = el('div', 'pq-cs');
     cur.long = it.c.some(function (c) { return c.length > 8 });
@@ -473,6 +494,7 @@
       saveLog(l);
       msg.innerHTML = '';
       msg.appendChild(el('div', 'pq-big', cur.correct ? '⭕ 정답!' : '👍 맞았어요!'));
+      if (cur.rw) msg.appendChild(el('div', 'pq-got', cur.rw.icon + ' ' + (cur.correct ? cur.rw.big : cur.rw.small)));
       msg.appendChild(el('div', 'pq-sub', cur.correct ? (giftLine || stars(l)) : '힌트를 잘 보고 풀었어요.'));
       finish();
     } else {
@@ -520,7 +542,7 @@
     resume();
     active = 0; target = rnd(); phase = 'wait';
     if (c && c.done) {
-      fire('plaza-quiz', { correct: c.correct, second: c.second, grade: c.g, subject: c.s, game: GAME });
+      fire('plaza-quiz', { correct: c.correct, second: c.second, grade: c.g, subject: c.s, game: GAME, reward: c.correct ? 'big' : c.second ? 'small' : null });
     }
   }
   function sparkle(btn, n) {

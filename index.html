@@ -6253,10 +6253,29 @@ function lamp(x,z){W(new ot(.17,.2,.22,8),5333103,f(x,.11,z)),W(new ot(.06,.07,2
 function sign(x,z,text,rot=0){W(new pe(.12,1.25,.12),9067066,f(x,.62,z)),W(new pe(1.7,.56,.08),12157778,f(x,1.2,z,rot));
 let tx=ge(256,80,(g2,w2,h2)=>{g2.fillStyle="#f7e6c4",g2.fillRect(0,0,w2,h2),g2.fillStyle="#5b3a1e",g2.textAlign="center",g2.textBaseline="middle",g2.font=`900 ${text.length>7?30:36}px ${je}`,g2.fillText(text,w2/2,h2/2+2)});
 let m=new vt(new en(1.58,.46),Z(new Rt({map:tx}),"sign"));m.position.set(x+Math.sin(rot)*.05,1.2,z+Math.cos(rot)*.05),m.rotation.y=rot,m.frustumCulled=!1,w.add(m),T.push(m),cir(x,z,.15)}
-{let cx=0,cz=-46,M=f(cx,0,cz),st=16117730,st2=14012616,rf=[16739179,5090295,11638780,16753434];
-let wall=(x0,z0,x1,z1)=>{let len=Math.hypot(x1-x0,z1-z0),a=Math.atan2(x1-x0,z1-z0);LW(M,new pe(.8,2.7,len),st,f((x0+x1)/2,1.35,(z0+z1)/2,a),{ao:.2,aoH:1.6});let n=Math.max(1,Math.floor(len/.95));for(let k=0;k<n;k++){let u=(k+.5)/n;LW(M,new pe(.82,.45,.5),st2,f(o(x0,x1,u),2.92,o(z0,z1,u),a))}box(cx+Math.min(x0,x1)-.45,cx+Math.max(x0,x1)+.45,cz+Math.min(z0,z1)-.45,cz+Math.max(z0,z1)+.45)};
+{let cx=0,cz=-46,M=f(cx,0,cz);
+/* 광장 꿈빛 성 — 고퀄리티 판 (2026-11-24, 캐릭터3D/pipeline/plaza_castle.js)
+ * 선생님: "성이 너무 도형으로 만들어져서 아쉽다, 동화 같은 분위기에 어울리면서 고퀄리티로"
+ * plaza_inject.py가 원본의 꿈빛 성 짓는 곳(성 표지판 sign 앞까지)을 이 파일로 바꿔 끼운다(끝의 } 하나는 원본 표지판 줄이 닫음).
+ * 무료판: 코드로 그린 모양(돈 0, 인터넷 없이). 돌 무늬·띠·모서리 돌, 아치 창문(따뜻한 불빛), 비늘 기와 지붕, 깃발·깃발 줄, 돌 아치 성문·내리닫이 쇠창살,
+ *   장미창·금빛 하트, 나무 문(쇠 띠·하트 문고리), 담쟁이·꽃 상자·꽃밭, 마당 돌길
+ * 주소 끝 ?castle=old 이면 원래 성(비교용), ?castle=tripo 이면 탑 9개를 트리포 3D 모양(castle/tripo.js, castle_tripo.mjs가 만듦)으로 — 2026-11-25 비교용. 부딪힘(box·cir)·마당 나무(Ze)·발 그림자(ft)는 원래와 똑같다
+ * 본관 문 자리(x 0, 앞면 z 0.38 = 광장 -45.62, 너비 1.2 · 높이 2.58)는 그대로 → 성탈출탐정/plaza_door.js 소용돌이가 문에 딱 맞음
+ * 원본 묶음 이름: LW(M,모양,색,f(…),옵션) 고정 물체 · f(x,y,z,ry,sx,sy,sz,rx,rz) · pe 상자 · ot 원기둥 · Ii 원뿔 · tt 공 · ls 고리 · as 밀어내기 · $n 모양 */
+const P=(g,c,x,y,z,ry,sx,sy,sz,rx,rz,op)=>LW(M,g,c,f(x,y,z,ry||0,sx==null?1:sx,sy==null?1:sy,sz==null?1:sz,rx||0,rz||0),op);
+// 부딪힘(원래와 같음)
+const colW=(x0,z0,x1,z1)=>box(cx+Math.min(x0,x1)-.45,cx+Math.max(x0,x1)+.45,cz+Math.min(z0,z1)-.45,cz+Math.max(z0,z1)+.45);
+colW(-9,5,-1.8,5),colW(1.8,5,9,5),colW(-9,-5,9,-5),colW(-9,-5,-9,5),colW(9,-5,9,5);
+for(const[x,z,r]of[[-9,-5,1.35],[9,-5,1.35],[-9,5,1.35],[9,5,1.35],[-2.4,5,.95],[2.4,5,.95],[-3.6,-1.8,1.05],[3.6,-1.8,1.05],[0,-2.6,1.3]])cir(cx+x,cz+z,r*1.1+.1);
+box(cx-3.7,cx+3.7,cz-4.1,cz+.5);
+ft(cx,cz-1.8,5.5,.3);
+for(let x of[-7,-4.5,4.5,7])Ze(cx+x,cz+3.4);
+if(/[?&]castle=old/.test(location.search)){
+// ---------- 원래 성(비교용, 원본 그대로에서 부딪힘만 뺌) ----------
+let st=16117730,st2=14012616,rf=[16739179,5090295,11638780,16753434];
+let wall=(x0,z0,x1,z1)=>{let len=Math.hypot(x1-x0,z1-z0),a=Math.atan2(x1-x0,z1-z0);LW(M,new pe(.8,2.7,len),st,f((x0+x1)/2,1.35,(z0+z1)/2,a),{ao:.2,aoH:1.6});let n=Math.max(1,Math.floor(len/.95));for(let k=0;k<n;k++){let u=(k+.5)/n;LW(M,new pe(.82,.45,.5),st2,f(o(x0,x1,u),2.92,o(z0,z1,u),a))}};
 wall(-9,5,-1.8,5),wall(1.8,5,9,5),wall(-9,-5,9,-5),wall(-9,-5,-9,5),wall(9,-5,9,5);
-let tower=(x,z,r,h,c)=>{LW(M,new ot(r,r*1.08,h,14),st,f(x,h/2,z),{ao:.18,aoH:2}),LW(M,new ot(r*1.12,r*1.12,.35,14),st2,f(x,h+.17,z)),LW(M,new Ii(r*1.25,r*1.9,14),c,f(x,h+.35+r*.95,z)),LW(M,new pe(.05,.9,.05),9067066,f(x,h+.35+r*1.9+.4,z)),LW(M,new pe(.5,.3,.04),16766011,f(x+.26,h+.35+r*1.9+.68,z));for(let k=0;k<3;k++){let a=k*2.1+.5;LW(M,new pe(.28,.5,.06),5007541,f(x+Math.sin(a)*r*1.02,h*.62,z+Math.cos(a)*r*1.02,a))}cir(cx+x,cz+z,r*1.1+.1)};
+let tower=(x,z,r,h,c)=>{LW(M,new ot(r,r*1.08,h,14),st,f(x,h/2,z),{ao:.18,aoH:2}),LW(M,new ot(r*1.12,r*1.12,.35,14),st2,f(x,h+.17,z)),LW(M,new Ii(r*1.25,r*1.9,14),c,f(x,h+.35+r*.95,z)),LW(M,new pe(.05,.9,.05),9067066,f(x,h+.35+r*1.9+.4,z)),LW(M,new pe(.5,.3,.04),16766011,f(x+.26,h+.35+r*1.9+.68,z));for(let k=0;k<3;k++){let a=k*2.1+.5;LW(M,new pe(.28,.5,.06),5007541,f(x+Math.sin(a)*r*1.02,h*.62,z+Math.cos(a)*r*1.02,a))}};
 tower(-9,-5,1.35,4.6,rf[0]),tower(9,-5,1.35,4.6,rf[1]),tower(-9,5,1.35,4.6,rf[1]),tower(9,5,1.35,4.6,rf[0]),tower(-2.4,5,.95,3.8,rf[3]),tower(2.4,5,.95,3.8,rf[3]);
 LW(M,new ls(1.75,.32,8,20,Math.PI),st2,f(0,2.15,5),{vert:!0});
 for(let sx of[-1,1])LW(M,new pe(1.1,2.1,.12),10775621,f(sx*1.25,1.05,5.55,sx*.9));
@@ -6266,9 +6285,143 @@ for(let sx of[-1,1])tower(sx*3.6,-1.8,1.05,6.2,rf[2]);
 tower(0,-2.6,1.3,7.4,rf[0]);
 LW(M,new pe(1.3,2,.1),10775621,f(0,1,.33)),LW(M,new tt(.65,12,6,0,Math.PI*2,0,Math.PI/2),10775621,f(0,2,.33,0,1,1,.15));
 for(let sx of[-1,1])for(let k of[0,1])LW(M,new pe(.55,.75,.06),5007541,f(sx*(1.6+k*1.3),2.8,.31));
-box(cx-3.7,cx+3.7,cz-4.1,cz+.5);
-ft(cx,cz-1.8,5.5,.3);
-for(let x of[-7,-4.5,4.5,7])Ze(cx+x,cz+3.4);
+}else{
+// ---------- 고퀄리티 성 ----------
+let sd=20261124;const rr=()=>((sd=sd*16807%2147483647)/2147483647);
+const sh=(c,k)=>(Math.min(255,((c>>16)&255)*k)|0)<<16|(Math.min(255,((c>>8)&255)*k)|0)<<8|(Math.min(255,(c&255)*k)|0);
+const ST=16183268,ST2=14998982,ST3=13944494,ST4=13219996,WD=10775621,WD2=8015408,IR=6051174,GD=16762172,GL=16770976,LF=6009690,LF2=8573806,PK=16744360,BL=5941493,LI=11111413,PE=16754253,RD=16743050,WH=16777215,SLIT=7629710,STM=15327957;
+const FLW=[16744360,16777215,16765503,13020671,16750950];
+// 모양 만들기(밀어내기 모양은 쓸 때마다 새로 — LW가 모양에 자리를 바로 굽기 때문)
+const arch=(w,h)=>{const s=new $n(),r=w/2;s.moveTo(-r,0);s.lineTo(r,0);s.lineTo(r,h-r);s.absarc(0,h-r,r,0,Math.PI,!1);s.lineTo(-r,0);return s};
+const archG=(w,h,d)=>new as(arch(w,h),{depth:d,bevelEnabled:!1,curveSegments:5});
+const heartG=(k,d)=>{const s=new $n();s.moveTo(0,-k*.9);s.bezierCurveTo(k*1.2,-k*.1,k*.9,k*.95,0,k*.45);s.bezierCurveTo(-k*.9,k*.95,-k*1.2,-k*.1,0,-k*.9);return new as(s,{depth:d,bevelEnabled:!1,curveSegments:6})};
+const penG=(w,h,d)=>{const s=new $n();s.moveTo(0,0);s.lineTo(w,-h/2);s.lineTo(0,-h);s.lineTo(0,0);return new as(s,{depth:d,bevelEnabled:!1})};
+const flagG=(w,h,d)=>{const s=new $n();s.moveTo(-w/2,0);s.lineTo(w/2,0);s.lineTo(0,-h);s.lineTo(-w/2,0);return new as(s,{depth:d,bevelEnabled:!1})};
+const out=(a,d)=>[Math.sin(a)*d,Math.cos(a)*d];
+// 아치 창문: 돌 테 + 불빛 유리 + 십자 창살 + 창턱 (a: 바깥을 보는 방향)
+const win=(x,y,z,a,w,h)=>{const[ox,oz]=out(a,1);
+ P(archG(w+.18,h+.14,.07),ST3,x,y-.07,z,a);
+ P(archG(w,h,.03),GL,x+ox*.05,y,z+oz*.05,a,1,1,1,0,0,{glow:!0});
+ P(new pe(.035,h*.9,.03),ST3,x+ox*.085,y+h*.45,z+oz*.085,a);
+ P(new pe(w,.035,.03),ST3,x+ox*.085,y+h*.42,z+oz*.085,a);
+ P(new pe(w+.28,.07,.17),ST2,x+ox*.07,y-.075,z+oz*.07,a)};
+// 담쟁이 한 덩이 + 작은 꽃
+const ivy=(x,z,a,y0,y1,spread)=>{const[ox,oz]=out(a,1),tx=Math.cos(a),tz=-Math.sin(a);
+ for(let k=0;k<7;k++){const t=(rr()-.5)*spread,y=y0+rr()*(y1-y0)*(1-Math.abs(t)/spread),s=.13+rr()*.12;P(new tt(s,5,4),rr()<.5?LF:LF2,x+tx*t+ox*.02,y,z+tz*t+oz*.02,a,1,1,.55)}
+ for(let k=0;k<3;k++){const t=(rr()-.5)*spread*.8;P(new tt(.05,4,3),FLW[k%FLW.length],x+tx*t+ox*.1,y0+.2+rr()*(y1-y0)*.5,z+tz*t+oz*.1)}};
+// 둥근 탑: 받침 · 몸통 · 돌 띠 · 돌 무늬 · 창문 · 받침돌 줄 · 성가퀴 · 비늘 기와 지붕 · 금빛 꼭대기 · 깃발
+const TRIPO=/[?&]castle=tripo/.test(location.search),TP=[];   // 트리포판: 탑은 그리지 않고 자리만 모아 두었다가 castle/tripo.js가 오면 그 모양을 세움
+const tower=(x,z,r,h,rc,o)=>{o=o||{};
+ if(TRIPO&&o.tp){TP.push([o.tp,x,z,r,o.th,o.ry||0]);return}
+ P(new ot(r*1.15,r*1.24,.55,14),ST4,x,.27,z,0,1,1,1,0,0,{ao:.25,aoH:.6});
+ P(new ot(r,r*1.06,h,14),ST,x,h/2,z,0,1,1,1,0,0,{ao:.18,aoH:2});
+ for(const t of[.34,.68])P(new ot(r*1.03,r*1.04,.1,14,1,!0),ST2,x,h*t,z);
+ const fa=o.face==null?0:o.face;
+ for(let k=0;k<Math.round(r*4);k++){const a=fa+(rr()-.5)*3.4,y=.75+rr()*(h-1.5),[ox,oz]=out(a,r*1.025);P(new pe(.3+rr()*.22,.15,.03),rr()<.6?ST2:STM,x+ox,y,z+oz,a)}
+ for(const[a,y,s]of o.win||[[fa,h*.56,1]]){const[ox,oz]=out(a,r*.985);win(x+ox,y,z+oz,a,.34*s,.62*s)}
+ if(o.banner){const[ox,oz]=out(fa,r*1.01);P(new pe(.62,1.25,.04),o.banner,x+ox,h*.5,z+oz,fa);P(new pe(.68,.08,.07),GD,x+ox,h*.5+.64,z+oz,fa);P(heartG(.2,.03),GD,x+ox*1.04,h*.52,z+oz*1.04,fa);
+  for(const s of[-1,1])P(new pe(.34,.34,.04),o.banner,x+ox+Math.cos(fa)*s*.155,h*.5-.68,z+oz-Math.sin(fa)*s*.155,fa,1,1,1,0,s*.78)}
+ const n=Math.max(10,Math.round(r*10));
+ const nc=Math.max(8,Math.round(r*7));for(let k=0;k<nc;k++){const a=k/nc*Math.PI*2,[ox,oz]=out(a,r*1.07);P(new pe(.15,.24,.2),ST3,x+ox,h-.12,z+oz,a)}
+ P(new ot(r*1.16,r*1.12,.5,14),ST,x,h+.25,z);
+ P(new ot(r*1.19,r*1.19,.06,14),ST3,x,h+.5,z);
+ for(let k=0;k<n;k+=2){const a=(k+.5)/n*Math.PI*2,[ox,oz]=out(a,r*1.12);P(new pe(.3*r,.32,.2),ST,x+ox,h+.68,z+oz,a)}
+ const H=r*2.35,R0=r*1.34,N=4,b0=h+.66;
+ P(new ot(R0*1.02,R0*1.06,.14,14),sh(rc,.78),x,b0,z);
+ for(let i=0;i<N;i++){const t0=i/N,t1=(i+1)/N,ra=R0*Math.pow(1-t0,1.15),rb=R0*Math.pow(1-t1,1.15);P(new ot(Math.max(.03,rb),ra*1.05,H/N,14),i%2?sh(rc,.86):rc,x,b0+H*(t0+t1)/2,z)}
+ const top=b0+H;
+ P(new tt(.13,8,6),GD,x,top+.05,z);
+ if(o.heart){P(new ot(.025,.025,.5,5),GD,x,top+.35,z);P(heartG(.36,.12),GD,x,top+.85,z-.06)}
+ else{P(new Ii(.05,.55,8),GD,x,top+.4,z);P(new ot(.018,.018,.75,5),IR,x,top+.55,z);P(penG(.62,.34,.02),o.flag||PK,x+.02,top+.9,z-.01)}};
+// 성벽 한 칸: 받침 · 몸통 · 띠 · 성가퀴 · 바깥 돌 무늬 · 활 구멍 · 담쟁이
+const wall=(x0,z0,x1,z1,o)=>{o=o||{};const len=Math.hypot(x1-x0,z1-z0),a=Math.atan2(x1-x0,z1-z0),mx=(x0+x1)/2,mz=(z0+z1)/2;
+ let na=a+Math.PI/2;if(Math.sin(na)*mx+Math.cos(na)*mz<0)na+=Math.PI;const[nx,nz]=out(na,1);
+ P(new pe(1,.5,len),ST4,mx,.25,mz,a,1,1,1,0,0,{ao:.3,aoH:.5});
+ P(new pe(.8,2.5,len),ST,mx,1.5,mz,a,1,1,1,0,0,{ao:.18,aoH:1.6});
+ P(new pe(.9,.14,len+.06),ST3,mx,2.7,mz,a);
+ const n=Math.max(2,Math.round(len/.62)),seg=len/n;
+ for(let k=0;k<n;k++){const u=(k+.5)/n,x=x0+(x1-x0)*u,z=z0+(z1-z0)*u;
+  if(k%2===0){P(new pe(.84,.48,seg*.92),ST,x,3.0,z,a);P(new pe(.9,.06,seg*.98),ST3,x,3.27,z,a)}else P(new pe(.84,.16,seg),ST,x,2.84,z,a)}
+ for(let k=0;k<Math.round(len*1.1);k++){const u=.04+rr()*.92,y=.75+rr()*1.7;P(new pe(.04,.17,.3+rr()*.3),rr()<.6?ST2:STM,x0+(x1-x0)*u+nx*.41,y,z0+(z1-z0)*u+nz*.41,a)}
+ for(let k=1;k*2.6<len;k++){const u=k*2.6/len,x=x0+(x1-x0)*u+nx*.4,z=z0+(z1-z0)*u+nz*.4;P(archG(.13,.5,.02),SLIT,x,1.42,z,na)}
+ for(const u of o.ivy||[])ivy(x0+(x1-x0)*u+nx*.4,z0+(z1-z0)*u+nz*.4,na,.35,2.2,1.3)};
+// 꽃 상자 / 꽃밭
+const flowerBox=(x,y,z,w)=>{P(new pe(w,.18,.22),WD,x,y,z+.11);P(new pe(w+.04,.04,.25),WD2,x,y+.1,z+.11);for(let k=0;k<Math.round(w*7);k++){const t=(k+.5)/Math.round(w*7)-.5;P(new tt(.075,4,3),k%3===2?LF2:FLW[k%FLW.length],x+t*w*.92,y+.16+rr()*.05,z+.1+(rr()-.5)*.08)}};
+const flowerBed=(x,z,r)=>{P(new ot(r,r,.03,16),ST3,x,.015,z);P(new ot(r*.88,r*.88,.04,16),LF,x,.02,z);for(let k=0;k<12;k++){const a=k*2.4,d=rr()*r*.75;P(new tt(.07,4,3),FLW[k%FLW.length],x+Math.sin(a)*d,.09,z+Math.cos(a)*d)}};   // 부딪힘이 없어서 땅에 납작하게
+// ===== 성벽 =====
+wall(-9,5,-1.8,5,{ivy:[.22,.7]}),wall(1.8,5,9,5,{ivy:[.4,.85]}),wall(-9,-5,9,-5),wall(-9,-5,-9,5,{ivy:[.55]}),wall(9,-5,9,5,{ivy:[.35]});
+// ===== 모서리 탑(앞 둘은 앞·옆 창문, 뒤 둘은 옆 창문) =====
+tower(-9,5,1.35,4.6,BL,{tp:'a',th:7.2,face:-.6,win:[[0,2.7,1],[-Math.PI/2,2.7,1]],flag:PK});
+tower(9,5,1.35,4.6,RD,{tp:'a',th:7.2,face:.6,win:[[0,2.7,1],[Math.PI/2,2.7,1]],flag:BL});
+tower(-9,-5,1.35,4.6,RD,{tp:'a',th:7.2,ry:Math.PI,face:-1.6,win:[[-Math.PI/2,2.7,1]],flag:GD});
+tower(9,-5,1.35,4.6,BL,{tp:'a',th:7.2,ry:Math.PI,face:1.6,win:[[Math.PI/2,2.7,1]],flag:LI});
+// ===== 성문: 탑 둘 + 돌 아치(쐐기돌) + 위 다리·성가퀴 + 쇠창살 + 열린 나무 문 + 등불 =====
+tower(-2.4,5,.95,3.8,PE,{tp:'a',th:5.4,win:[[0,2.55,.8]],flag:PK});
+tower(2.4,5,.95,3.8,PE,{tp:'a',th:5.4,win:[[0,2.55,.8]],flag:LI});
+{const g=new $n();g.moveTo(-2.05,0);g.lineTo(-1.6,0);g.lineTo(-1.6,2.15);g.absarc(0,2.15,1.6,Math.PI,0,!0);g.lineTo(1.6,0);g.lineTo(2.05,0);g.lineTo(2.05,3.85);g.lineTo(-2.05,3.85);g.lineTo(-2.05,0);   // 구멍 대신 ∩ 모양 한 덩어리(구멍이 바깥 선에 닿으면 면이 안 만들어짐)
+ P(new as(g,{depth:.96,bevelEnabled:!1,curveSegments:14}),ST,0,0,4.52,0,1,1,1,0,0,{ao:.15,aoH:2})}
+{const b=new $n();b.absarc(0,0,1.7,0,Math.PI,!1);b.absarc(0,0,1.6,Math.PI,0,!0);P(new as(b,{depth:.1,bevelEnabled:!1,curveSegments:16}),ST3,0,2.15,5.47);   // 아치 띠(한 줄로 매끈하게) + 돌 이음매
+ for(let k=1;k<11;k++){const a=k/11*Math.PI;P(new pe(.035,.1,.03),ST4,Math.cos(a)*1.65,2.15+Math.sin(a)*1.65,5.585,0,1,1,1,0,a-Math.PI/2)}}
+// 아치 꼭대기에는 장식을 두지 않는다(카메라가 성문 너머 본관 문·내 캐릭터를 보는 길 — 검토)
+P(new pe(4.2,.08,1.02),ST3,0,3.89,5);   // 아치 틀 윗단(그 위 다리·성가퀴는 본관 문을 가려서 뺌)
+for(let k=0;k<6;k++)P(new pe(.05,.6-Math.abs(k-2.5)*.08,.05),IR,-.75+k*.3,3.62-(.6-Math.abs(k-2.5)*.08)/2+.25,4.72);
+P(new pe(1.5,.06,.05),IR,0,3.55,4.72);
+for(const s of[-1,1]){P(new pe(1.1,2.1,.12),WD,s*1.25,1.05,5.55,s*.9);for(const y of[.5,1.6])P(new pe(1.06,.08,.03),IR,s*1.25+Math.sin(s*.9)*.07,y,5.55+Math.cos(s*.9)*.07,s*.9)}
+if(!TRIPO)for(const s of[-1,1]){const x=s*2.4,z=5+.98;P(new pe(.05,.05,.3),IR,x,1.85,z-.12);P(new pe(.2,.06,.2),IR,x,1.9,z+.05);P(new tt(.1,8,6),GL,x,1.76,z+.05,0,1,1,1,0,0,{glow:!0});P(new Ii(.14,.12,6),IR,x,1.98,z+.05)}
+// 깃발 줄: 모서리 탑 ↔ 성문 탑
+for(const s of[-1,1]){const xa=s*7.75,xb=s*3.25,ya=4.55,yb=4.15,N=11;
+ for(let k=0;k<N;k++){const u0=k/N,u1=(k+1)/N,sag=u=>.45*4*u*(1-u),xA=xa+(xb-xa)*u0,xB=xa+(xb-xa)*u1,yA=ya+(yb-ya)*u0-sag(u0),yB=ya+(yb-ya)*u1-sag(u1);
+  P(new pe(Math.hypot(xB-xA,yB-yA),.02,.02),WH,(xA+xB)/2,(yA+yB)/2,5.62,0,1,1,1,0,Math.atan2(yB-yA,xB-xA));
+  const um=(u0+u1)/2;P(flagG(.3,.36,.015),FLW[(k+(s>0?2:0))%FLW.length],xa+(xb-xa)*um,ya+(yb-ya)*um-sag(um)-.01,5.6)}}
+// ===== 본관 =====
+for(const sx of[-1,1])P(new pe(2.9,.55,4.7),ST4,sx*2.3,.27,-1.8,0,1,1,1,0,0,{ao:.3,aoH:.6});P(new pe(1.7,.55,4.35),ST4,0,.27,-1.975,0,1,1,1,0,0,{ao:.3,aoH:.6});   // 문 앞(|x|<0.85)은 받침돌을 뒤로 물림(문 아래가 가려졌음)
+P(new pe(7,4.4,4.2),ST,0,2.2,-1.8,0,1,1,1,0,0,{ao:.18,aoH:2.2});
+P(new pe(7.16,.16,4.36),ST3,0,2.55,-1.8);
+P(new pe(7.3,.32,4.5),ST2,0,4.5,-1.8);
+for(let k=0;k<7;k++){const x=-3.3+k*1.1;P(new pe(.62,.46,.5),ST,x,4.88,.3);P(new pe(.68,.06,.56),ST3,x,5.13,.3)}
+for(const sx of[-1,1]){for(let k=0;k<8;k++){const y=.78+k*.44,w=k%2?.36:.52;P(new pe(w,.2,.06),ST3,sx*(3.5-w/2+.02),y,.33)}}
+for(let k=0;k<18;k++){const x=(rr()-.5)*6.4,y=.8+rr()*3.3;if(Math.abs(x)<1.1&&y<3||Math.abs(x)<.8&&y>2.8)continue;if(Math.abs(Math.abs(x)-1.75)<.42||Math.abs(Math.abs(x)-2.85)<.42)continue;P(new pe(.3+rr()*.25,.15,.03),rr()<.6?ST2:STM,x,y,.31)}
+for(const x of[-2.85,-1.75,1.75,2.85]){win(x,.98,.3,0,.46,1.12);flowerBox(x,.8,.3,.66)}
+for(const x of[-2.85,-1.75,1.75,2.85])win(x,3.02,.3,0,.4,.78);
+// 장미창 + 금빛 하트
+P(new ot(.66,.66,.05,24),ST3,0,3.56,.31,0,1,1,1,Math.PI/2);
+P(new ot(.56,.56,.04,24),16766700,0,3.56,.35,0,1,1,1,Math.PI/2,0,{glow:!0});
+for(let k=0;k<8;k++)P(new pe(.035,1.1,.03),ST3,0,3.56,.38,0,1,1,1,0,k*Math.PI/8);
+P(new ls(.6,.06,6,24),ST3,0,3.56,.36);P(new ls(.24,.04,6,14),ST3,0,3.56,.385);
+P(heartG(.17,.04),PK,0,3.57,.39);
+// 문: 돌 쐐기 아치 · 기둥 · 나무 문(널빤지·쇠 띠·하트 문고리) · 앞 돌판
+for(const s of[-1,1])P(new pe(.22,1.98,.18),ST3,s*.72,.99,.37);
+for(let k=0;k<9;k++){const a=(k+.5)/9*Math.PI;P(new pe(.24,.3,.2),k===4?GD:k%2?ST2:ST3,Math.cos(a)*.74,1.98+Math.sin(a)*.74,.37,0,1,1,1,0,a-Math.PI/2)}
+P(archG(1.22,2.6,.08),WD,0,0,.29);
+for(const x of[-.3,0,.3])P(new pe(.025,2.3,.02),WD2,x,1.2,.375);
+for(const y of[.55,1.6])P(new pe(1.18,.08,.025),IR,0,y,.385);
+P(new tt(.035,6,4),IR,-.45,.55,.4);P(new tt(.035,6,4),IR,.45,.55,.4);P(new tt(.035,6,4),IR,-.45,1.6,.4);P(new tt(.035,6,4),IR,.45,1.6,.4);
+P(heartG(.12,.03),GD,0,1.2,.38);P(new ls(.08,.015,5,12),GD,0,1.06,.405);
+P(new ot(1.35,1.4,.04,24),ST3,0,.02,.95,0,1,1,1,0,0,{ao:.2,aoH:.1});
+// ===== 본관 옆 탑(깃발 천) · 가운데 큰 탑(꼭대기 금빛 하트, 앞 하트 무늬) =====
+tower(-3.6,-1.8,1.05,6.2,LI,{tp:'b',th:8.8,face:-.9,win:[[-1.75,3.7,1],[-1.75,2.1,.85],[-.3,5.3,.8]],banner:PK,flag:BL});
+tower(3.6,-1.8,1.05,6.2,LI,{tp:'b',th:8.8,face:.9,win:[[1.75,3.7,1],[1.75,2.1,.85],[.3,5.3,.8]],banner:BL,flag:PK});
+tower(0,-2.6,1.3,7.4,PK,{tp:'b',th:10.8,win:[[0,6.25,1],[-.9,5.4,.8],[.9,5.4,.8]],heart:!0});
+if(!TRIPO){P(new ls(.42,.05,6,20),GD,0,5.35,-1.24);P(heartG(.3,.05),GD,0,5.35,-1.27)}
+// ===== 트리포판 탑: castle/tripo.js(작게 줄인 트리포 모양 + 그림)를 불러 탑 자리에 세움. 굵기는 부딪힘 원에, 높이는 th에 맞춤 =====
+if(TRIPO){const go=()=>{const D=window.CASTLE_TRIPO;if(!D)return;
+ const dec=s=>{const b=atob(s),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u.buffer},mats={};let left=0;
+ const build=()=>{const R0=-Math.PI/2+(+(new URLSearchParams(location.search).get('tr')||0));   // 트리포 모양의 앞(문)은 +x 쪽 → 광장 앞(+z)으로 돌림
+  for(const k in D){const d=D[k],L=TP.filter(t=>t[0]===k);if(!L.length||!mats[k])continue;   // 같은 모양 탑은 한 덩어리로(그리기 횟수 줄이기)
+   const q=new Uint16Array(dec(d.pos)),qu=new Uint16Array(dec(d.uv)),qi=d.i32?new Uint32Array(dec(d.idx)):new Uint16Array(dec(d.idx)),n=d.n;
+   const Pp=new Float32Array(n*3*L.length),Uv=new Float32Array(n*2*L.length),Ix=[];
+   L.forEach(([,x,z,r,th,ry],j)=>{const sx=r*1.12/d.r,c=Math.cos(ry+R0),sn=Math.sin(ry+R0),o=j*n;
+    for(let i=0;i<n;i++){const lx=(q[i*3]/65535-.5)*2*d.ext[0]*sx,ly=q[i*3+1]/65535*th,lz=(q[i*3+2]/65535-.5)*2*d.ext[2]*sx,v=o+i;Pp[v*3]=cx+x+lx*c+lz*sn;Pp[v*3+1]=ly;Pp[v*3+2]=cz+z-lx*sn+lz*c;Uv[v*2]=qu[i*2]/65535;Uv[v*2+1]=qu[i*2+1]/65535}
+    for(let i=0;i<qi.length;i++)Ix.push(qi[i]+o)});
+   const g=new un;g.setAttribute("position",new jt(Pp,3));g.setAttribute("uv",new jt(Uv,2));g.setIndex(Ix);g.computeVertexNormals();Re(g,16777215,{});g.computeBoundingSphere();
+   const m=new vt(g,mats[k]);w.add(m);T.push(m)}
+  window.CASTLE_TRIPO_READY=TP.length};
+ for(const k in D){left++;const im=new Image();im.onload=()=>{const t=new Uo(im);if(/[?&]tsrgb/.test(location.search))t.colorSpace="srgb";mats[k]=Z(new Rt({map:t,vertexColors:!0}),"tripo"+k);if(--left===0)build()};im.src=D[k].tex}};
+ const sc=document.createElement("script");sc.src="castle/tripo.js?v=1";sc.onload=go;document.head.appendChild(sc)}
+// ===== 마당: 돌길 · 꽃밭 =====
+for(let r=0;r<7;r++)for(let c=-1;c<=1;c++){const z=4.55-r*.56,x=c*.56+(r%2?.12:-.06);P(new pe(.5,.03,.48),(r+c)%2?ST3:ST2,x,.015,z,(rr()-.5)*.12)}
+flowerBed(-2.35,1.25,.55),flowerBed(2.35,1.25,.55);
+}
 sign(4.4,-37.6,"🏰 꿈빛 성",-.2)}/* 광장 꿈빛 성 본관 문의 색깔 소용돌이 (성탈출탐정/plaza_door.js)
  * plaza_inject.py가 광장 원본의 꿈빛 성 짓는 곳 바로 뒤(같은 범위)에 그대로 끼워 넣는다.
  * 원본 묶음의 이름: $n=Shape, or=ShapeGeometry, vt=Mesh, Rt=MeshBasicMaterial, Se=Color, Un=양면, Z=땅 휘어짐 재질, w=장면, T=물체 목록
@@ -6330,11 +6483,13 @@ for(let[x,z,c]of[[44,-33,15226703],[51,-38.5,16753434],[45.5,-44,11638780]]){W(n
 for(let k=0;k<7;k++){let a=k/7*Math.PI*2+R(),e2=.45+R()*.4;W(new tt(.26,8,6),16777215,f(x+Math.cos(a)*1.9*Math.sin(e2*1.4),2.2+Math.cos(e2*1.4)*1.5,z+Math.sin(a)*1.9*Math.sin(e2*1.4)))}
 W(new pe(.6,1,.1),10775621,f(x,.5,z+1)),W(new ot(.22,.22,.06,10),16774064,f(x+.5,1.5,z+.85,0,1,1,1,Math.PI/2),{glow:!0}),cir(x,z,1.3),ft(x+.5,z-.3,2,.3)}
 sign(42.4,-29,"🍄 버섯 마을",-.2);/* 광장 명소 입구 4곳 (2026-11-20, 선생님이 고름 "명소마다 하나씩") → 새 게임 4개 + 바람 풍차 문 → 하트섬 원정대(2026-11-24, 마지막 보스)
+ *   + 시계탑 문 → 사랑둥이 방탈출(2026-11-24, 할로윈 호텔 게임 방식의 협동 방탈출)
  *   소원 우물 → 피라미드 대탈출(우물 속으로 쑥 떨어져 달리기) · 마법사 탑 문 → 거인과 꼬마(크기 마법)
  *   버섯 집 문 → 젤리와 팡(꿀) · 반짝 등대 호숫가 얼음 문 → 자석 친구(얼음)
  * plaza_inject.py가 원본의 버섯 마을 표지판 바로 뒤(광장을 짓는 곳, 같은 범위)에 그대로 끼워 넣는다.
  * 원본 묶음의 이름: W 고정 물체 더하기(미리 칠한 빛으로 합쳐 그림) · pe 상자 · tt 공 · fi 보석 · f(x,y,z,ry,sx,sy,sz,rx,rz) 자리·회전
  *   $n Shape · or ShapeGeometry · vt Mesh · Rt 기본 재질 · Se 색 · Un 양면 · Z 땅 휘어짐 재질 · w 장면 · T 마을 물체 목록 · cir 부딪힘 원 · sign 표지판
+ *   Mt 나무 목록 · pt 부딪힘 원 목록 · Fe 땅 그림자 목록
  * 소용돌이는 꿈빛 성 문(성탈출탐정/plaza_door.js)과 같은 밝은 모양. 멀리서는 안 보이고 가까이 가면 열린다(games.js가 uNear·uSpin을 바꿈)
  * window.PLAZA_DOORS[key] = {u, m, x, z, r}: x·z는 "들어갈까요?"를 묻는 자리, r은 그 거리 */
 {
@@ -6426,6 +6581,20 @@ sign(42.4,-29,"🍄 버섯 마을",-.2);/* 광장 명소 입구 4곳 (2026-11-20
     d.m.position.set(-30, 0.03, -42.4); d.m.rotation.x = 0.12;   // 문 상자처럼 위가 바깥으로 0.12 기울어짐(아래 끝을 문 아래 끝에 맞춤)
     DOORS.island = Object.assign(d, { x: -30, z: -41.9, r: 1.35 });
     sign(-32.1, -41.3, "😈 하트섬 원정대", 0.3);   // 문 왼쪽(오른쪽에는 풍차 표지판이 있음)
+  }
+  // 6) 시계탑(-32.5, 5) 문: 너비 0.9 · 높이 1.5, 앞면 z = 6.22(부딪힘 상자 끝 6.25) → 사랑둥이 방탈출(꽁꽁 하트 학교, 2026-11-24)
+  {
+    const d = swirl(rect(0.42, 1.44), 0, 0.74, 1 / 0.46, 1 / 0.8, 0xff8fb7, "door_escape");
+    d.m.position.set(-32.5, 0.03, 6.24);
+    DOORS.escape = Object.assign(d, { x: -32.5, z: 6.65, r: 1.35 });
+    sign(-34.6, 6.9, "💗 사랑둥이 방탈출", 0.2);   // 문 왼쪽(오른쪽에는 시계탑 표지판이 있음)
+    // 문 바로 앞에 저절로 자란 사과나무가 문을 가려서 치운다. 나무·덤불 만들기(무작위)는 이미 끝난 뒤라 다른 나무 자리는 그대로.
+    // 부딪힘 원(pt)·땅 그림자(Fe, 아직 땅 색을 칠하기 전)도 같이 지우고, 나무는 지도 밖으로(그리기·흔들기에서 빠짐)
+    for (const t of Mt) if (!t.border && Math.hypot(t.x + 32.5, t.z - 8.4) < 2.3) {
+      for (let i = pt.length - 1; i >= 0; i--) if (pt[i].x === t.x && pt[i].z === t.z) pt.splice(i, 1);
+      for (let i = Fe.length - 1; i >= 0; i--) { const q = Fe[i]; if (!q.b && Math.abs(q.x - (t.x + 0.42 * t.s)) < 1e-6 && Math.abs(q.z - (t.z - 0.32 * t.s)) < 1e-6) Fe.splice(i, 1); }
+      t.x = 900; t.z = 900;
+    }
   }
 }
 

@@ -181,14 +181,16 @@
     const d = (e && e.detail) || {};
     if (state !== 'play' || !player || player.dead || !(d.correct || d.second)) return;
     const full = love >= 100;
+    // 2026-11-24 선생님: "문제를 풀면 확실한 어드밴티지" → 처음에 맞히면 사랑 게이지 가득 + 체력 가득 + 15초 무적, 힌트 보고 맞히면 게이지 +30 + 체력 가득
     if (d.correct) {
-      gainLove(40); player.hp = player.max; Sound.play('heal');
-      FX.burst(player.x, player.y, 70, 'star', 14, { speed: 180 });
-      toast(full ? '퀴즈 정답! 체력 가득' : '퀴즈 정답! 사랑 게이지 +40, 체력 가득', '#ffe680');
-    } else if (!full) { gainLove(15); Sound.play('ding'); toast('퀴즈를 끝까지 풀었어요! 사랑 게이지 +15', '#d9f5ff'); }
+      gainLove(100); player.hp = player.max; player.shieldT = Math.max(player.shieldT || 0, 15); Sound.play('heal');
+      FX.burst(player.x, player.y, 70, 'star', 18, { speed: 200 });
+      toast('퀴즈 정답! 💖 사랑 게이지 가득 + 체력 가득 + 15초 무적!', '#ffe680');
+    } else { gainLove(30); player.hp = player.max; Sound.play('ding'); toast(full ? '퀴즈를 끝까지 풀었어요! 체력 가득' : '퀴즈를 끝까지 풀었어요! 사랑 게이지 +30, 체력 가득', '#d9f5ff'); }
   });
   // '같이 하기'(서버로 친구와 연결)에서는 퀴즈를 열어도 게임을 멈추지 않아요(친구 화면에서 내가 멈춰 보이고, 돌아올 때 공격이 한꺼번에 오지 않게)
   window.PLAZA_QUIZ_NOPAUSE = () => mode === 'multi';
+  window.PLAZA_QUIZ_REWARD = { icon: '💖', big: '사랑 게이지 가득 + 체력 가득 + 15초 무적!', small: '사랑 게이지 +30 + 체력 가득' };
 
   function save() {
     if (!Q || state !== 'play' || !player) return;
@@ -510,7 +512,7 @@
   }
   function hurt(dmg, fromX) {
     const p = player;
-    if (p.dead || p.inv > 0 || busy() || state !== 'play' || special || window.__game._god) return;
+    if (p.dead || p.inv > 0 || p.shieldT > 0 || busy() || state !== 'play' || special || window.__game._god) return;
     p.hp = Math.max(0, p.hp - dmg); p.inv = 0.9; p.hurtT = 0.35; shake = Math.max(shake, 7); hitStop = Math.max(hitStop, 0.05);
     FX.text(p.x, p.y, 130, '-' + dmg, '#ff6b8b', { size: 26 }); FX.word(p.x, p.y, 150, pick(['아야!', '앗!', '으앗!']), '#ffb3c8', 24);
     FX.burst(p.x, p.y, 50, 'spark', 6, { col: '#ffb3c8' });
@@ -802,6 +804,7 @@
   const CHARGE = 0.7;
   function updatePlayer(dt, free) {
     const p = player;
+    if (p.shieldT > 0){ p.shieldT -= dt; if (p.shieldT <= 0){ p.shieldT = 0; toast('💖 무적 보호막이 사라졌어요', '#d9f5ff'); } }
     p.inv = Math.max(0, p.inv - dt); p.shootCd -= dt; p.shootT -= dt; p.hurtT -= dt; p.landT -= dt; p.emoT = Math.max(0, p.emoT - dt); p.dashCd -= dt;
     if (p.dead) { p.moving = false; return; }
     if (special) { p.moving = false; return; }
@@ -1120,6 +1123,7 @@
     }
     if (special) { const k = Math.min(1, special.t / 0.55); Art.glowFast(ctx, sx, sy - 55 * s, 90 + k * 80, [255, 150, 210], 0.7); }
     if (love >= 100 && !special) Art.glowFast(ctx, sx, sy - 55 * s, 70 + Math.sin(t * 6) * 8, [255, 220, 120], 0.35);
+    if (p.shieldT > 0) Art.glowFast(ctx, sx, sy - 55 * s, 95 + Math.sin(t * 9) * 10, [255, 140, 200], 0.4 * Math.min(1, p.shieldT));   // 퀴즈 무적 보호막(분홍 빛)
     ctx.save();
     if (p.dead) ctx.globalAlpha = 0.6;
     else if (p.inv > 0 && !p.dash && !special && Math.floor(p.inv * 12) % 2 === 0 && p.hurtT <= 0) ctx.globalAlpha = 0.45;

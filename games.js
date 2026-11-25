@@ -216,6 +216,7 @@
     { key: "jelly", name: "젤리와 팡", emoji: "🍯", goal: "꿀젤리와 불꽃 친구가 힘을 합쳐 꿀나무 마을을 지나가요. " + COOP, ext: "games/jelly.html", color: 0xffc94d },
     { key: "magnet", name: "자석 친구", emoji: "🧲", goal: "빨강 N과 파랑 S 자석이 서로 당기고 밀며 얼음 성까지 가요. " + COOP, ext: "games/magnet.html", color: 0x8ec5ff },
     { key: "island", name: "하트섬 원정대", emoji: "😈", goal: "풍차 바람을 타고 하트섬으로! 신전 세 곳에서 사랑의 불꽃을 찾아 그림자 악마둥이를 만나요. 혼자도, 친구 6명까지 같이도 해요.", ext: "games/island.html", color: 0xff7ab8 },   // 마지막 보스(2026-11-24, 하트섬원정대/)
+    { key: "escape", name: "사랑둥이 방탈출", emoji: "💗", goal: "심술 구름이 하트 학교를 꽁꽁 잠갔어요! 가구마다 걸린 반짝이 문제를 맞혀 하트 열쇠 조각을 찾고, 투덜이를 피해 3층까지 탈출해요. 혼자도, 친구 4명까지 같이도 해요.", ext: "games/escape.html", color: 0xff8fb7 },   // 시계탑 문(2026-11-24, 사랑둥이방탈출/)
   ];
   // 광장 옷 → 피라미드 꾸미기(피라미드는 자기 꾸미기 14가지만 입힘). 거꾸로(피라미드 → 광장)는 games/uriban_bridge.js
   var PYR_ACC = { bow: "ribbon", flower_crown: "flower", sunglasses: "glasses", cat_ears: "cat", magician_hat: "magic", grad_cap: "grad", star_antenna: "antenna", egg_hat: "egg", pharaoh_nemes: "nemes", halo: "halo", kinball_hat: "minikin", backpack_mint: "backpack", cape_red: "cape", butterfly_wings: "butterfly" };
