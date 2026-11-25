@@ -174,7 +174,7 @@ let target = null;
 const keys = {};
 let joy = {id:null, ox:0, oy:0, x:0, y:0, active:false};
 let holdB = false, holdBkey = false;
-let tut = null, tutPress = false, hudCard0 = null;   // 처음 하는 학생: 보여 주기 → 따라 하기(아래 createTutorial) · 보여 주기가 누르는 잡기 · 첫 주문 카드 자리
+let tut = null, tutPress = false, hudCard0 = null; let hudSlots = [];   // 주문 카드마다 재료 칸 자리(연습에서 지금 집을 재료 칸을 빛나게)   // 처음 하는 학생: 보여 주기 → 따라 하기(아래 createTutorial) · 보여 주기가 누르는 잡기 · 첫 주문 카드 자리
 
 function buildStations(){
   st = []; dynList = [];
@@ -996,10 +996,11 @@ function lantern(c, x, y, s){
 function drawHud(){
   const pad = 10, ch = topH - 22, cw = Math.min(250, (W - 230) / 3 - pad);
   const list = orders.filter(o => !o.served && !o.leaving).sort((a, b) => a.id - b.id);
-  ctx.textBaseline = 'middle'; hudCard0 = null;
+  ctx.textBaseline = 'middle'; hudCard0 = null; hudSlots = [];
   list.forEach((o, i) => {
     const x = pad + i * (cw + pad), y = 8, rc = RECIPES[o.rid];
     if (!i) hudCard0 = {x, y, w: cw, h: ch};
+    const slot = {oid: o.id, rid: o.rid, card: {x, y, w: cw, h: ch}, ings: []}; hudSlots.push(slot);
     const slide = 1 - Math.pow(1 - o.anim, 3);
     ctx.save(); ctx.translate(0, -(1 - slide) * 60);
     ctx.lineWidth = 3; ctx.strokeStyle = OUT; rr(ctx, x, y, cw, ch, 14); fs(ctx, '#fff8ea');
@@ -1011,7 +1012,7 @@ function drawHud(){
     const sx = x + is * 1.25, avail = cw - is * 1.25 - 8, n = rc.ings.length, isz = Math.min(ch * .36, avail / n);
     rc.ings.forEach(([id, cut], j) => {
       const ix = sx + isz * (j + .5), iy = y + ch * .32;
-      icon(ctx, id, false, ix, iy, isz * .92);
+      icon(ctx, id, false, ix, iy, isz * .92); slot.ings.push({id, x: ix, y: iy, r: isz * .55});
       if (cut) knifeBadge(ctx, ix + isz * .3, iy + isz * .22, isz * .45);
     });
     ctx.fillStyle = '#7a5236'; ctx.font = `${Math.round(ch * .17)}px Jua, sans-serif`; ctx.textAlign = 'left';
@@ -1579,7 +1580,7 @@ function createTutorial(api){
   let doneMem = false;   // 기기 저장이 막힌 브라우저(시크릿 창 등)에서도 이 페이지 동안은 기억(같은 판을 또 시작할 때 연습을 되풀이하지 않게)
   const done = () => { if (doneMem) return true; try { return localStorage.getItem(KEY) === '1'; } catch (e){ return false; } };
   const setDone = () => { doneMem = true; try { localStorage.setItem(KEY, '1'); } catch (e){} };
-  const canSkip = () => { if (done()) return true; try { return !window.PLAZA_CAN_SKIP || !!window.PLAZA_CAN_SKIP(); } catch (e){ return true; } };
+  const canSkip = () => true;   // 2026-11-25 선생님: 처음 하는 학생도 언제나 튜토리얼 전체를 건너뛸 수 있게(이야기 장면 건너뛰기 규칙과 따로). 건너뛰어도 '함'으로 기억 → 다음부터는 처음 화면 '연습 다시 보기'로만
   const small = () => api.grade() <= 2;   // 1~2학년: 글은 더 짧게, 그림·화살표 먼저
   const esc = s => String(s).replace(/[<>&]/g, c => ({'<': '&lt;', '>': '&gt;', '&': '&amp;'})[c]);
   const josa = (w, a, b) => { const c = w.charCodeAt(w.length - 1) - 0xAC00; return w + (c >= 0 && c < 11172 && c % 28 ? a : b); };   // 받침 있으면 '을', 없으면 '를'
@@ -1616,7 +1617,7 @@ body.tutPractice .pad.tutLit{opacity:1;animation:tutPulse .7s ease-in-out infini
   const ov = document.createElement('div'); ov.id = 'tutOv'; ov.className = 'hide';
   ov.innerHTML = '<canvas class="guy" width="160" height="160"></canvas><div class="tb"><div class="tl"></div><div class="tx"></div><div class="dots"></div><button class="nx" id="tutGo" aria-label="다음">▶</button></div>';
   const bar = document.createElement('div'); bar.id = 'tutBar'; bar.className = 'hide';
-  bar.innerHTML = '<span></span><button id="tutNext">다음 연습으로 ▶</button><button id="tutSkip">건너뛰기 ▶▶</button>';
+  bar.innerHTML = '<span></span><button id="tutNext">다음 연습으로 ▶</button><button id="tutSkip">튜토리얼 건너뛰기 ▶▶</button>';
   document.body.appendChild(ov); document.body.appendChild(bar);
   // 꼭 푸는 문제 카드(quiz.js #pqOv)가 떠 있는 동안 안내 친구·말풍선·위 띠를 숨김. 카드가 뜨면 게임 장면(rAF)이 멈추므로 그림판 쪽이 아니라 '카드가 붙었나'를 지켜봄
   const quizOpen = () => { try { return !!document.getElementById('pqOv') || !!(window.PLAZA_QUIZ && PLAZA_QUIZ.asking && PLAZA_QUIZ.asking()); } catch (e){ return false; } };
@@ -1786,11 +1787,11 @@ body.tutPractice .pad.tutLit{opacity:1;animation:tutPulse .7s ease-in-out infini
   // 보여 주기 대본: go = 걸어가서 누를 칸, say = 말(짧은 말은 s)
   const DEMO = [
     {who: 'sarang', t: '주문 카드를 봐요. 주먹밥이에요!', s: '주먹밥 주문!', card: true, wait: 3.0},
-    {who: 'sarang', t: '먼저 접시를 들어요', s: '접시 들기', go: () => one('plates'), check: () => !!H() && H().t === 'plate'},
-    {who: 'sarang', t: '밥을 담아요', s: '밥 담기', go: () => box('rice'), check: () => H() && H().c && H().c.some(i => i.id === 'rice')},
-    {who: 'sarang', t: '김을 담아요', s: '김 담기', go: () => box('gim'), check: () => H() && H().c && H().c.some(i => i.id === 'gim')},
-    {who: 'sarang', t: '참치도 담아요', s: '참치 담기', go: () => box('tuna'), check: () => H() && H().c && H().c.some(i => i.id === 'tuna')},
-    {who: 'sarang', t: '손님에게 서빙해요', s: '손님에게!', go: () => serveFor('jumeokbap'), check: () => !orderOf('jumeokbap')},
+    {who: 'sarang', t: '먼저 접시를 들어요', s: '접시 들기', ing: '*', go: () => one('plates'), check: () => !!H() && H().t === 'plate'},
+    {who: 'sarang', t: '밥을 담아요', s: '밥 담기', ing: 'rice', go: () => box('rice'), check: () => H() && H().c && H().c.some(i => i.id === 'rice')},
+    {who: 'sarang', t: '김을 담아요', s: '김 담기', ing: 'gim', go: () => box('gim'), check: () => H() && H().c && H().c.some(i => i.id === 'gim')},
+    {who: 'sarang', t: '참치도 담아요', s: '참치 담기', ing: 'tuna', go: () => box('tuna'), check: () => H() && H().c && H().c.some(i => i.id === 'tuna')},
+    {who: 'sarang', t: '손님에게 서빙해요', s: '손님에게!', ing: '*', go: () => serveFor('jumeokbap'), check: () => !orderOf('jumeokbap')},
     {who: 'kong', t: '맛있대요! 이제 {name} 차례예요', s: '이제 해 봐요!', wait: 2.8}
   ];
   function standFor(s){   // 칸 옆 빈자리 중 요리사에게서 가장 가까운 곳(걸음 수로)
@@ -1886,6 +1887,23 @@ body.tutPractice .pad.tutLit{opacity:1;animation:tutPulse .7s ease-in-out infini
     else if (T.phase === 'practice') practiceTick();
     else if (T.phase === 'end' && now() >= T.at) finish(false);
   }
+  // 왼쪽 위 주문 카드에서 지금 집을 재료 칸(2026-11-25 선생님: "어묵을 들라고 할 때는 왜 어묵인지 알게 주문 카드의 어묵 칸도 빛나게")
+  // → {x, y, r} 재료 칸, 또는 {card: {x,y,w,h}} 카드 전체(접시·담기·서빙·끓이기 기다리기처럼 재료가 아닌 단계). 없으면 null
+  const SEC_RID = {tteok: 'tteokbokki', kimbap: 'kimbap'};
+  function slotNow(){
+    if (!T || !api.cardSlots) return null;
+    let rid = null, ing = null;
+    if (T.phase === 'demo'){ const D = DEMO[T.i]; if (!D || !D.ing) return null; rid = 'jumeokbap'; ing = D.ing; }
+    else if (T.phase === 'practice'){
+      const sec = T.secs[T.si]; rid = sec && SEC_RID[sec.key]; if (!rid || !T.cur) return null;
+      const k = T.cur.key; if (/^(junk|clearA)/.test(k)) return null;
+      ing = /^(plate|dish|wait|serve)-/.test(k) ? '*' : k.slice(k.lastIndexOf('-') + 1);   // 접시·담기·끓이기·서빙은 카드 전체
+    } else return null;
+    const o = orderOf(rid); if (!o) return null;
+    const c = api.cardSlots().find(c => c.oid === o.id); if (!c) return null;
+    const sl = c.ings.find(i => i.id === ing);
+    return sl ? {x: sl.x, y: sl.y, r: sl.r, card: c.card} : {card: c.card, whole: true};
+  }
   // 화살표·반짝이(게임의 2D 그림판 위에): 짚는 칸 위에서 통통 튀는 화살표 + 바닥 빛 고리
   let mask = null, mctx = null;
   function draw(ctx, t){
@@ -1893,6 +1911,7 @@ body.tutPractice .pad.tutLit{opacity:1;animation:tutPulse .7s ease-in-out infini
     const tg = T.phase === 'demo' ? (T.sub ? T.tgt : null) : T.cur && T.cur.tgt;
     const D = T.phase === 'demo' ? DEMO[T.i] : null;
     const card = D && D.card ? api.cardRect() : null;
+    const sl = card ? null : slotNow();
     // 화면을 어둡게 하고 할 곳만 동그랗게 밝게(2026-11-25 선생님 그림처럼). 연습하는 동안 내내(짚는 곳이 없는 틈에도 깜빡이지 않게), 문제 카드가 떠 있으면 끔
     const tc = tg ? api.toScreen(tg.x + .5, tg.y + .5, 0.8) : null;
     qSync();
@@ -1910,10 +1929,20 @@ body.tutPractice .pad.tutLit{opacity:1;animation:tutPulse .7s ease-in-out infini
       if (tc) cut(tc.x, tc.y, RU * 1.6);
       cut(me.x, me.y, RU * 1.05);   // 내 요리사도 보이게
       if (card){ const m = 7; mctx.fillStyle = '#000'; mctx.fillRect((card.x - m) * k, (card.y - m) * k, (card.w + m * 2) * k, (card.h + m * 2) * k); }
+      if (sl){   // 주문 카드: 묻히지 않게 반쯤 밝게, 지금 재료 칸(또는 카드 전체)은 환하게
+        const c = sl.card, m = 5; mctx.fillStyle = sl.whole ? '#000' : 'rgba(0,0,0,.6)'; mctx.fillRect((c.x - m) * k, (c.y - m) * k, (c.w + m * 2) * k, (c.h + m * 2) * k);
+        if (!sl.whole) cut(sl.x, sl.y, sl.r);
+      }
       mctx.globalCompositeOperation = 'source-over';
-      ctx.drawImage(mask, 0, 0, mw, mh, 0, 0, mw / k, mh / k);
+      ctx.save(); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.drawImage(mask, 0, 0, mw, mh, 0, 0, mw / k, mh / k); ctx.restore();   // 앞에서 남은 투명도에 상관없이
       // 구멍 가장자리: 얇은 금빛 테(흐림 대신 가볍게 '여기!'를 보여 줌)
       if (tc){ ctx.save(); ctx.strokeStyle = 'rgba(255,224,120,.85)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(tc.x, tc.y, RU * 1.6, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
+    }
+    if (sl && !quizOpen()){   // 반짝 테두리: 재료 칸은 동그라미 + 작은 별, 카드 전체는 둥근 네모
+      ctx.save(); ctx.globalAlpha = .7 + Math.sin(t * 6) * .3; ctx.strokeStyle = '#ffd43b'; ctx.lineWidth = 4;
+      if (sl.whole){ const c = sl.card, m = 4, x = c.x - m, y = c.y - m, w = c.w + m * 2, h = c.h + m * 2, r = 16; ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); ctx.stroke(); }
+      else { ctx.beginPath(); ctx.arc(sl.x, sl.y, sl.r + 2 + Math.sin(t * 6) * 2, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; for (let i = 0; i < 3; i++){ const a = t * 2.4 + i * Math.PI * 2 / 3; star(ctx, sl.x + Math.cos(a) * (sl.r + 6), sl.y + Math.sin(a) * (sl.r + 6), 4 + Math.sin(t * 8 + i) * 1.5); } }
+      ctx.restore();
     }
     place(tc ? tc.y + Math.max(24, api.unit()) * 1.6 : (card ? null : null));
     if (card) arrow(ctx, card.x + card.w / 2, card.y + card.h + 14 + Math.abs(Math.sin(t * 5)) * 10, true, t);
@@ -1939,10 +1968,11 @@ body.tutPractice .pad.tutLit{opacity:1;animation:tutPulse .7s ease-in-out infini
   }
   return {
     begin, tick, draw, finish, abort, isDone: done, canSkip,
+    slots: () => api.cardSlots ? api.cardSlots() : [],   // 점검용: 주문 카드 칸 자리
     section(i){ if (T && T.phase === 'practice'){ api.clearOrders(); T.si = i - 1; nextSection(); } },   // 점검용: 그 연습으로 바로
     get active(){ return !!T; },
     get lock(){ return !!T && T.phase === 'demo'; },   // 보여 주는 동안 조이스틱·단추 잠금
-    get state(){ return T && {phase: T.phase, i: T.i, sub: T.sub, sec: T.secs ? T.secs[T.si] && T.secs[T.si].key : null, si: T.si, key: T.cur ? T.cur.key : '', text: lastText, tgt: T.cur && T.cur.tgt ? [T.cur.tgt.type, T.cur.tgt.x, T.cur.tgt.y] : null, skip: skipB.style.display !== 'none', ts: (() => { const g = T.phase === 'demo' ? (T.sub ? T.tgt : null) : T.cur && T.cur.tgt; if (!g) return null; const q = api.toScreen(g.x + .5, g.y + .5, 0.8); return [Math.round(q.x), Math.round(q.y), Math.round(Math.max(24, api.unit() * .95) * (small() ? 1.15 : 1) * 1.6)]; })()}; }
+    get state(){ return T && {phase: T.phase, i: T.i, sub: T.sub, sec: T.secs ? T.secs[T.si] && T.secs[T.si].key : null, si: T.si, key: T.cur ? T.cur.key : '', text: lastText, tgt: T.cur && T.cur.tgt ? [T.cur.tgt.type, T.cur.tgt.x, T.cur.tgt.y] : null, skip: skipB.style.display !== 'none', slot: (() => { const q = slotNow(); return q ? (q.whole ? 'card' : [Math.round(q.x), Math.round(q.y), Math.round(q.r)]) : null; })(), ts: (() => { const g = T.phase === 'demo' ? (T.sub ? T.tgt : null) : T.cur && T.cur.tgt; if (!g) return null; const q = api.toScreen(g.x + .5, g.y + .5, 0.8); return [Math.round(q.x), Math.round(q.y), Math.round(Math.max(24, api.unit() * .95) * (small() ? 1.15 : 1) * 1.6)]; })()}; }
   };
 }
 function tutClean(){ running = false; orders = []; holdB = holdBkey = false; reset('peace'); running = false; }
@@ -1974,7 +2004,7 @@ tut = createTutorial({
     else if (i >= 2 && i <= 4 && h && h.t === 'plate') h.c.push({t: 'ing', id: ['rice', 'gim', 'tuna'][i - 2], cut: false});
     else if (i === 5){ const o = orders.find(q => q.rid === 'jumeokbap' && !q.served); if (o){ serveOrder(o, player); player.hold = null; } }
   },
-  toScreen: (x, y, h) => ({x: ox + x * T, y: oy + y * T - h * T * .45}), unit: () => T, cardRect: () => hudCard0,
+  toScreen: (x, y, h) => ({x: ox + x * T, y: oy + y * T - h * T * .45}), unit: () => T, cardRect: () => hudCard0, cardSlots: () => hudSlots,
   joyBox: () => ({x1: Math.min(70, W * .07) * 2 + 30}),   // 조이스틱 오른쪽 끝: 말풍선이 가리지 않게
   focus(){}, platesComing: () => false, hurryPlates(){},
   quizBusy(){ if (quizPend > 0) return true; try { return !!(window.PLAZA_QUIZ && window.PLAZA_QUIZ.asking && window.PLAZA_QUIZ.asking()); } catch (e){ return false; } },
