@@ -364,7 +364,7 @@ img{-webkit-user-drag:none}
     <div class="menu">
       <button id="bStart" class="btn big">모험 시작!</button>
       <button id="bMulti" class="btn purple">친구랑 같이 하기</button>
-      <button id="bShow" class="btn mint">스킬 구경하기</button>
+      <button id="bShow" class="btn mint" hidden style="display:none">스킬 구경하기</button>
       <div class="toggles">
         <button id="tPick" class="tg">능력 얻기: <b>자동으로</b></button>
         <button id="tDiff" class="tg">난이도: <b>상</b></button><button id="tSnd" class="tg">소리: <b>켜짐</b></button>
@@ -567,12 +567,11 @@ window.PLAZA_QUIZ_GATES = true;   // 꼭 푸는 문제만(LEVEL UP·보물 상�
 </style><script>
 /* 하트 특공대 튜토리얼 (heart_inject.py, 2026-11-26) */
 (function () {
-  var KEY = 'heart.tutorial', mem = false, force = false, T = null;
+  var KEY = 'heart.tutorial', mem = false, T = null;
   var Q = new URLSearchParams(location.search);
   function done() { if (mem) return true; try { return localStorage.getItem(KEY) === '1'; } catch (e) { return false; } }
   function setDone() { mem = true; try { localStorage.setItem(KEY, '1'); } catch (e) {} }
   function want() {
-    if (force) return true;
     if (Q.get('tut') === '0') return false;
     if (Q.get('start') === '1' || Q.get('auto') === '1') return Q.get('tut') === '1';
     return !done();
@@ -594,13 +593,6 @@ window.PLAZA_QUIZ_GATES = true;   // 꼭 푸는 문제만(LEVEL UP·보물 상�
     bar.querySelector('#htSkip').onclick = function (e) { e.stopPropagation(); if (T) finish(true); };
     [goB, bar.querySelector('#htSkip')].forEach(function (b) { ['pointerdown', 'touchstart', 'mousedown'].forEach(function (t) { b.addEventListener(t, function (e) { e.stopPropagation(); }, { passive: true }); }); });
   }
-  // 처음 화면 「연습 다시 보기」
-  function titleBtn() {
-    var tg = document.querySelector('#title .toggles'); if (!tg || document.getElementById('tTut')) return;
-    var b = document.createElement('button'); b.id = 'tTut'; b.className = 'tg'; b.innerHTML = '연습 <b>다시 보기</b>';
-    b.onclick = function () { force = true; try { Snd.sfx('click'); } catch (e) {} var s = document.getElementById('bStart'); if (s) s.click(); };
-    tg.appendChild(b);
-  }
   // 단계: s 글(1~2학년 sm 짧게), lab 위 작은 글, at 밝힐 곳(함수 → {x,y,r} 또는 {rect}), ok 다 했나(없으면 ▶), set 시작할 때
   var me = function () { return Game.G.me; };
   function scr(x, y) { return { x: (x * V.k + V.ox) / V.rs, y: (y * V.k + V.oy) / V.rs }; }
@@ -617,8 +609,10 @@ window.PLAZA_QUIZ_GATES = true;   // 꼭 푸는 문제만(LEVEL UP·보물 상�
     { key: 'hp', lab: '내 체력', t: '내 체력이에요. 투덜이에게 부딪히면 줄어요.', sm: '내 체력이에요.', at: function () { return elSpot('#me', 6); } },
     { key: 'move', lab: '직접 해 보기', t: '화면을 누른 채 밀어서 움직여 보세요.', sm: '화면을 누르고 밀어 보세요.', at: function () { return meSpot(80); }, live: 1,
       set: function (S) { var p = me(); S.x0 = p.x; S.y0 = p.y; }, ok: function (S) { var p = me(); return Math.hypot(p.x - S.x0, p.y - S.y0) > 120; } },
-    { key: 'atk', lab: '투덜이', t: '반짝이는 친구들이 투덜이예요! 가까이 가면 저절로 공격해요.', sm: '이 친구들이 투덜이예요!', at: function () { return grumps(); }, live: 1,
-      set: function (S) { S.k0 = Game.G.stats.kills; spawnPractice(4); }, ok: function (S) { var G = Game.G; if (!G.enemies.some(function (e) { return !e.dead && !e.boss; }) && G.stats.kills - S.k0 < 3) spawnPractice(2); return G.stats.kills - S.k0 >= 3; } },
+    { key: 'atk0', lab: '투덜이', t: '투덜이들이 나타났어요!', sm: '투덜이들이 나타났어요!', at: function () { return grumps(); }, auto: 2.2,
+      set: function () { if (!Game.G.enemies.some(function (e) { return !e.dead && !e.boss; })) spawnPractice(4); } },
+    { key: 'atk', lab: '직접 해 보기', t: '가까이 가면 저절로 공격해요. 잡아 보세요!', sm: '가까이 가서 잡아 보세요!', at: function () { return grumps(); }, live: 1,
+      set: function (S) { S.k0 = Game.G.stats.kills; }, ok: function (S) { var G = Game.G; if (!G.enemies.some(function (e) { return !e.dead && !e.boss; }) && G.stats.kills - S.k0 < 3) spawnPractice(2); return G.stats.kills - S.k0 >= 3; } },
     { key: 'gem', lab: '경험치', t: '하트를 먹으면 경험치가 쌓여요. 하트를 먹어 보세요.', sm: '하트를 먹어 보세요.', at: function () { return elSpot('#me .bar.xp', 6) || elSpot('#me', 6); }, live: 1,
       set: function (S) { var p = me(); S.xp0 = p.xp; S.lv0 = p.lv; if (!Game.G.gems.length) dropGems(3); }, ok: function (S) { var p = me(); if (!Game.G.gems.length && p.xp === S.xp0 && p.lv === S.lv0) dropGems(2); return p.xp !== S.xp0 || p.lv !== S.lv0; } },
     { key: 'quiz', lab: 'LEVEL UP 문제', t: '경험치 칸이 모두 차면 문제가 나와요. 맞히면 새로운 능력을 얻습니다.', sm: '칸이 차면 문제! 맞히면 새 능력.', at: function () { return elSpot('#me .bar.xp', 6) || elSpot('#me', 6); } },
@@ -627,14 +621,7 @@ window.PLAZA_QUIZ_GATES = true;   // 꼭 푸는 문제만(LEVEL UP·보물 상�
       set: function (S) { var f = friend(), p = me(); if (!f) { S.skip = 1; return; } f.down = true; f.hp = 0; f.rv = 0; var pt = freeSpot(p, f); f.x = pt.x; f.y = pt.y; S.f = f; },
       ok: function (S) { return S.skip || (S.f && !S.f.down); } },
     { key: 'chest', lab: '보물 상자', t: '보물 상자는 문제를 맞혀야 열려요.', sm: '보물 상자는 문제를 맞혀야 열려요.' },
-    { key: 'boss', lab: '보스', t: '보스가 나왔어요! 약점 퀴즈를 맞히면 약점을 공격할 수 있어요.', sm: '보스가 나왔어요!', run: 1,
-      at: function () { var b = Game.G.boss; if (!b) return meSpot(90); var q = scr(b.x, b.y - 90 - (b.lift || 0)); return { x: q.x, y: q.y, r: 150 * V.zoom }; },
-      set: function () { bossDemo(); } },
-    { key: 'bossq', lab: '약점 퀴즈', t: '약점 퀴즈를 풀어 보세요.', sm: '약점 퀴즈!', run: 1,
-      at: function () { var b = Game.G.boss; if (!b) return null; var q = scr(b.x, b.y - 90); return { x: q.x, y: q.y, r: 150 * V.zoom }; },
-      set: function (S) { var b = Game.G.boss; if (b) { b.quizDone = true; Game.G.queue.push({ k: 'cq', b: b }); } else S.done = 1; },
-      ok: function (S) { var b = Game.G.boss, open = !document.getElementById('modal').classList.contains('hide'); if (S.done) return true; if (!open && b && (b.weak > 0 || b.rage)) { S.hitT = S.hitT || performance.now(); return performance.now() - S.hitT > 1500; } return false; } },   // 약점 공격 장면을 1.5초 보여 준 뒤   // 약점 공격(weak) 또는 아무도 못 맞혀 화남(rage)이면 끝
-    { key: 'down', lab: '탈락', t: '모두 기절하면 탈락!', sm: '모두 기절하면 탈락!', set: function () { bossAway(); } },
+    { key: 'down', lab: '탈락', t: '모두 기절하면 탈락!', sm: '모두 기절하면 탈락!' },
     { key: 'end', lab: '출발!', t: '레벨 7을 넘겨 보세요!', sm: '레벨 7을 넘겨 보세요!' },
   ];
   function freeSpot(p, f) {   // 기절한 친구 자리: 섬 가운데 쪽으로 약 200, 소품(나무·탑)·다른 친구와 떨어진 곳(검토: 섬 끝이면 물속·나무 속이 될 수 있었음)
@@ -648,18 +635,6 @@ window.PLAZA_QUIZ_GATES = true;   // 꼭 푸는 문제만(LEVEL UP·보물 상�
     }
     return best || { x: p.x + 60, y: p.y };
   }
-  function bossDemo() {   // 연습용 보스: 진짜 째깍 시계왕을 잠깐(안 다침·느리게, 저절로 나오는 투덜이 없음)
-    var G = Game.G; if (G.boss) return;
-    try { Game.summon('clock'); } catch (e) { return; }
-    var b = G.boss; if (!b) return; b.sp = 22; b.rage = false; b.quizDone = true; b.tut = true;
-    G.phase = 'wave';
-    var bn = document.getElementById('banner'); if (bn) bn.classList.remove('in');   // '1분 30초 안에…' 띠는 연습에선 안 맞음
-  }
-  function bossAway() {   // 연습 보스 퇴장(연기와 함께)
-    var G = Game.G, b = G.boss; if (!b || !b.tut) return;
-    try { FX.puff(b.x, b.y - 60, 14, 120); FX.stars(b.x, b.y - 120, 'gold', 10, 180); Snd.music('field'); } catch (e) {}
-    G.enemies = G.enemies.filter(function (e) { return e !== b; }); G.boss = null; G.hz.length = 0;
-  }
   function spawnPractice(n) {   // 약한 연습 투덜이 n마리를 내 둘레 화면 안에
     var G = Game.G, p = me(), before = G.enemies.length;
     try { Game.summon('horde'); } catch (e) { return; }
@@ -672,7 +647,7 @@ window.PLAZA_QUIZ_GATES = true;   // 꼭 푸는 문제만(LEVEL UP·보물 상�
   }
   function dropGems(n) { var G = Game.G, p = me(); for (var i = 0; i < n; i++) { var a = Math.random() * 6.28, d = 150 + Math.random() * 60; G.gems.push({ id: 900000 + Math.floor(Math.random() * 99999), x: p.x + Math.cos(a) * d, y: p.y + Math.sin(a) * d * 0.7, v: 1, tier: 0, mag: false, sp: 0, t: Math.random() * 6, pop: 0.25 }); } }
   function begin() {
-    var G = Game.G; build(); force = false;
+    var G = Game.G; build();
     T = { i: -1, S: {}, t0: performance.now(), run: G.stats.time };
     G.players.forEach(function (p) { if (p.bot) { p.wasBot = true; p.net = 'tut'; p.nx = null; } });   // 가상 친구는 연습 동안 제자리(내 조이스틱을 따라오지 않게 '멈춘 친구'로)
     G.queue.length = 0;
@@ -680,7 +655,7 @@ window.PLAZA_QUIZ_GATES = true;   // 꼭 푸는 문제만(LEVEL UP·보물 상�
     next();
   }
   function next() {
-    T.i++; T.S = {};
+    T.i++; T.S = {}; T.st0 = performance.now();
     if (T.i >= STEPS.length) { finish(false); return; }
     var st = STEPS[T.i]; if (st.set) st.set(T.S);
     T.next = !st.ok; say(st);
@@ -697,20 +672,19 @@ window.PLAZA_QUIZ_GATES = true;   // 꼭 푸는 문제만(LEVEL UP·보물 상�
   function finish(skipped) {
     var G = Game.G; setDone();
     G.players.forEach(function (p) { if (p.wasBot) { delete p.wasBot; if (p.net === 'tut') delete p.net; p.bot = true; p.down = false; p.hp = Game.maxHp(p); } });
-    bossAway(); G.enemies = G.enemies.filter(function (e) { return e.boss && !e.tut; }); G.hz.length = 0; if (G.boss && G.boss.tut) G.boss = null;
+    G.enemies.length = 0; G.hz.length = 0;
     G.waveT = 0; G.spawnAcc = 0; G.eliteI = 0; G.phase = 'intro'; G.phaseT = 2.4; G.freeze = 0;
     var p = me(); p.down = false; p.hp = Game.maxHp(p); p.inv = 2;
     T = null; ov.classList.add('hide'); bar.classList.add('hide'); mask.classList.add('hide');
     try { UI.banner('LEVEL 1', skipped ? '바로 출발! 투덜이들을 웃게 만들어요' : '연습 끝! 이제 진짜 출발이에요', 'lvl', 2.4); } catch (e) {}
   }
-  window.HEART_TUT = { get state() { return T ? { i: T.i, key: STEPS[T.i] && STEPS[T.i].key, next: !!T.next } : null; }, done: done, next: function () { if (T) next(); }, skip: function () { if (T) finish(true); }, force: function () { force = true; } };
+  window.HEART_TUT = { get state() { return T ? { i: T.i, key: STEPS[T.i] && STEPS[T.i].key, next: !!T.next } : null; }, done: done, next: function () { if (T) next(); }, skip: function () { if (T) finish(true); } };
   // 매 장면: 시작할 때인지 보고, 튜토리얼 중이면 연습판 지키기 + 어두운 막 그리기
   function tick() {
     requestAnimationFrame(tick);
-    titleBtn();
     var G = typeof Game !== 'undefined' && Game.G; if (!G) return;   // Game은 const라 window.Game이 아님
     if (!T) {
-      if (G.on && G.phase === 'intro' && G.L === 1 && !G.net && !G.guest && !G.cfg.show && !G.cfg.auto && !G.tutTried && want()) { G.tutTried = true; begin(); }
+      if (G.on && G.phase === 'intro' && G.L === 1 && !G.net && !G.guest && !G.cfg.show && !G.cfg.auto && !G.cfg.teach && !G.tutTried && want()) { G.tutTried = true; begin(); }
       if (!G.on) G.tutTried = false;
       return;
     }
@@ -721,9 +695,10 @@ window.PLAZA_QUIZ_GATES = true;   // 꼭 푸는 문제만(LEVEL UP·보물 상�
     if (G.phase === 'intro') G.phase = 'wave';
     G.waveT = 0; G.spawnAcc = -1e9; G.eliteI = 99; G.bossT = 90;
     G.players.forEach(function (p) { if (p.wasBot && p !== (T.S && T.S.f)) { p.down = false; } });   // 다치지 않게 하는 것은 hurt()에서(inv로 하면 모두 깜빡였음 — 검토)
-    G.freeze = st.live || st.run ? 0 : 0.2;   // ▶ 단계는 잠깐 멈춤(보스 시범은 움직이게)
+    G.freeze = st.live ? 0 : 0.2;   // ▶ 단계는 잠깐 멈춤(투덜이가 나타날 때도 멈춘 채로 보여 줌)
     var modalOpen = !document.getElementById('modal').classList.contains('hide') || !!document.getElementById('pqOv');
     ov.style.visibility = bar.style.visibility = mask.style.visibility = modalOpen ? 'hidden' : '';
+    if (st.auto && !modalOpen && performance.now() - T.st0 > st.auto * 1000) { next(); return; }   // 저절로 다음(▶로 먼저 넘겨도 됨)
     if (st.ok && !modalOpen && st.ok(T.S)) { T.ok = (T.ok || 0) + 1; if (T.ok > 20) { T.ok = 0; next(); return; } } else T.ok = 0;   // 다 하면 조금 뒤(반짝 볼 틈) 다음
     draw(st);
   }
@@ -737,7 +712,7 @@ window.PLAZA_QUIZ_GATES = true;   // 꼭 푸는 문제만(LEVEL UP·보물 상�
     var a = st.at ? st.at() : null, list = Array.isArray(a) ? a : a && !a.rect ? [a] : [];
     if (a && a.rect) { var R = a.rect; c.fillStyle = '#000'; c.beginPath(); if (c.roundRect) c.roundRect(R.x * k, R.y * k, R.w * k, R.h * k, 10 * k); else c.rect(R.x * k, R.y * k, R.w * k, R.h * k); c.fill(); }
     list.forEach(function (q) { cut(q.x, q.y, q.r); });
-    if (st.live && (st.key === 'atk' || st.key === 'rv' || !list.length)) { var m = meSpot(70); cut(m.x, m.y, m.r); }   // 직접 하는 단계는 내 캐릭터도 보이게
+    if ((st.live || st.key === 'atk0') && (st.key === 'atk' || st.key === 'atk0' || st.key === 'rv' || !list.length)) { var m = meSpot(70); cut(m.x, m.y, m.r); }   // 직접 하는 단계는 내 캐릭터도 보이게
     c.globalCompositeOperation = 'source-over';
     // 밝힌 곳 테두리: 흰 줄 + 금빛 굵은 줄(깜빡), 투덜이는 위에 ❗ 화살표
     var t = performance.now() / 1000, gl = 0.75 + Math.sin(t * 6) * 0.25;
@@ -759,6 +734,179 @@ window.PLAZA_QUIZ_GATES = true;   // 꼭 푸는 문제만(LEVEL UP·보물 상�
   }
   requestAnimationFrame(tick);
 })();
+</script><style>
+#hRoom{position:absolute;right:calc(14px + var(--sar,0px));bottom:calc(64px + var(--sab,0px));padding:3px 12px;border-radius:999px;background:rgba(58,24,48,.78);color:#fff;border:2px solid #fff;font-size:15px;letter-spacing:.5px;pointer-events:none;z-index:3}
+#hRoom b{font-weight:normal;font-size:18px;color:#ffe066;margin-left:4px;letter-spacing:2px}
+#hRoom.hide,#tBack.hide{display:none}
+#tBack{margin-top:2px}
+#netWait #nwHome{margin-top:10px}
+.fr.away{opacity:.55}
+@media (max-height:520px){#hRoom{bottom:calc(50px + var(--sab,0px));font-size:13px}#hRoom b{font-size:15px}}
+</style><script>
+/* 하트 특공대 친구랑 같이 하기: 진짜 친구끼리만·사람 수 맞춤·튕김 대처 (heart_inject.py, 2026-11-26) */
+(function () {
+  var Q = new URLSearchParams(location.search);
+  // 사람 수 표: hp 투덜이 체력 · rate 나오는 빠르기 · boss 보스 체력 · dmg 받는 피해 (난이도·학년 배율 위에 곱함)
+  // solo = 혼자(가상 친구 3명과 함께, 예전 그대로) · 1 = 친구랑 하기에서 방장 혼자 남음 · 2·3·4 = 진짜 친구 수
+  // 자동 플레이(난이도 상, 12분, ?teamsim=N)로 맞춤: 혼자 LEVEL 5~6 · 2명 LEVEL 7(기절 1번) · 3명 LEVEL 4~8 · 방장 혼자 LEVEL 8 → 2명 판은 한 명이 기절하면 깨울 사람이 하나라 받는 피해를 크게 낮춤
+  window.HEART_TEAM = {
+    solo: { hp: 1, rate: 1, boss: 1, dmg: 1 },
+    1: { hp: 0.55, rate: 0.46, boss: 0.42, dmg: 0.55 },
+    2: { hp: 0.65, rate: 0.55, boss: 0.5, dmg: 0.55 },
+    3: { hp: 0.86, rate: 0.82, boss: 0.8, dmg: 0.85 },
+    4: { hp: 1, rate: 1, boss: 1, dmg: 1 } };
+  var SIM = Math.max(0, Math.min(4, parseInt(Q.get('teamsim'), 10) || 0));
+  function GG() { return typeof Game !== 'undefined' && Game.G; }
+  window.HEART_TEAMN = function () {
+    var G = GG(); if (!G) return 'solo';
+    if (G.guest) return 'solo';   // 친구 기기는 판정을 안 함(방장 기기 판 그대로 받음)
+    if (SIM && !G.net) return SIM;
+    if (!G.net) return 'solo';
+    return Math.max(1, G.players.filter(function (p) { return !p.bot && !p.away; }).length);
+  };
+  window.HEART_TK = function () { return window.HEART_TEAM[window.HEART_TEAMN()] || window.HEART_TEAM.solo; };
+  window.HEART_BOTS = function () { return SIM ? SIM - 1 : 3; };   // 혼자 판의 가상 친구 수
+  // 판 중에 사람 수가 바뀌면(나감·돌아옴) 이번 LEVEL 숫자를 다시 계산(나와 있는 보스 체력은 그대로)
+  window.HEART_TEAM_CHANGED = function () { var G = GG(); if (G && G.on && !G.guest && G.L) { try { G.lv = DATA.LV(G.L); } catch (e) {} } };
+  // 약점 퀴즈: 진짜 사람의 절반 이상이 맞혀야 약점 공격(2명 1명 · 3명 2명 · 4명 2명, 혼자면 내가 맞히면)
+  window.HEART_CQPASS = function (rate) { return rate >= 0.5 - 1e-9; };
+  function people(list) { var n = 0; for (var i = 0; i < list.length; i++) if (!list[i].bot && !list[i].away) n++; return n; }
+  window.HEART_CQSUB = function (crew) { var n = people(crew); return n <= 1 ? '맞히면 약점 공격! 틀리면 보스가 화가 나요' : '절반 이상(' + n + '명 중 ' + Math.ceil(n / 2) + '명) 맞히면 약점 공격!'; };
+  window.HEART_CQMSG = function (res, rate) {
+    var n = 0, m = 0; for (var i = 0; i < res.length; i++) { if (res[i] === true) { n++; m++; } else if (res[i] === false) n++; }
+    var ok = window.HEART_CQPASS(rate);
+    if (n <= 1) return ok ? '정답! 약점을 찾았어요!' : '아쉬워요! 약점을 못 찾아서 보스가 화났어요';
+    return n + '명 중 ' + m + '명 정답! ' + (ok ? '약점 공격!' : '절반 이상 맞혀야 약점 공격이에요');
+  };
+  // 잠깐 나간 친구: 섬 밖으로 비켜 세우고(안 다침·안 셈) 레벨·능력·체력은 그대로 맡아 둠
+  window.HEART_AWAY = function (p, quiet) {
+    var G0 = GG(); p.awDown = !!p.down; p.awHp = p.hp; p.awL = G0 ? G0.L : 0;
+    if (!quiet && window.HEART_CQSKIP) window.HEART_CQSKIP(p);   // 약점 퀴즈 중이면 그 친구는 빼고 셈
+    p.away = true; p.busy = false; p.x = p.nx = -99999; p.y = p.ny = -99999; p.vx = p.vy = 0; p.down = false; p.rv = 0;
+    if (!quiet) {
+      window.HEART_TEAM_CHANGED();
+      var G = GG();   // 마지막으로 서 있던 친구가 나가면 '모두 기절 = 끝'(검토: 아무도 안 다쳐서 검사가 안 돌았음)
+      if (G && G.on && !G.guest && G.players.every(function (q) { return q.down || q.away; })) try { Game.gameOver(); } catch (e) {}
+    }
+  };
+  window.HEART_BACK = function (p) {
+    var G = GG(), a = G.players.filter(function (q) { return q !== p && !q.away && !q.down; })[0] || G.me;
+    p.away = false; p.x = p.nx = a.x + 56; p.y = p.ny = a.y + 24; p.vx = p.vy = 0; p.rv = 0;
+    if (p.awL === G.L && p.awDown) { p.down = true; p.hp = 0; }   // 기절한 채 나갔으면 기절한 채로(같은 LEVEL일 때)
+    else { p.down = false; p.inv = 2.5; if (p.awL === G.L && p.awHp > 0) p.hp = p.awHp; }
+    if (window.HEART_CQSKIP) window.HEART_CQSKIP(p);   // 진행 중인 약점 퀴즈 창은 못 받았으니 빼고 셈
+    window.HEART_TEAM_CHANGED();
+  };
+  // 기기 표(이 기기를 알아보는 무작위 글자, 처음 한 번 만듦)
+  var devMem = '';
+  window.HEART_DEV = function () {
+    if (devMem) return devMem;
+    try { devMem = localStorage.getItem('heart.dev') || ''; } catch (e) {}
+    if (!devMem) { devMem = Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4); try { localStorage.setItem('heart.dev', devMem); } catch (e) {} }
+    return devMem;
+  };
+  // 마지막 방 기억: 친구 기기 heart.room(30분), 방장 기기 heart.host(20분, 판 내용까지)
+  function getJ(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
+  function setJ(k, v) { try { if (v) localStorage.setItem(k, JSON.stringify(v)); else localStorage.removeItem(k); } catch (e) {} }
+  window.HEART_ROOM_SAVE = function (code, hero, nick) { setJ('heart.room', { code: code, hero: hero, nick: nick, t: Date.now() }); };
+  window.HEART_ROOM_FORGET = function () { setJ('heart.room', null); };
+  window.HEART_HOST_FORGET = function () { setJ('heart.host', null); };
+  function saveHost() {
+    var G = GG(); if (!G || !G.on || !G.net || G.guest || G.over || G.allClear || typeof Net === 'undefined' || Net.mode !== 'host' || !Net.started) return;
+    setJ('heart.host', { code: Net.state.code, t: Date.now(), L: G.L, hero: G.me.hero, nick: G.me.nick,
+      players: G.players.filter(function (p) { return !p.bot; }).map(function (p) { return { me: p === G.me, dev: p === G.me ? window.HEART_DEV() : p.dev || '', nick: p.nick, hero: p.hero, lv: p.lv, xp: p.xp, need: p.need, W: p.W, P: p.P }; }) });
+  }
+  setInterval(function () { try { saveHost(); } catch (e) {} }, 2000);
+  // 다시 연 방에서 이어 하기: 레벨·능력을 그대로(체력은 새 LEVEL이라 가득)
+  window.HEART_RESTORE = function (R) {
+    var G = GG(); if (!G || !R || !R.players) return;
+    G.players.forEach(function (p) {
+      if (p.bot) return;
+      var sp = R.players.filter(function (s) { return p === G.me ? s.me : !s.me && s.dev && s.dev === p.dev; })[0] || (p === G.me ? null : R.players.filter(function (s) { return !s.me && s.nick === p.nick; })[0]);
+      if (!sp) return;
+      p.lv = sp.lv || 1; p.xp = sp.xp || 0; p.need = sp.need || DATA.need(p.lv);
+      p.W = JSON.parse(JSON.stringify(sp.W || p.W)); p.P = JSON.parse(JSON.stringify(sp.P || {}));
+      p.hp = Game.maxHp(p);
+    });
+  };
+  window.HEART_RESUMESUB = function (R, lobby) {
+    var miss = (R.players || []).filter(function (s) { return !s.me && !lobby.some(function (g) { return s.dev && g.dev === s.dev; }); }).map(function (s) { return s.nick; });
+    return '아까 하던 LEVEL ' + R.L + '부터 이어 해요 · 친구들은 저절로 다시 들어와요' + (miss.length ? ' · 기다리는 친구: ' + miss.join(', ') : '');
+  };
+  // 처음 화면 「🔁 아까 방으로 돌아가기」: 친구 기기는 heart.room, 방장 기기는 heart.host
+  function backInfo() {
+    var r = getJ('heart.room'), h = getJ('heart.host'), now = Date.now();
+    if (r && !(now - r.t < 30 * 60000)) r = null;
+    if (h && !(now - h.t < 20 * 60000)) h = null;
+    if (h && (!r || h.t >= r.t)) return { host: 1, v: h };
+    return r ? { host: 0, v: r } : null;
+  }
+  function titleBack() {
+    var title = document.getElementById('title'), st = document.getElementById('bStart'); if (!title || !st) return;
+    var b = document.getElementById('tBack');
+    if (!b) { b = document.createElement('button'); b.id = 'tBack'; b.className = 'btn purple small hide'; st.parentNode.insertBefore(b, document.getElementById('bMulti') ? document.getElementById('bMulti').nextSibling : null); b.onclick = function () { var I = backInfo(); if (!I) { b.classList.add('hide'); return; } try { Snd.init(); Snd.sfx('click'); } catch (e) {} if (I.host) Net.reopen(I.v); else Net.joinCode(I.v.hero, I.v.nick, I.v.code); }; }
+    var I = title.classList.contains('hide') || typeof Net === 'undefined' || Net.mode !== 'solo' ? null : backInfo();
+    if (!I) { b.classList.add('hide'); return; }
+    var tx = I.host ? '🔁 아까 방 다시 열기 (' + I.v.code + ')' : '🔁 아까 방으로 돌아가기 (' + I.v.code + ')';
+    if (b.textContent !== tx) b.textContent = tx;
+    b.classList.remove('hide');
+  }
+  // 게임 중 '방 코드 1234'(튕긴 친구가 친구 패드를 보고 다시 들어올 수 있게)
+  function roomChip() {
+    var hud = document.getElementById('hud'); if (!hud) return;
+    var c = document.getElementById('hRoom');
+    if (!c) { c = document.createElement('div'); c.id = 'hRoom'; c.className = 'hide'; hud.appendChild(c); }
+    var G = GG(), on = G && G.on && typeof Net !== 'undefined' && Net.mode !== 'solo' && Net.state.code;
+    if (!on) { c.classList.add('hide'); return; }
+    var h = '방 코드<b>' + Net.state.code + '</b>'; if (c.innerHTML !== h) c.innerHTML = h;
+    c.classList.remove('hide');
+  }
+  // 친구 고르기 화면 글: 혼자 / 친구랑, 광장 동물이면 '누구의 힘을 빌릴까요?'
+  function selText() {
+    var sh = document.querySelector('#select .sh'); if (!sh || typeof UI === 'undefined') return;
+    var b = sh.querySelector('b'), sm = sh.querySelector('small');
+    var tb = window.ME2D ? '누구의 힘을 빌릴까요?' : '함께할 하트 친구를 골라요';
+    var ts = UI.cfg.mode === 'multi' ? '친구랑 같이 하기는 진짜 친구끼리만 한 팀이 돼요' : window.ME2D ? '고른 친구의 힘(무기)을 내 동물이 써요 · 남은 친구 셋은 같은 팀' : '남은 친구 셋은 같은 팀으로 함께 싸워요';
+    if (b && b.textContent !== tb) b.textContent = tb;
+    if (sm && sm.textContent !== ts) sm.textContent = ts;
+  }
+  setInterval(function () { try { titleBack(); roomChip(); selText(); } catch (e) {} }, 400);
+  // 내 동물 옆에 고른 하트 친구가 작게 둥둥(사랑둥이의 힘을 빌린다는 것이 보이게) — 그림 하나만 더 그림(낡은 패드 부담 적게)
+  window.HEART_BUDDY = function (g, p, t) {
+    var f = p.face || 1; p.bdx = p.bdx == null ? -f * 54 : p.bdx + (-f * 54 - p.bdx) * 0.12;   // 바라보는 쪽 뒤에 떠서 따라옴(돌 때 미끄러지듯 옮겨 감)
+    var bx = p.x + p.bdx, by = p.y - 22 + Math.sin(t * 3.1) * 5;
+    try { Render.hero(g, p.hero, bx, by, 0.5, { t: t, mv: 0.25, ph: t * 5, face: f, mood: 'happy', flash: 0, cheer: false, seed: (p.seed || 0) + 3, vx: 0 }); } catch (e) {}
+  };
+  window.HEART_JOSA = function (w, a, b) { var c = String(w).charCodeAt(String(w).length - 1) - 0xac00; return c >= 0 && c <= 11171 && c % 28 ? a : b; };
+})();
+</script><script>
+/* 하트 특공대 선생님 점검 바로 가기 (heart_inject.py, 2026-11-26) */
+(function () {
+  function teacher() { try { if (window.PLAZA_TEACHER) return !!window.PLAZA_TEACHER(); } catch (e) {} return new URLSearchParams(location.search).get('teacher') === '1'; }
+  function go(L, after) {   // 혼자 판을 LEVEL L에서 새로 시작(연습 없이, 점검 판 표시)
+    try { if (typeof Net !== 'undefined' && Net.mode !== 'solo') return; } catch (e) {}
+    ['title', 'select', 'result', 'pause'].forEach(function (id) { var e = document.getElementById(id); if (e) e.classList.add('hide'); });
+    UI.cfg.mode = 'play'; UI.begin(Game.G.me && Game.G.on ? Game.G.me.hero : 'sarang', { L: L, teach: true, nick: '선생님' });
+    if (after) setTimeout(after, 600);
+  }
+  function toBoss(weak) {   // 지금 LEVEL 보스를 바로(weak면 체력 조금만)
+    var G = Game.G; if (!G.on) return; G.phase = 'wave'; G.waveT = 49.6;
+    if (weak) { var n = 0, iv = setInterval(function () { if (G.boss && !G.boss.dead) { G.boss.hp = Math.min(G.boss.hp, 30); G.boss.quizDone = true;   /* 반쯤에서 나오는 약점 퀴즈는 건너뜀 */ for (var i = 0; i < G.players.length; i++) G.players[i].inv = 9; clearInterval(iv); } else if (++n > 80) clearInterval(iv); }, 100); }
+  }
+  function allDown() { var G = Game.G; if (!G.on) return; G.phase = 'wave'; G.players.forEach(function (p) { p.down = true; p.hp = 0; p.rv = 0; p.inv = 0; }); try { Game.gameOver(); } catch (e) {} }
+  if (!teacher()) return;
+  window.PLAZA_TEACHER_JUMPS = function () {
+    return [
+      { label: 'LEVEL 6 보스(7 직전)', fn: function () { go(6, function () { toBoss(false); }); } },
+      { label: 'LEVEL 7 보스 거의 다(깨기 직전)', fn: function () { go(7, function () { toBoss(true); }); } },
+      { label: 'LEVEL 14부터', fn: function () { go(14); } },
+      { label: 'LEVEL 15 보스 거의 다(최종 완료 직전)', fn: function () { go(15, function () { toBoss(true); }); } },
+      { label: '지금 LEVEL 보스 바로', fn: function () { if (Game.G.on) toBoss(false); else go(1, function () { toBoss(false); }); } },
+      { label: "'모두 기절' 끝 화면", fn: function () { if (Game.G.on) allDown(); else go(1, allDown); } },
+      { label: '최종 완료 화면', fn: function () { go(15, function () { var G = Game.G; G.phase = 'done'; G.allClear = true; try { window.HEART_ALLCLEAR(); } catch (e) {} }); } },
+    ];
+  };
+})();
 </script><style>@media (min-width:761px) and (max-height:820px){#cards{grid-template-columns:repeat(6,minmax(0,150px));gap:10px}.ht{display:none}#select{gap:9px}.hcard canvas{max-width:136px}}</style><script>
 /* 친구 고르기 화면을 화면 높이에 맞추기 (heart_inject.py, 2026-11-26) */
 (function () {
@@ -779,18 +927,21 @@ window.PLAZA_QUIZ_GATES = true;   // 꼭 푸는 문제만(LEVEL UP·보물 상�
   addEventListener('resize', function () { setTimeout(window.HEART_FIT, 60); });
   setInterval(fit, 400);
 })();
-</script><style>@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,d09GMgABAAAAAAEEAA0AAAAAAigAAAC4AAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcEAZgAAQRCAoBKgE2AiQDBAsEAAQgBQYHIBtpAfifCbbNmLNLdQxDhtE+iQgbsmaP1oTp8V1V1YsGZRAGhEe4VjTCIRESiSrt/3pjRO1Zu0GSoksQrGPYgAOQQCQBj20AvRlwYJJXBATtevXLwtLGgVaNUCsgaNepG9DYYNREOS1hXXNoAujU3OYgT4ZeThrUST8NeUMg12UMKiBSqx4QUAAA0AiAIOaOd8/Pjnpm31tpGJ4f5w/gdZgA0KyAkLXLgAAAUrYkCIAAAIBmDUB9cAE=) format('woff2');unicode-range:U+d7a3}
-@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,d09GMgABAAAAAAMQAA0AAAAABQwAAAK/AAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcEAZgADQRCAqFMIQbATYCJAMICwYABCAFBgcgG44DAMao33z3ICGiPBWtmXx1BlonleQJ1CRSd8/UTe0tjabIAos0kbDsL9tDo0SzENbCeZ6YZO6gzjRP1BrOU3kNAkANPwSAlFU0aQMlZADgdAIAwAm10MPMy+hQYoYcoASqA4Ba3yPdkGIFgBOAUdI0KAgHd6CFDnJm4Tc9CB9oJNlInSiCQAEd0IUbaBDBZAgCMoSEO+B0KquagACAQuYtA3DCNiADwAD4AOA3AIBPmIiylJAwXVvBQ5xP5i8mPO8rLfB0aHS2beG2ed7zFi1c6NUw163Bqu4lCt1tx8Ibbe5rKtdQ94lWN+txtXC9wr7dR1y8eAEJ5fkFAqU1xT0RbrJ5Uswl90aH+9b+Xe7r4uZuVbdr69jm3gguzDqGaqupCmpuYViD1b76DefsxyMEQRQ9BA/R7iES3lNyOEyaoQ1uc7dGiKTyfJ7QvORxUY9DY1rlPm+RN7iFI7jGlDVqTJ46X1IoSfkQ7yHa3bT2rWFCg1sDh8aG7u1A0GzupvbbyTh/wkqDNSSU9YmpSrz8bLffuaDRnplnXaHxyy2OGbFlRU/Nf3Iw4Es/S8myhxuPMvOh2yCNs6oPmi9agn2Su1Ns0IlNM8eyKhJAsy4p6R16P55k5LT8MhiVF0d8/PTRYrR8woTeE5d6sAPpMXeSN7/97+m9xqOnm8y8KYjVeXJdtz8+XqRRyvXmpB5KVY+RPZRJl7bu3sW67ulXUWIgE9q6R/Tu6nZ5+rTpmSxh5CqZxj9mfLtVbbTsxO5j/OT3ffQ+BrkqmOXk8h6JFw8u9bKYs5UK9/b9ObO2pbmFkvPy0DGEzo0aTKdoeyeP6EG5e7oSAAAIAIKSfZezrnY35H1T+tIvAeDC9tI2APAifpgVgc4b1B+aAcCAAgAQfFi5gIGitAEEoaCoC6gAnwCg8AFMLQFoBjTEnNuQAgAAAA==) format('woff2');unicode-range:U+b700}
-@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,d09GMgABAAAAAAL8AA0AAAAABRAAAAKrAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcEAZgADQRCAqFNIQnATYCJAMICwYABCAFBgcgG5oDAMaHxzPfj65Ne4A0sx2ZZBDQoWvqn70+pUiBPemLVFGXPQ0nPJtRNiZNcOA+3anqn+PMn8rxj0EA8LCCDUhSSlYRZGAAQKMBACCnV0IHdJqhHckUsAA1jioDkHluSA0CmAMoASgJ2XZ2OLh+0AbaThOG33QHfEjDyUbqxGAHCtiANo1gEyAM7AADkX79II1GaPkjQQDAJPFCF+hQAEwf7ydcN4CH6Pa01I6CxKuuqVSYNddpKT/OYr6Ner5aTdQUm0izAQnNOKNxy++CxaLpDDZWmDjHFYrx443FZcbFyxFFleDMU9koZs51EgS+THRPvbgdkPZXCStXLnVZPnvOGtM1RzxnrFkzly5btcr4UPyaLZ5zjrgGknXXvHWWymjmVpfdlz1mLzUrtM1WL5msPhy7s1UlzJxpJPDjTCST2TcsibCU5yFAgDxWzZYkQksLTOe4rnieMSsjBsT77xEizTGdYTrHeZm5OM/Itm/cRd4SSXEhStP3HVil1fSDLKcI9GJlvJzXYuwT/DfGxZmrFAW9d/XU5+3M0luSuHr1ItVGPpCV+3XT7z4JC9VLG265hAQZcloyRVhsuKecvtWhxxVO2SHjnDvnRfX7jlyLHR5csr7DoqtsSscD1R2sLCIHuBfNf/hwsJOsPZSTPzP/vvBR4C/28EhrLNvQVb99oQlvaNv5sf3h8aEL13dafI39VrZkZvpj/cvjIzVBRJG3SFyuNDq1ovINSdDRWRjH05V8SEUnsUmU69wQN9VaIYNxqBQek9J+rTGm7qyClpXFLbxYo+QZj5j7X55MFyvtaQAACACChOdvuu6t1Y36JrOkXwLAhe2JRQDwwrvLUig09+hQmgHAgapUP68RkwFDawoIaKCoC0gRNgFA4SfoiQRCcqDBp9mGAAAAAAA=) format('woff2');unicode-range:U+ae7c}
-@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,d09GMgABAAAAAALcAA0AAAAABOwAAAKNAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcEAZgADQRCAqFEIQCATYCJAMICwYABCAFBgcgG3UDAMaH3rPeZNIFhN8DkR5UZtdJD/SXqEzd1H9LoymywCJNJBz7fA7LEs5CaFM+wUIPMADOzTkevVykjLzaDQLACC5wA8nJK6mBAVgAkCQAADyxCcxA6yz1JisgAxiOaQBQ3AekDVHMA4wAtKxSDw8cO2ndQz2kBPymQ/DBRpBtzNnKAwxQkFY2oCA9ysIDsoDEJ60lKRgp70EAQCa6Yw5scAD2hk+994AO8eHY6An+NvWzk40EP6XOSbvRXyU3Np7N87y9ShQ1tgobY/ne3aKjRi0INuJmzDp09aoRd/36kXYVb69S2avW2hurbBW2CoWtwtFF0+9Yy2915nkVT4ip7qHudtRsd5wnNRq1zRpBUNptOOGm3uSwJiWSwK7OEeWWHq2d7q/zWaOLxmyet+d3OvO0hQzHrE1GnJ2uh1Blrz3vvzdwX95tA7kI21acHzXLRr3Lp2G27gxnxHG7BMwSd582lp8+u3ZWVthrvUx6udfCwi2ywsTgoYn9uIcnv50uu+Ec5txlHu3VnRWxe9jThyFRDr5vKu2H66elHbF/pz+GXQZe/jbNPnF6o5nBU2Nyog74j3SAK3ROmf02YztHl1tZe7rutECL8uDUTTZFvok1tHNBFGvx2Tct7fK17mtDdigscb5DGJhCyEGPR1sS9b/occi+PE++xFX7q+n21U2d4zMtzer2Vzpdd7fUJQ8YBNPo5jWXc6zry+wDiGElWzGqMiP6v1OQa+POr8fUXaZ/bDLcPVK/3jE1vvP1mIf7J+s/AAAQAARZjTDwaTdP+WbgTF8CwIU92TUA8CJ0hAA36TJtoIYA9MC81PEvpQYHAnSAgCqGuYA8cAkABk/BthKA0gOFkLQbUQAA) format('woff2');unicode-range:U+c313}
-@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,d09GMgABAAAAAARUAA0AAAAABvwAAAQEAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcEAZgADwRCAqJFIZxATYCJAMMCwgABCAFBgcgG/AEAC4L4jFuqhJtZQhwyhZm15N+kA+9Z73JpOBuuoDxdfxND+pBUMoIcLDOKph2Pc2s6BfoJ8+cZEn9TnjKeac5Whf6zYN1B61wpOf/mvrP7vAo8ciO9EQiYhHpexOaTXBAw0g6WgGWyIB9usnwckKiWE/m74W6BgSAHJawBklMziyEFCwACAJA4pSUUPsOs1SDTKKJAIZnlALIGNdINfyRARgBUsVn2drSDm5p2XlKbQX4TdvxgUaQjYwTA1swwAXRgSEoiKIsXCFxnoCZRchQap3MApSXmicgggA9QIuA+ImQGc7yXcQAaztN9A1I8k+s0B3TagXaUS0EzyAqKjSpljttQH7nzsgdwI+NtUFcV1dNLxk7trqaLG8n2+lc5wBvFWhbN4gqa2QrRkBx3fLt8vgyxSvXMTCeI7j6HZCeFjq/CtXSGPklqqKCoAAPMcRVkF6661qYrlMOVRAtbdpTZ+HLuyDuIiiKoDqIjh3HaS0tbRBXKVRPk9PnESu6dbrXw1o698mhecIpGDIFQyq2Al4NuOCabrL72INMawN8tNCFbEH5BiRQVNfrtLd2VooQovnqo3KoMpmwBdB9eAl8mo6gd9qFEdTKjhbttqrqbrJ72WNGd3c7Wd7aec8sxq3ZYlC97OK4tvfUS4fQJaJiRHvqyH12iyzVIdsxowl4DDHsWvKulo1mVV6iMRsP5biiQiU1HQPteXJnxFnBVeWHWrw/vbV75WBeZIgYF2DzdCZOmdVcKz/21e6hnKErjjEVSbuy5pbca9aQMfRppr7Gwuq+0acAZ6ZV7UDtAlUNoJzShZKNDRzuEE5avHykzNZc/3+g7wvfj2ytXKRv4pRedII8GpFWYc8OE6KQO6g757jfOzKiguS8nJGhj6nH5Fdbr92Vqi9iPdyMwc8rBj79a8aKqzfRzvlle8YWtv14EBvrtismNLpD+ER17IYXFp2iFkVyQTc/cgZqHeL7n62ZUZuU8xF99mTNnKiI8mzK14ifC+kt4BSbmmPi0i08jO40PubRAJpn/LJEdCzvjjXDMu0cKo6DAjULg/udpRtVhRrfA5WEI5RK+BHN7LTqVf19WY1XRckdB6qyLM0divUK6x4+HOkobQsRy96afV/4yPGy/e6pyaUbeqTaGoyBgU3uK7vD2pAG/opHTNFlt28+0+8Vd1kb8WOrsxUhzUgilnWLupt6hm+2V2aHyK3oQ1s6OzJLbe6h4mlae7mW7aUXy6yI1PSh2Qinv6jaFlySSVVMdFzSb7/kvn7rWwniDWZWSMdLRH6TWtCXkPqF7Qkh4xQvvLpbYC2kXtQagBhMpPw70KIZMLglIIBpyuwDdRKKRsOTpvgIupBAKDEo2IRt8AcAAA==) format('woff2');unicode-range:U+b367,U+cce4}
-@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,d09GMgABAAAAAAPcAA0AAAAABigAAAOOAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcEAZgADwRCAqHQIVzATYCJAMKCwgABCAFBgcgG3AEAI7Ctm0TUSEcgSdTPIzgn2c/d9/EPC601SGmSazh8VMnbURNNA7Zk0mJhEz6Q3jaXTNQSJ9MCqbelrcx/9fU+3ZBR0lHeqQnEokdqyaezWxvllhNE4Spt+7VhXjZ1xO6GwEeclgAO7vT8oASNgDzPwBwMh8BbLvNagtXAHmw1CizAAb2lZbx8RyAEBzUnm5VAgc2nNg3hlj9D+KXtYX3NEo3lNdBCQpMYB3EQJDicpSBIxaWLM3/JkhnJLht3lWRUDQLgu4DB+AEzQC0/goPWF+z9fc5jkS4lApbU1NiBymLTRqSh13pJCkzpEump/UPRpObXdmHHYFb1151x3Ec1WNscdh1yYUlNsKmjKb22KksohnQDGYOodO9KMZg6GFDrEtpPB4fClukpwJaRTC5/YZFo0ErjW/IdpRJ9HFcH2cCDICTrfYQ0tiGdEO2vcQY5+p1LdpmMgOPr1myhaZ0kj47fQUYKJd77B34YtWpuoTJ1GPsUJmpbTOgsVhUaKey2aRqfdoYZ+qDfJolKsoa0lXr+ibKdGuggXJQQF9sWEjl8clYj8tF9Yp6ydHDsOUysRhT2TYwQDFwwCSMpo6ZsHhQKsBA9ZnEs1ZLDaRCaKdS2aQjXZKhBsCrhJijDO5Cv4sCVamiBEqAxIL7eutaBFfkE7b3l7eYZUJHnCd5Dx6M27maKw7lp8bfiIfA32bHpbe2aH2n9iZhoKJr2f7I+tDiQEL5agVip0Z/LRIxkh9pX1ocqusPVbMucala7KSsdDwa0dXUuGBKICuegJI2vA5XDlzHN1aakStnU4o9goVHjRFJZ3lVRKmoqkWFmoqcS8S9z49X46XW1tIti8XHTpausCnjVjrWRhyeGTMnxtZnBUHWy7qso0zI+zX6EimHLlOWaMYb/u7Yk2Zk1dbI/IzWSvrWhWXUKeAZNVA/DbUCBgbP6Ore3RtmSTFSUwSWJOJpTBisQJ5UwtVOcd1bsm0ZXgHQVCtZd0/YX1sXJsZ+QDYkyCsizxAFeQWvy86KZ3qL9f8D38gpy8vHnK43VBs61LQ2SFG3blNAhNTBGVmkr8GCwDMaSHdvTPQ7cnuo+6ieKyIx3Ol9scnUEwh1rOAFAIAA0T4iHtxTqRn2VckUeQGA322xeQDAn3uHGNiZl60miBwABxZOqh/SiGDA2C0AENezWM6DboFCZY2s3BpgrlDGgRU+cys+AA==) format('woff2');unicode-range:U+b0c8,U+be7c}
-@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,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) format('woff2');unicode-range:U+b6f0,U+ba4b,U+cd98,U+d29c}
-@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,d09GMgABAAAAAAMwAA0AAAAABMgAAALhAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcEAZgADQRCAqEbIN5ATYCJAMICwYABCAFBgcgG2wDUZTMRQ/gc47KuC32/6JKwDLB5RyJcDrqWa9kqw3mJO7CiDmo3euhhReitj7JCpNVFDs6gv/YlPtkwf74Zp8+ICXAkWjmmemcYBIAl7v/bw7ASRvTxc8tTR80fS7wsE2hB1YWyOg0wH/twxyIEIINOFnoyQNdfKU7RM43nE5OL9/pF8oyD8MAqAYMDKrcFk2ywzILVf5/17YRT9rkpAqvQ8pkUmR1q19Qjx6ahUTK9M3R6biEgrQsML7UiROvs+PC2a41ysS8yPzfW7pv09EpcoGNdMJbJXBc1DfMMrsp0MSk59nNoLyom9ZZHnsNAojTpI2WwZGJKOAA+B8AwJkkSYNnLjKgQYBJw1RARN/TATMMgBMY/urq4tT3esPq/ueX4UeTdAsvoi4GClhUxCJnHF3gCE3H+l9YCwgAqOi+HrxQA9wJD+sXWOo/9BhoJFeN1RQogMgbGhNJGW0fBRkBbNX2VUr3tG/2F+nWa1fyeDKxfDjs9GiVhZ2NY3aOpFtYfmoc6ZFQzG1+WkkLO2kfckSNQ7H/Ts+6sI0S75v9ueg9sfyM44BxKhNPKvLeEBkaW2ZmyxzHGOI0fEENz0LObnBU73KcqdYAhsPdq2Z2GP+CE2xM+veVsA7yh2Oa2CHKfLotOaf31dSMicpcxHu5JvJA/W03iM/9GalW06j44B+zkpiUByfJKvinl0ztrrTcGkj+QYMG4lLiEmJySy+Ll5Y2tFEsZMn8X0/3w8o+Yv76w8SMlyir/rDzkfs6xa+pip2OUWb9xK277xIdPpbd14mfjlXFZSs7H7tx8DA59HXJg0K+Yvy5zhgES1/+r3q7/noJZbPYY40pNHfJkOU8SMJ3ZqygS1RWLKDR6XW4DmlbOVpLT55lT+YSctOCspqaKCcuawoAAAGIf10a5sh4fkXYFwJw5bNIBOD58OZxYXkAAibTdyxhUB4rII5MeEWs1ScA46HMIlEtYMX+XwAA) format('woff2');unicode-range:U+bca8}
-@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,d09GMgABAAAAAAUgAA0AAAAACHgAAATQAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcEAZgAEQRCAqMAIklATYCJAMQCwoABCAFBgcgGzAGCObv2bTeR1oCJDUINU+74pp2zQzuHE6yM/kQqRhZEZHM/+X0/6N7R3M1yCJNZA8bm8bGjwfYiwIL8LSX7QESJqQBUubWEGoegbQYE6c60HzWO4AAgIV4SATUolWHrsAABQAQDAICtjIPNn09RaYhF9AAhEr0BID2so76Q7WHCxAQwFXNOiYnw+410Wd3k8nBOvCVHA2vSiW0mjjUSQYCIEGyIwAJSFIUVLExwABhsSb69OGzu4PBaNnpSeV6FZsD8neiYBDC4pSATIsFILIp1exFYfk1JJDZjsz0VrmOJqMz+6gbY5cipURR4vwlccayRaa45DzIcn6+iDHWuG6a6fUKns1sj8DGWF2RDMNhLNq0iEO6XwPSpzOwKeJ8IOTtrLoToamqXfchXwFSlDjDLy3irOaGDDM/xpuflxft9gjuMna8rvaQsYgxp0nWENc6HqrY9YDAB9anq27BLQN2T8CmmF+jbQGvqpmBpbG+AuR+7CaO0zBnRbyqC6yq2nXd7oszjFEJo6SjHQGQPR/mYQT2ejxCmcqy6saNAbteUOBHSNH9fslYJGmVHuRMcZUlMRgLnsWsqh5UWTDdvNmGV3C7x42wIIsYX0B7dAjIy1nVHihApF4o+R2bsjEWcb4AmmmaoqnNyoJnffoa2MZEd9g17YLGmef3kC8/pnF3b4yGRcxRwb2YZQfGgEaAm9awNOUoH+M2OGye+UvaBeE3efsEdgDX+1h4F4TPRyuG4T2aPY0NjkPtpHapW2ZDBkiQ09uZNkUNVHngxW/GYeDluYl972UliWStmpSFOTi2aN/SuQnQLI1Po8k4zncu0nKWttqm2qMzJ8b9tnjP2X29kmPL/axR5XaV11RTli4nNRwx6xC6M7dtn1SqU0z1WMmZpIXwKMIYz6G0iNhqbSqffbA1/lLyFKn2/ijgExo0LTdxXekgjkG7E7vMpZmUCJmmB9Y9vbsoeqGrDhMq9hghu+w5LicjR9utIYgEs+LtfzqXdlyvcOuE8s4m2+zhjM3CVlRPPLKL1EASly+kVzeJYcMnTbrXel93x+YPd50Tb1si6Il0oHr/tE62LV8uufgdlZHr0JL4xxd6V5GKIprW+rbUu7AKgy4gPrxKuhZ3hyoKsVFsuKIII7YkS6w9cqtESM6+rcu9LkJ/cIPdj/5NoK0tVvxhuxZj7db8DL0yIvmeU4jPib2YFBGoX8KUJ6v3cZ9tEdWjk5SFLDmUc2JOk+o/Y8sl9Fr3fjesdbyZ03ld//WTuDNC0SpDREs24e+bhNiaTgBzcvpz2JVzrc8Pm3vHeTc8LLVqcxjye+/4/7S2Hf18yGW9mr70neW1orwd3qWPIFrEhFIxUgeWCE10VJQm96VcTWLZpr9d+COWZlssHcq7KUsNMvduBM20gW5tgKnMNIkIO32PyAnfUCbc21/7vJBtqVivWb2KloiwKuIVj67WJVEx4vgGabNCzyzk+IZz3xDhg4ajhs3/Rq0RLU6sef+rVazE7WnSAiJypw8f2o2Junr0ICQ7/8plCJpdjfw1ckBYgw9MHPk43zi1sXlXecWjiuPLQAieJjuR8QAQAkRz8DuN9DLhwPmSmaEUcQpakSK0MjodZAYITgpOAzURQVBCgAR3wQ1QDQAAAA==) format('woff2');unicode-range:U+b118,U+d0c8,U+d2c0}
-@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,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) format('woff2');unicode-range:U+aca8,U+c5d4,U+c644,U+c9dc}
-@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,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) format('woff2');unicode-range:U+ac74,U+b8cc,U+c57c,U+cc28,U+d1a0}
-@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,d09GMgABAAAAAANwAA0AAAAABawAAAMgAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcEAZgADwRCAqGRIURATYCJAMMCwgABCAFBgcgGxAEAI7EdGuHPJMvImLH89/f6Nz/mg9x41lgjTdZoE2i6fIaLdmCra5gx7+XzVsorYNCwObO2zsnJQ/kl/QFar6br53dWdHEyCJNZEywPS3rJZhlNKg/aA1R/apzrB3xMilmdsjjLwKMtEAH0B4SlQQiPMDzH0T1BHIUaueHMkTrgA/am5MG4HhOcoGD8gAZ8NAWracHp/ZcOv+h9P67wa+qgPc2Oh/OxW4GDrhBdRNwIRI8ZqC7CGcX+YQqqmh3D5VPOYHeBopgF5++oizYigADcFHDO23VLYPwVIYAKcFiWN9c2uwckRgrxgowgzgzi8sYyRAJ+8lmXtLfT0LF6jgaoRGXHkaIHhl9asR0YAAbaJcDAjtsZqS4lMEZmGJYsyZsaMQf1myrB6gFrC/fU2eHCFYKlZdvJd28KZHtO3DA5MhtRN/xPXrHeU7wcppdJsbMmFmJguwIQvRwv41GjqbJhjlEREhtYOdqzkWscm5JgfNiBgdxRiI78d4wiST9Bw7Mk/0j1MCC6SJKiiHZPkb9wwOX7JAr+8ZzefT4+BaTedmhY2qDY9sP8+9y8OjOS4+tbeWEicniDVgBhikJ65UWK71uMcLVcFXNwtZQ8ynRGZHgukhV8IA+jqlI6j80PNpSkmXkokXFKimCoYoznyO2lHBFkiKNpSN+U8INZ+L3BiS187uVKBsMCyMkpEADN+QSSqayoNFlV4/6ZxKUGykQ8/JCArAA15jLYpK4f7jI1VBLgxDD6jcnHWr50fzCovwyzVPN473vDAqdnY2zJi1T1Pfan2GHqobh7I+fejB+fD8Sm9+l+gSIQALcneI/8D/76daQ8LT1Nbl608Z6yihfZuKppcZJR1r5p9m7ivjrA1mVrhJ77gM97nB6hYKGpW6QXR6dx/dX9OMspBvZgi7fQjdIT69OKhbpUqa+pStfKH+p/EK6nBoKLXX55BJjVFGw/JE/Y78OAAJEwJ1Dn5bkKnp9FWlyXwDwPRCYBMDfumYO9P4/LE2uAoCOo1P7XUwfBwTDGUBkXO0KhHDVwNMlgyujwJsMsB2X0LMfHAAAAA==) format('woff2');unicode-range:U+b2c8,U+c5f0}</style><script src="../peerjs.min.js"></script>
+</script><style>@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,d09GMgABAAAAAAEAAA0AAAAAAigAAACyAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcEAZgAAQRCAoBKgE2AiQDBAsEAAQgBQYHIBtpAfifCcZtid+8hDQkPBQR/dhv730DD8WneyK7NE2FUKAlPBMakRCJJPHXGyNqz5oHshJdgmAdwwYcgAQiCXhsA+jNgAOTvCIg6DFkRBaXNw91aUKtgKBHnwFAs2HUolyWsKE5NQt0an5rjEfjzxcNdc53I68I5KqMMQVEajUIAgoAAJoACGL+fO/s6GyQty4aw9PDwiG8TLQEgLYCQtYuAwIASNmyIAACAADaGkC9dwEAAA==) format('woff2');unicode-range:U+d7a3}
+@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,d09GMgABAAAAAALsAA0AAAAABNwAAAKdAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcEAZgADQRCAqFAINvATYCJAMICwYABCAFBgcgG2IDAB4HuWn0zsX4Cls+vU59X992HQVYDgDw2Cmdeue0LAUAi4ATkututHmw7vr83029b6fRFFlgkSYyNt7z2nYWaZbp2GBtIe6l3vxxTmkya0KnQQCwMIIJSFRMUhakEAGAQgEAgKZUgRpgW0QtySaIAUbO5AFIPGekBB6oAZYAkohkMzMcu8QANVP44TdtwAcZT7YxZ6kZGGABpTqgIIMRwQxEiJSXghSKknmeBgGAkPCROuAQASKf8HGyLwHAy7Qiwb127rC+0KvDs/ID3PQ81z3PZfXuYuXcNNc9IOtZkC3cdCT8NCufnC7UH8z0pHKXoKw8MGI7MzXXpysImC279YW+3l4dfpKVE64TCARBONe78/jZ2Umb6f6BBdnCSceehYUZWc/U3Jzu8fCFnY4DJ22Jo0u3nQVB6NTp3WVz4IZD/6QeP6s3e8iKlXdz3dz8CbZSC75Xh3+vsff293cT2j0iG7Dday8IukKfDtDJ63ZNTU3pTgm6dh9htf4CNczW9177XlPbfFbtyJOFnqGKpo9oiDdbNRUEFjRS+aDaZd+2Nk3l7RNFJQmGjs7ysc1SmkbTuXe54tPpD00YEfW37L3p7WXVntlhI91mpqLldk11lURFM/JHtPprBma3LTeM3RLHNB4tbjAyCFxtnzX87NlW0npfidJr/e+jz4nf6XCIq8xbadWsH+VYbdPmF+YnunxHlWY2UfGa8G/ujX+heaMr8N1UIetTUDhzX1tzWtheZoQE6lnI34jSzk2R2YvZaCUxKxGltaWHef43cDDO3/n1GAAABABBxEl1z5xS9aBvUkP6DgCu7onMAoC3zkI09BSPaQI1BSABg5vuJwySFRi0AQRAGeYqYkJNADB4DFpLEKIEFHqK3fAAAA==) format('woff2');unicode-range:U+cc3c}
+@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,d09GMgABAAAAAAMUAA0AAAAABQwAAALEAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcEAZgADQRCAqFMIQbATYCJAMICwYABCAFBgcgG44DAI7CtrVzjZEUSdJmvOLh+Xt37nuvMSmcFMHY4BHHmZSlgSUYfm/+/Xu95658H2B+dSZpnS2ySgqIX5y6qb2l0RRZYJEmEpb9ZXtolGgWwlo4zxOTzB3UmeaJWsN5Kq8F2obGYpmWUwIiBf7/AYATdvWZ+ZKdEQ180plTAeDge3GEICsADxjzXAcHuO+BFu70f4RX7oIvNDKunDPFVKKDXAxkIVgxBQWJ8Ab//ysrMyBAiXlLyQnbFNRRAS8A4JP6LCXIyUVeSpkx89H8xYgkrdkF5muk8lW7XFfNs5y3aOFCC/1cE/1KSRND1a865WpYZbqmEvq6j1lpsvK0hLqdtnq3FbN48QLkTJILBLIbinvGVb3Kk2LOmhrWmG7t32e6yWfuTklZ6ZpdpgYgXFaOoWSlqVISYqGLfuXq9W84t/q0G0UxjBllxqw2YxBpzq5Zo5b26k3m7nRjSOX5JOKSrNlFPWuk6nWm8xZZwmnhAGFImUGqNpf7kkKWzYdIM2a1iWz1ThdKb6InwKCvLwOCtspU3X47GrNFmO2WImds5ZXhf/3VfptLDsPm4ReNoTOMTvQa2LGiUfovjtr9aNMkLXu69aRgPsgv7NhKyVH6qsbRKrCegx3ObJs5isXIjouNgkIrmp9PUhEychmomlcHvn77qlFpvpnQPHGpGe7kjjwI3P7xn7nlBrNGEx69zQHLzYna3c9PJ0hFfAUd0CASNww2iAKu7dy/DxsfaEtLUqIJpaZuzbUm16dPmx6OkYAv5kltvcbL1pXI8MT6ERv+YyuFlZIvdsQEn9/gf/XoUgsNHSkSmpa3E7SskC4QERZmcgHiRnt0c4NkzYEDDRxTc2MEIBDmh6590NYrY36JrLlvAY/dySUAPH0NqWD/v8P5nQVAXQLhw8pxDNSiARKKlK7AGvxAUkG9NoCuy8T+uwQBAAA=) format('woff2');unicode-range:U+b700}
+@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,d09GMgABAAAAAAL4AA0AAAAABRAAAAKqAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcEAZgADQRCAqFNIQnATYCJAMICwYABCAFBgcgG5oDAMaHxzPfj65Ne4A0sx2ZZBDQoWvqn70+pUiBPemLVFGXPQ0nPJtRNiZNcOA+3anqn+PMn8rxj0EA8LCCDUhSSlYRZGAAQKMBACCnV0IHdJqhHckUsAA1jioDkHluSA0CmAMoASgJ2XZ2OLh+0AbaThOG33QHfEjDyUbqxGAHCtiANo1gEyAM7AADkX79II1GaPkjQQDAJPFCF+hQAEwf7ydcN4CH6Pa01I6CxKuuqVSYNddpKT/OYr6Ner5aTdQUm0izAQnNOKNxy++CxaLpDDZWmDjHFYrx443FZcbFyxFFleDMU9koZs51EgS+THRPvbgdkPZXCStXLnVZPnvOGtM1RzxnrFkzly5btcr4UPyaLZ5zjrgGknXXvHWWymjmVpfdlz1mLzUrtM1WL5msPhy7s1UlzJxpJPDjTCST2TcsibCU5yFAgDxWzZYkQksLTOe4rnieMSsjBsT77xEizTGdYTrHeZm5OM/Itm/cRd4SSXEhStP3HVil1fSDLKcI9GJlvJzXYuwT/DfGxZmrFAW9d/XU5+3M0luSuHr1ItVGPpCV+3XT7z4JC9VLG265hAQZcloyRVhsuKecvtWhxxVO2SHjnDvnRfX7jlyLHR5csr7DoqtsSscD1R2sLCIHuBfNf/hwsJOsPZSTPzP/vvBR4C/28EhrLNvQVb99oQlvaNv5sf3h8aEL13dafI39VrZkZvpj/cvjIzVBRJG3SFyuNDq1ovINSdDRWRjH05V8SEUnsUmU69wQN9VaIYNxqBQek9J+rTGm7qyClpXFLbxYo+QZj5j7X55MFyvtaQAACACChOdvHAbU6kZ9k1nSLwHgwvbEIgB44S0mQ6G5R4fSDAAOVKX6eY2YDBhaU0BAA0VdQIqwCQAKP0FPJBCSAw0+zTYEAA==) format('woff2');unicode-range:U+ae7c}
+@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,d09GMgABAAAAAALQAA0AAAAABGQAAAKAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcEAZgADQRCAqECIM1ATYCJAMICwYABCAFBgcgGygDAK4H7GAc/hOJ6p1aZ0sFqMS5i4Zeoq6NoY8veP7br903MysmoSiNZt7IlEr9+W9FLIkl8bSHtERK0LgRfBrACGoqbMD5NoX74IP6w+8v3z+Yk6LQZB3S/YFsdgLr4kIReoOmSk0jOJK3SxOsucLJ/vlz6X82HaVIgY10IsNRRFgfnvDZGVV7pKCc2xQN9lmxw2jH3kaAIGWqyITvwhJ+DIC1APDUYaLkZaOVUBvwgHIRkQDm74Usg6EuAiHAGlusy8DD2ewOpOyfbz0Y2Cg5R5w3dRQIdJNGI4Eb6mCQ1Gez//ZwdiAA18VaMQAUAIbQg0dANfzBuJm5RU7oah+ra0UzszAyyo0gEEwzMwOQbnB2lgivwjACYjeskbp7mt3dn5PAcboagTOFphbODAxwwgdmCLGQqQc5Z8Syt46lwLtisJXvmyOYZjg9PS5dN0CMY5paIyTodIOD3LoBnmf3D/Mbx0H3ht0939/I6jsJcnZVXVNjaCGHkgdHFS3Ozq7dxOrqAqEuPD3Nnl4uN5tAeum/uE0U6EU66cjiLhqtEQayqDh/jBm+JOc1mf60uJdm42RLQz/X4ww5vQgqnV7LFhKVHAJbSYsfXv4yBnQLqOgAhJD7hEDHHyvU7gr0qyPMTDabdYmn0eNucJaAQqIQSARHXsioVRNFFhVhp6kU+kR8aQktIUtZsrGD0XtR1a1bd2cd70h/+MzVYrJsUTgpkTF/fdvv58NiiBgPPF9XYtiRkzsrM1b22vB+eGPcq7MtBgAIIIwNr1XgEqjOr4B8ATzdjocCvDfWfEDG1kcCwIsCQOArKTkw1BwgRKPUFUEogKKHmSmA8aKRsjeGAAAA) format('woff2');unicode-range:U+af49}
+@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,d09GMgABAAAAAARsAA0AAAAABzgAAAQbAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcEAZgADwRCAqJUIc6ATYCJAMMCwgABCAFBgcgGzkFAI7DOCZ8oDGzi6Kf2PR9B7Fy8R6QOF/EnGwOmyfeOvBFxBrgv/bpxDX18/wp8cme9MWyR1FWVCmyiYy0qJNaeMQ4nbqBYh9NcGCZXNsGEAAw4BOAGjdt3RlMoAMA+B4ncmJmsOZG6+hC6B/QA1AS1R0AWs1TqC9U9CyAI4C5GrYRBNixouXudFr4Xt0neiQ8p5FoBbU/J6AAHpB2CRgImA6Kg4YwAmoVvkNRq7a+9nNAv2TQ99gM+gYN7QwAWgeAjhyobhkD6IoULVmmCK40tRgZJ64ovuHMuVMoVIqRFkl4McYnJS8E+C5xAcNEMifG5mOM92NZroJVuUhkIYjFw2uKWiVJ07goCvGx+bwcGyJHIhE2s3hYUcKIkQ4hlPSmFmNZZSORRIIVxeFG1Fx9DPeVNElhpHo1aWrEeOTNl4thWSZ5bKQmyXbJ3CI1izwFQ9EBoWTkriv8EirCi3EXGm88kmJcUbDsMtRn/mIU2iRtAHFjt1AtRika1TzJxcViMsahlEvzMVVNlNURLK9fq7oT6EfUpSBuOXOGkc6d29YvxhI6CeFYCz+LuH2JXHeX1HJvKhVLIUQqFOKZ7sRKd9w3kYiTsKJEuUW7AvElrjBUBIArlFB0WVaSyycXFA5rV10oleJTq70pNw4aA+ISRuK0LERHs/lUsfUl1ktnEpBV8Vg1fphI4msKdw9p+yRGktYoIKpr92J57/75x1oFtB+MnfTN/b5SZcYa+SeEPOFbuhwPOO6Bw9Uh959mWrZ2xKDx5bH7Sv1Kpfra9eWLVztjtLnLfz1doS6yNxo2bDPHHjmy5ibd3jga7f5w1N2VdOXTd0C05EI+TjhykNeLDXZ/n8Qxep/NSwn/FRVuolQhur6rvR7/ELn4v4MRmrec0rjohMal+9fQ4/o7dq/Zk5XJBKmJVI7gvWI0Ov7uyxpU1toeMB25mOdgH3MKnFi5ZuLDplUbpxuM6CfL2b4LzMFdXo+N+pW4TMWMbv9UEBuWfWRoQJ/KttsDFdqbTTfM/OQbu9/ubXveW9abYatUMLNh+bWj79woXdFV5HEHfoyxbt0xxg7857QMU8FipFfhqoYJVP6eiY0rbio2zgV+mqdBLpk0YEI7Z3oB1int0Du6edYS0rJIjc70gF8q6uyvitSte+ps5tmRqyIOONhfyZuJ0Gbh5rIa+c/JcjU69ZP8hz/5seelM0sGTGngsHbd2MFzLujQauWZStGVeoVPNU7v1pYvjtI66NqP71C/0jdPSX+P1W92xDMsn0n9oFDnzWULvqw9QvBl+udN474IGv7cqZW9n632W5OXfgAAcHxdo84AAPfLRJoAaR/dnU4DAANQldK+kukOBMw6IHD1NHUcmtI+IN+NABga7oChKwKlDUAD1/erCAAAAA==) format('woff2');unicode-range:U+b04a,U+c313}
+@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,d09GMgABAAAAAARUAA0AAAAABvwAAAQDAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcEAZgADwRCAqJFIZxATYCJAMMCwgABCAFBgcgG/AEAK4L4ri6CRJrG0Ezp6aGSL+e9IP8J73/zp3Jy4eIatkmS6ESnTICHKzLFsy2ns1U1g/Urz1Ak6yRk/Dj735E3Y0mpGZyXeg3D9YdtMKRnv9r6j+7w6PEIzvSE4mIRaTvTWg2wQENI+loBVgiA/bpJsPLCYliPZm/F+oaEABNWMMWlJza0MRShwAAigKQOCVt6PoOC9yJprFUAJM45QCyxjWqRSAyACMgVWJOiD3r2M62+0+5vQK/eSc+0Ajaxjk7sAcDLogPjMFBigpwh8Q8gc0iZCi1TnZBQUvNE0hRoAdoERCfCM111uwiBljbebJ/0EBdRSc6vU2WyCciETyDkssjGPNWK9CUth7fCqSTJ60Qa7UqdtnEiSoVLbPRNjrXOcAtEtmyQapQ+8iPg9IG6x4/vIbiyaINnMrRHNU7oL1IdH4V0rCY5gRGLqcYIEEMsRKyy/dfy53t8EVyymyNOvsyb40TYifFMBRjp+z3I2aZzVaIlf6qc/S5V/lrSTS5ldvmOOyL5gnPwpAp2CTfBSQ14IJrCE2exdMsK5CihS5kC2QbkERroS7aZnEopAixfPUTvkiRTGgGdB+uBp81m6A77MI2Zp3dHGVVqghNrsXPJcRGyyyOe+ZKwsad8apr0Y5rD7xInI3Qakp+POrs07gFZh/G7mM/HwEkDDF0XvWuNonmK1az2MZDzTkVFSqpRRuw5Uk67qxgpexQi/enW8j1ywXRYa4GQdn7zvcECYbXKk9/dXioych6QorUq4S3aNn21nANRge5+obpmTsSPwW5cm3qD9df5jrb0NRyvdo2vcDgOLry9GSFvWXc/2D/t/4fhXpNladZ4ejiLXo0JqMzTBglsso/MvuVp8HvvVkdmZqSb2JCdYrXma/2Pg/W6XwRXx5rCn5eO/TpX3PXrtuE7j9cffDk5RM/HsTHx+7vai7qcnmic/qGD5bPtSrxDdn0wdMo1O525DWZqxmY+og+f3rEVEd+5SRXUrudC+uf89TaburqqfP3Stxq2CPi+bzA9GWZ6nTBHVsm8Agn+bPM4Ij5xoUo9W0hLob+j3XURG2DpB/xWjCiWn/o4IThKj+161LNRIBl/lJssfbh27HO6h1hosYzi+/LHjledjAufbDtUJ9nh94UGNlNv3c4IYfpxWt3c1UTS795Xu17g8ty1I9drpmUFyeFrBuuzL7pbvxmT/VktqYNf2jPF7RPuFl6BVek1K+p5/voxbO17RF+LDvh9JcQ+7nVGup2ZtHFo1teen791rcSEo3m1T2u04v+pm7FX0LqF/YkNY1TvPCZXcmyVXIfbgtABIuUfwdaLAOGwRIQYJqzC8BdhOKx8KY5PoIvJAglgoNN2Y1AAAAAAA==) format('woff2');unicode-range:U+b367,U+cce4}
+@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,d09GMgABAAAAAATIAA0AAAAACHQAAAR3AAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcEAZgAEQRCAqLfIkVATYCJAMOCwoABCAFBgcgGx4GQOYIt3I2S5BgEg5ORPRFw9ehdYKeOXV1Bk6nG+/T1vlkkSZyv71zwS5JOO0eGmWjLA8hEs28EfY1L3F9ddtK4V8BBAAUeII3oMLiykbgAwcAwO0GaD0CIpAw1zk4AF0JJABhJFoBoGIUQd0Q3+QAiQAY5Vf5+sKD1957/yns606Fv/E4/ODEQTcST+R8gQCoIDap1IKU4ECsid9UVppr773xyftPud1j2oaimvS8iwBtLENuN0gtnB7kZygAIiADqeM29gEwYOCUZheXl4XUZPP5Leb9/e3gXYfTRbseibC6XHu0defgQP1QnuuWCOcjIdPj170WxbIso7LdGnz3y+GObW2YRfvGLZrDh5lMj2lHzX7KVoBZWWHKcbvNpjJvb+9qHJsIGRwaC3AjZVR17Y8nWxwOJ221StpEm+4wgbptyLir9lKxRpfU7wmFFoSoEjE4XbS4rcgapkob9+i9MFbN2oAwMLs4KaMo1ejAZNBpxPv3BlLGMfUuMObVtc+q1dU1hMxGFQVmVqma9B6HxYKwZY12huztqFlWzdrBDMDeFoSQxUlbaWfQjge7opo13q47RIbXfZybeqvLufLgVWCYlZWgc6xJ2GTasdtVtjupFuPthzhpQKTB6XQJTQcerF0NTU4uZOAktFVoUjsZO84ghllmwGqiWwyray5LZmWFUbXm6LLKbL71583UBGMGgmHBvq7df1znWEWIAoZRE+pDbd7V7G4i0mBwukKsO/FRACFaDgrZc80yUJFuIbNeWIGS5n+9rx/feJUsnniga9xTl3EirHH1ww9PB/LHUriCzzx+X/9o+sXz4aUDrTfMyMfWNZTSZ+pjv4dNKevXT26+Rv7WumUr+1j+simj8VbBjXOvXmdyXijTEOBPiiQ+lROn1x45OP1Ivq5IzvUWOl5RCCidXivw20h88aESgVa3srSnu4msTcxK6qVaeXlFHqUBURIx1sluje0TeVOUD03/eE55Pdn7I5KrfiQ8ePSgdanhynPK0ZAMgdgHdDmXswMJfPnfd5QHxSnkJHygOtIywd6VmDTk6Ucrk5CwdoPdFame2us4nYeVUsmL+nU8SCW3T7KDrEDyBntTjyc0cPw7zB+jlmMj2XQYKcT81lwZdIsoTnj2+798cg3b4Yc7xr07Pwn1iUCjOgH/8cn1Rw5TD+QHiHwR6G/m31onxZJFjTZ4Vg+XStXD/915b6UWyyU1z+TJ6ITBTJ2YgMcYjfgZJEs+cvRZpfK9+zJ9CK2IBwSNYzzWNVfiByh5X6ha+fbe7dWxErhM5Os3dyboer+WkoIf8Y3FJA9/jrkkN/aVMN6zC23qv1K+5QhIMn/lBlp07KjUT1Mu9pvk4k3D0cO9nATNxSnPSvBcaX7e9647MqJOqvjZJVm8uJdG9VQKUviiF/+K5xDkDzT/8HCPNPM3vh5/aYi+cHtB44jBF1FsEdDuV3AKpgCAC0Sc7sdpyrYDbm0dRycmXoBinAy0jy8DArOMA88CZyEC8LiAQZH7NogHAAAA) format('woff2');unicode-range:U+acbc,U+b0c8,U+be7c}
+@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,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) format('woff2');unicode-range:U+b6f0,U+ba4b,U+cd98,U+ce60,U+d29c}
+@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,d09GMgABAAAAAAQwAA0AAAAABoQAAAPfAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcEAZgADwRCAqIHIY+ATYCJAMMCwgABCAFBgcgG70EAK4LTLntCqwQyhCBgaK27Xyu9XT6oYOIdP+bzeW7SWWISsULYqH0ykwq+DXikkGdKiUsxSkZ2o6BLgAKXPbGlkwBlMd8AfMH9G25MaXWmJnF8rsCJEReQ4HxQWqEGTM6hbM9dE0+u7d/SmzhJ32RTF1E0sRnM8ui2VrQp5vsw1cEnJZ51w3oYQRwJpRwpLZ+4EjgiA5gWQCQk3PFPXZaVzVkK7ADbbmjB2jxSzKIbJYAF7iruq1qJLhw+O+ZHc5IC7/VfEgj5YDjeicSDQZQHV8UYphOIrBPC9pbqv8tQKPVrqbfUilBZnMeYFmwvyMyLzK/wvTfoqGPLhjds5bXDKUWMQydV48i1xClTGTl1JJsG6/JE4qNZFFCRy/FdycSFuw2QpYlabZkY/MiUMy8I+hhqb63i1UzTWxqhAh5g1ch4tWczNAtJB7fAIauS9VU0fLdiQQUBAKA31+fZaBdiELDsvZItkCM3ASXQSaSe+pMxOMxMJ2VLuVQt9+I1KQUCsodL6cisFFzfO6S83JGWW12GBqZTKiCZpY4ZOcFI126tyWMtdAapaSknehQMBzjMdHqnLslSJOSVccuI0QgOhi4SrYv3lLNIVdZrs12l4+mVrsJuygEu8GATHkkyyKlIjVNJdVR5iFRxpWrYMOL22C8EZIqWFYrX0bivGODquu1u7W1ZfOxGDTHmqqymsCWoNCfEK+2oKxbX60DO1qnT98tYmEdcOA+w/oPqrJIr3zZy3NoKuVxcJTaI1/T439XDKtq74C3lad3i1abGn033t30QNOu3AEyZ02KO5DyeB0FfRcqasH5U6kjO9osKXfk2u3MXXzqbWfN6fWgWvbv653nDHzq6dUnXTP4puq5/9D4bX/foipdxUKnxx2ssrf2rx/s2teinni621t3fWFTt2G3Tm8fFPBkwLP+zvn9Ni1ZQnwel1cdnF+Rof7MvuzjtwJt/lds27G4LGTBNzd8nxrs5+c66AFnSfX4OcnDu9Y8TPAofujpVsOZQ9hftP3r9k7b3le5Gj/TKfX/W1X1Y3p2S+7ek0eXJ9Rz43nTv9WRG3g0hPp8U4emhoiqm3P68pcF/lXcQ9WRGufdG4aWOhdODb1v6NeipM7J34+Z8sbRq9JvdyFnUI364M1f13e7E3dmOfZPGnp25Ri4mUwo1DsI7rqRzAj7PJ16zG31RquOkMppLRsHdbXw7ZRil6INHv+gMp8LFSYCAAQQqs9EL28aXFD6DeoLwK1jNSMB8CJtVS/gZVUhCgOwR1Oa/7ZTBqRwBoK1lXabetCqM8WM4hH6VAG0PQo56yjZAAAAAA==) format('woff2');unicode-range:U+b3fc,U+bca8}
+@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,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) format('woff2');unicode-range:U+b118,U+b9b4,U+be4c,U+c751,U+d0c8,U+d2c0}
+@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,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) format('woff2');unicode-range:U+aca8,U+c5d4,U+c644,U+c7a1,U+c9dc,U+d63c}
+@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,d09GMgABAAAAAAVIAA0AAAAAB/gAAAT5AAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcEAZgAEQRCAqLAIhrATYCJAMQCwoABCAFBgcgG/YFUZQsThTgywRu04Iv9ULHyWS0VTIsN5lpTxahjPh0AtHx13oPO+Kx4Hmb7v1/17IdenmMmksYhCUYsR16C9lUeIrEEhRuKkL82cP9vPezKTEW2SIVIDSggYxsP9revWs9af2kmNgGm6nl1gQ88s3u1yYR3Uw22HVjIwEemobyskm7iTeVyPeJP9CPHYRB5nlcEGQUciBBFHiCw/2PU1zbh7+c3tnp0cSdaKSJvMacNLdwFtHpfWtNSyQhS7chvd8UCIZdVz3gXyOAJCExVLV19gZpcAAcAHKqGsa709ZIQe3AA10nBAA6flPGYC3aASfgo3JPXBx8ym/R8kTx//mzb/A7TZAgYXsFGNBp08vCQpXlqBbjSHEzhOPhN1r+Xzc958JncBdkaZkcha1Hx1tJoHuPlb7G7z/Gwm4c9dJad9AaTPVTdKGUZokGG8rW7GlKWa3AhHGzboCkEIU3BBYtfIQZY0sCQnfNj6HLcqrkBSQdEvBKoNSKhTgzN+EsEJetgXABcekEi1znT4IiewRdRNQ8RrBgGOMLTCilTZGQZp2kVM+QFLnQpA4QekR0saG4kBOQ1pJTbbleWKtppW2YUYp3DCH2HvN4SwtxJqta4BQXuIrmd0CxmtIZiDrnxA2ECIEv5FD+TuV8Ojwcbzdr15hDsgVSVNmJ0C1xUwYCXu2YbXu9liq0CjFrAN7BzDEYbl8Bj5HQ0SOii7FLwF0bDcSUiic8Hi0nyiAxXHVes24dgHCDHXLOD9KsnP/ISUgCIVvGYhTdjnUvLNHsUtoPLCpkrApr3aOj7ZrdMTaG2cjIAJDW4eHDggDrYeyEcAz/eh5DGbR6Ybxk6lHptVQNZmyEYS2D0pMqeqYpaFkKs1CfYdYHC4L4v4dbdn33KKLDnbVAqrpGMBux4KVhc0LYpur3TZFU0dVVFRFkF5nRrfPyvnlKW/9W8eFnYa+wlCwfjXKjlrqYRjqD81pSdpx2Hg83iRjqKvDqCVvE9albFIKZkVKGnEwlVWhu6JzV++WRmotONe4TMBFQEuKnaVxEsIyhxMWVm2FBMjzX4Z8Yss2eS4RZOVhgjOkF0n/l10iCnR2W4qjtTEUNYiI/C+eZoMCOSdMUrygPyWUUy51jnfVVlD4/8UbtexK4GkkCv+jlR/MiQojb/UahR8XHB7M5yRtMCIJDAPeePbY2DuohMhC7HePzEg7jOz/4LoScuMNJcwJOYa1KIsGUKZow8PgvRjqAFzhX5SvE1m+zvQbL4Pn+m5vfwrkAHn7VHC2JsUBLicSpqdOi8reRsIqWfyD9JnNd3C4eh+uYQXY4dgC0bR1t13OmgwjdwKC5bGsM4/Tq2TgvDPZGK8ih6bpY+X6ufAowYYPDBMJwT/cw1/rn50UCtr60wqkM0vtkHorzzqvN5IC4wVGY4by04pd1hadLSagL6EcG05ainrIKT4/OLKHcnUuwABFERUHbVjSJsgOZOVL4w5Q5ez6+0q3Q7Qzyuh5yNz/iTbAhRBruPc0sizTgPJR+g3IyKm42hm+L9r9+3//DypbUsAKXZoFaoVJ29IV/+zlz84t82c377SFpaRsoX5ydFsu1HvfsQeVuAGEx8nyyuzv1HJvxVylgfRFqXasr3v4HzxXCBuju7CZWFAAfhun9IQbGGQziDkDAptWrUDcQKGbJVQMDT7Z8wW4ViuTD4shNHQA=) format('woff2');unicode-range:U+b2d8,U+b2eb,U+c62c}
+@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,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) format('woff2');unicode-range:U+ac74,U+b8cc,U+c57c,U+cc28,U+d1a0}
+@font-face{font-family:'Jua';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,d09GMgABAAAAAAVoAA0AAAAACRQAAAUYAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcEAZgAEwRCAqNEIl9ATYCJAMSCwwABCAFBgcgG5IGCOYIN2s2IRSS1iNYWyrupyLk3+HfE7Qiei56dan+J308HbtwSCOyX4ulFbvH0Ofo8TkBiTaRs5RG6RSyCEiAOaq1nSpefOHLO4AAgAQNeADKze81CGQgAQD4/h0cj3XtwXH+sAT3Qf8AAYDpsWEA0HM8RGMguqsCfiSuyu6t1cKO9gP7TuDa74nwCZ8Bz7dmUCu2H5yCjVhD4wrNNWTbEkgko8gQHGs/sOvG3hf7ThD1zH3ZOynNO9ktKRbQOxQEa05cI0Y0iRwBsF7GnP8xYfw0BjhIgBgVEZTkqwzJpd38wwNchgoM6BiRogxVbUOsYhQlAieAYKaFSlovkAx0zMiiatJoZAUviMXIxiOctyLE29g4ZwswmSjTGSyPgTi5WNDROoEWQAOvV/pLxCPCqt673cTVUAZGVIoWRtTBXF4Mm4oChUrSXr8JISPP2TZjtsgoaOKMrgFi1fwF+6kJRpW1pKWBa2gJsbWoeRuHHVTNR7sYS6FSrGPqdiotTUpLbeU6dtu5cL62trGxlhZqfQX9XF4wm2mB1LPfqCwuQXwFz8tG97BJbarxq1KKhfTMg2cHnTlD6jvXrfPfdA7x5zM2n4+rkr7p7ww4rsFbeRuyysyFeR1gukdxK4tI47p11ayyawI4NCMK6TsX+karybIQO7vZr2ocX1xc71+t37BFYS5q2ijx9ZtbVu49e/SshmRk3ZTFBnIDq9rW4KiqgAjcFruSs56aKJjfBFauVMBd9T5D9ftURv6AwiEjxPM2ahsog7ulSAlnz8C4olJfYVfXW1I5qj5HGqtZI+LBv4YaA+VQ08XUgc5MV3b6j7Bt86/et2eDwrw1r8qwvkF94HZYhL3dwMHy/6gJFOVsN9/5R+fHS3xpBe2mnri0IKhMtksmPSVzk97gt1Ku5PwXC27VTxnlG6/h+jo7gY9rHIHJQ0hcRk5S/WzLLLP7b1f/juxBy4nVzlw4RXVjSFaqon1wxjlAn1v4y4nNWSMZLpGVyiXj8rOp7IQ+B+Usc2njpAQfjYqRQ9tw2P3hmjKP3tqFvgVd4AykH0knccSNrN2vlqpIicpdgWvL/bQuKPfe2X4LaxY+b5J8JFqLGKmrxIUZ2KxxXjF3fJ8BfTJagse8fXOle17olyFX81KGfAS3krdt3VwbO/AyrpQF9/7t4nlHl081o9bkELQLY5ecwDiQsuD0E8sPoDPCKAKHP59sj55L9CYmTho/Tb1jcfHaZ94T4+L8RpWGDFF2RO0SLbOslAPyBSlikNQm3L3UP+R4vX+KRoENR5rxO8ULTvTjdaNmJpBR+A0tbh0+w1EV4pkbOY4fR2Q5ZWI1w30jwJMI9szVaufp5DJPLiBj6u8PXN7MfMPG77AUTI1/Fd/Hd8aEX29lCVH/gNtrR+8Bij81WUnSgrm9x6lunNk8Y51Hj4Ahv/T13oY6HhxTDqabRET6b+CGMyy9kSEga/f1RSwpc2adMR+Pm2jONsLbJ5LpWVfNl40vy63Xop2+n1qnqzZEttrP5+ZQmuClQ+oH2vvsXKyWEqgnEgr4XPuW2etu7c+kNLhWl4epTnZu2cwxW6cWxDihIVEVT70VTh/OcBXatKhe0g952fLEuNEzhajgbuVZvyHbk7PHXG+KHeuU+lamxh9wB46vyxk0dt8PE/PA7vslfJ126kkBOyz813I6FAMfPnsbsgQ7Dvm4AlJwe7CD21pIMXkCSoCYiUDkpIBDre9dEA0AAA==) format('woff2');unicode-range:U+b2c8,U+c2e0,U+c5f0,U+c6d0}</style><script src="../peerjs.min.js"></script>
 <script src="../peer-config.js"></script>
 <script>/* ---- util.js ---- */
 /* 공통 도우미 · 조이스틱 */
@@ -1633,10 +1784,10 @@ const DATA = (() => {
     return {
       L, boss: odd ? 'clock' : 'devil', pool,
       title: (L >= window.HEART_MAXL ? '최종 스테이지 · ' : L > 7 ? '도전 스테이지 · ' : L > 2 ? '더 세진 ' : '') + (odd ? '째깍째깍 장난감 섬' : '보랏빛 하트 구름섬'),
-      hpMul: window.HEART_KH(k) * window.HEART_GK().hp * window.HEART_DK().hp, dmgMul: (1 + 0.15 * k) * window.HEART_GK().dmg * window.HEART_DK().dmg, xpMul: 1 + 0.25 * k,
-      rate0: 1.5 * (1 + 0.24 * k) * window.HEART_GK().rate * window.HEART_DK().rate, rate1: 3.4 * (1 + 0.24 * k) * window.HEART_GK().rate * window.HEART_DK().rate, cap: 70 + 14 * Math.min(k, 4),
+      hpMul: window.HEART_KH(k) * window.HEART_GK().hp * window.HEART_DK().hp * window.HEART_TK().hp, dmgMul: (1 + 0.15 * k) * window.HEART_GK().dmg * window.HEART_DK().dmg * window.HEART_TK().dmg, xpMul: 1 + 0.25 * k,
+      rate0: 1.5 * (1 + 0.24 * k) * window.HEART_GK().rate * window.HEART_DK().rate * window.HEART_TK().rate, rate1: 3.4 * (1 + 0.24 * k) * window.HEART_GK().rate * window.HEART_DK().rate * window.HEART_TK().rate, cap: 70 + 14 * Math.min(k, 4),
       elites: L === 1 ? [26] : L === 2 ? [18, 36] : [12, 26, 40],
-      bossHp: Math.round(BOSS[odd ? 'clock' : 'devil'].hp * window.HEART_KB(k) * window.HEART_GK().hp * window.HEART_DK().boss), rage: L >= 3, gr: window.HEART_G(), df: window.HEART_D(),
+      bossHp: Math.round(BOSS[odd ? 'clock' : 'devil'].hp * window.HEART_KB(k) * window.HEART_GK().hp * window.HEART_DK().boss * window.HEART_TK().boss), rage: L >= 3, gr: window.HEART_G(), df: window.HEART_D(),
     };
   }
   const need = (lv) => Math.round((6 + 6 * lv + 0.7 * lv * lv) * (window.HEART_XK ? window.HEART_XK(lv) : 1));
@@ -2012,7 +2163,7 @@ const Render = (() => {
   }
   function vignette(g, W, H) {
     const key = W + 'x' + H; if (vigKey !== key) { vig = document.createElement('canvas'); vig.width = Math.max(1, W / 4 | 0); vig.height = Math.max(1, H / 4 | 0); const v = vig.getContext('2d'), w = vig.width, h = vig.height, gr = v.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.max(w, h) * 0.75); gr.addColorStop(0, 'rgba(90,50,140,0)'); gr.addColorStop(1, 'rgba(90,50,140,0.28)'); v.fillStyle = gr; v.fillRect(0, 0, w, h); vigKey = key; }
-    g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(vig, 0, 0, W, H);
+    g.setTransform(1, 0, 0, 1, 0, 0); g.imageSmoothingQuality = 'low'; g.drawImage(vig, 0, 0, W, H); g.imageSmoothingQuality = window.HEART_SQ;
   }
   // 카드·화면 위 작은 캔버스에 친구 그리기
   function card(cv, id, t, opt) {
@@ -2087,12 +2238,12 @@ const Game = (() => {
     return { hero, bot, name: Art.HERO[hero].name, nick: Art.HERO[hero].name, x: ISL.cx + Math.cos(a) * 70, y: ISL.cy + 40 + Math.sin(a) * 50, vx: 0, vy: 0, face: 1, hp: 100, down: false, rv: 0, inv: 0, hurtT: 0, flash: 0, happy: 0, blinkT: rand(1, 4), ph: 0, mv: 0, W: { [H.w]: 1 }, P: {}, ws: {}, orb: 0, lv: 1, xp: 0, need: DATA.need(1), seed: i * 1.7, aiT: 0, tx: 0, ty: 0, idx: i, cheer: 0 };
   }
   function hurt(p, dmg) {
-    if (p.down || p.inv > 0) return;
+    if (p.down || p.inv > 0 || p.away) return;
     if (window.HEART_TUT && HEART_TUT.state) return;   // 튜토리얼 동안은 안 다침
     if (G.cfg.show && p === G.me) { p.flash = 0.12; p.inv = 0.3; return; }
     p.hp -= dmg * (G.players.some((q) => q.down && q !== p && Math.hypot(q.x - p.x, (q.y - p.y) * 1.25) < window.HEART_RV.R) ? window.HEART_RV.guard : 1); p.inv = 0.6; p.hurtT = 0.4; p.flash = 0.16;
     if (p === G.me) { G.cam.sh = Math.min(12, G.cam.sh + 5); Snd.sfx('hurt'); emit('hurt'); }
-    if (p.hp <= 0) { p.hp = 0; p.down = true; p.rv = 0; FX.stars(p.x, p.y - 30, 'gold', 6, 120); FX.puff(p.x, p.y - 10, 6, 50); if (p === G.me) { Snd.sfx('down'); emit('toast', '기절했어요! 친구가 3초 동안 꼭 붙어 있으면 깨어나요'); } if (G.players.every((q) => q.down)) gameOver(); }
+    if (p.hp <= 0) { p.hp = 0; p.down = true; p.rv = 0; FX.stars(p.x, p.y - 30, 'gold', 6, 120); FX.puff(p.x, p.y - 10, 6, 50); if (p === G.me) { Snd.sfx('down'); emit('toast', '기절했어요! 친구가 3초 동안 꼭 붙어 있으면 깨어나요'); } if (G.players.every((q) => q.down || q.away)) gameOver(); }
   }
   function healP(p, v, show) { const m = maxHp(p), b = p.hp; p.hp = Math.min(m, p.hp + v); if (show && p.hp - b >= 1) FX.heal(p.x, p.y - 70, p.hp - b); }
 
@@ -2159,7 +2310,7 @@ const Game = (() => {
     return { id: ++eid, type, x, y, hp, max: hp, r: D.r, sp: D.sp * (0.9 + Math.random() * 0.2), dmg: D.dmg * lv.dmgMul, xp: D.xp, face: 1, sq: 0, flash: 0, seed: Math.random() * 10, kx: 0, ky: 0, dead: false, dt: 0, tg: null, tgT: 0, aT: rand(1.5, 3.5), wind: 0, lunge: 0, ph: Math.random() * 2 };
   }
   function spawnPos() {
-    const al = G.players.filter((q) => !q.down), hs = al.filter((q) => !q.bot), p = G.net && hs.length ? hs[rint(hs.length)] : (G.me && !G.me.down) ? G.me : (al[0] || G.me);
+    const al = G.players.filter((q) => !q.down && !q.away), hs = al.filter((q) => !q.bot), p = G.net && hs.length ? hs[rint(hs.length)] : (G.me && !G.me.down) ? G.me : (al[0] || G.me);
     const rad = Math.hypot((V.x1 - V.x0) / 2, (V.y1 - V.y0) / 2) + 70;
     for (let k = 0; k < 10; k++) { const a = Math.random() * TAU, o = { x: p.x + Math.cos(a) * rad, y: p.y + Math.sin(a) * rad }; clampIsl(o, 0.97); if (!inView(o.x, o.y, 40) || k === 9) { o.vis = inView(o.x, o.y, 40); return o; } }
   }
@@ -2197,7 +2348,7 @@ const Game = (() => {
       if (e.boss) continue;
       const D = DATA.EN[e.type];
       e.flash -= dt; e.sq *= Math.exp(-11 * dt); if (e.hitT > 0) e.hitT -= dt;
-      e.tgT -= dt; if (e.tgT <= 0 || !e.tg || e.tg.down) { e.tgT = 0.5; let best = null, bd = 1e12; for (const p of pl) { if (p.down) continue; const q = (p.x - e.x) * (p.x - e.x) + (p.y - e.y) * (p.y - e.y) * (p.bot ? 1.25 : 1); if (q < bd) { bd = q; best = p; } } e.tg = best; }
+      e.tgT -= dt; if (e.tgT <= 0 || !e.tg || e.tg.down || e.tg.away) { e.tgT = 0.5; let best = null, bd = 1e12; for (const p of pl) { if (p.down || p.away) continue; const q = (p.x - e.x) * (p.x - e.x) + (p.y - e.y) * (p.y - e.y) * (p.bot ? 1.25 : 1); if (q < bd) { bd = q; best = p; } } e.tg = best; }
       const t = e.tg; let mx = 0, my = 0, sp = e.sp;
       if (t) { const dx = t.x - e.x, dy = t.y - e.y, d = Math.hypot(dx, dy) || 1; mx = dx / d; my = dy / d;
         if (D.burst) { e.ph += dt; sp *= (e.ph % 1.1) < 0.6 ? 1.9 : 0.35; }
@@ -2216,7 +2367,7 @@ const Game = (() => {
 
   /* ── 보스 ── */
   function spawnBoss(kind) {
-    const B = DATA.BOSS[kind], p = G.me, al = G.players.filter((q) => !q.down);
+    const B = DATA.BOSS[kind], p = G.me, al = G.players.filter((q) => !q.down && !q.away);
     let bx = ISL.cx, by = ISL.cy; for (let k = 0; k < 12; k++) { const a = Math.random() * TAU; const o = { x: p.x + Math.cos(a) * 330, y: p.y + Math.sin(a) * 250 }; clampIsl(o, 0.85); bx = o.x; by = o.y; if (Math.hypot(o.x - p.x, o.y - p.y) > 240) break; }
     const hp = G.cfg.show ? B.hp * 1.6 : G.lv.bossHp;
     const b = { boss: true, id: ++eid, kind, name: B.name, x: bx, y: by, hp, max: hp, r: B.r, sp: B.sp, dmg: B.dmg * G.lv.dmgMul, face: -1, sq: 0, flash: 0, st: 'enter', stT: 0, lift: 700, walk: 0, rage: G.lv.rage, quizDone: false, stun: 0, weak: 0, combo: 0, seq: 0, vx: 0, vy: 0, dead: false, dt: 0, type: -1 };
@@ -2244,7 +2395,7 @@ const Game = (() => {
       upd(b, dt) { b.stT -= dt; if (b.stT <= 0) rest(b, 0.8); } },
     barrage: { start(b) { b.ph = 'go'; b.n = b.rage ? 4 : 3; b.stT = 0.3; },
       upd(b, dt) { b.stT -= dt; if (b.stT > 0) return; if (b.n-- <= 0) { rest(b, 0.8); return; } const t = b.tg, base = Math.atan2(t.y - b.y, t.x - b.x), m = b.rage ? 9 : 7; for (let i = 0; i < m; i++) { const a = base + (i - (m - 1) / 2) * 0.17; G.hz.push({ k: 'shot', sp: 'dheart', x: b.x + Math.cos(a) * 40, y: b.y + Math.sin(a) * 30, vx: Math.cos(a) * 250, vy: Math.sin(a) * 250, r: 12, t: 0, life: 3, dmg: 10 * G.lv.dmgMul }); } b.sq = 1; b.face = Math.cos(base) > 0 ? 1 : -1; Snd.sfx('pop', 0.8); b.stT = 0.42; } },
-    rain: { start(b) { b.ph = 'go'; b.stT = 1.9; FX.pop(b.x, b.y - 260, '하트 비!', '#c48cff', '#3d1d70', 30, 1.1); const al = G.players.filter((q) => !q.down), n = 5 + al.length + (b.rage ? 3 : 0); for (let i = 0; i < n; i++) { const p = al[i % Math.max(1, al.length)] || G.me, o = i < al.length ? { x: p.x + p.vx * 0.6, y: p.y + p.vy * 0.6 } : { x: p.x + (Math.random() - 0.5) * 420, y: p.y + (Math.random() - 0.5) * 300 }; clampIsl(o, 0.96); G.hz.push({ k: 'drop', x: o.x, y: o.y, r: 66, t: -i * 0.08, T: 1.35, dmg: 14 * G.lv.dmgMul }); } Snd.sfx('warn', 0.5); },
+    rain: { start(b) { b.ph = 'go'; b.stT = 1.9; FX.pop(b.x, b.y - 260, '하트 비!', '#c48cff', '#3d1d70', 30, 1.1); const al = G.players.filter((q) => !q.down && !q.away), n = 5 + al.length + (b.rage ? 3 : 0); for (let i = 0; i < n; i++) { const p = al[i % Math.max(1, al.length)] || G.me, o = i < al.length ? { x: p.x + p.vx * 0.6, y: p.y + p.vy * 0.6 } : { x: p.x + (Math.random() - 0.5) * 420, y: p.y + (Math.random() - 0.5) * 300 }; clampIsl(o, 0.96); G.hz.push({ k: 'drop', x: o.x, y: o.y, r: 66, t: -i * 0.08, T: 1.35, dmg: 14 * G.lv.dmgMul }); } Snd.sfx('warn', 0.5); },
       upd(b, dt) { b.stT -= dt; if (b.stT <= 0) rest(b, 0.7); } },
     bounce: { start(b) { const t = b.tg; b.ph = 'up'; b.stT = 0.95; b.sx = b.x; b.sy = b.y; const o = { x: t.x + t.vx * 0.6, y: t.y + t.vy * 0.6 }; clampIsl(o, 0.9); b.ex = o.x; b.ey = o.y; G.hz.push({ k: 'circle', x: b.ex, y: b.ey, r: 160, t: 0, T: 0.95 }); Snd.sfx('spring'); },
       upd(b, dt) { b.stT -= dt; if (b.ph === 'up') { const u = 1 - Math.max(0, b.stT) / 0.95; b.x = lerp(b.sx, b.ex, u); b.y = lerp(b.sy, b.ey, u); b.lift = Math.sin(u * Math.PI) * 260; if (b.stT <= 0) { b.lift = 0; b.ph = 'land'; b.stT = 0.6; G.cam.sh = 16; Snd.sfx('stomp'); FX.shock(b.x, b.y, 30, 240, 0.5); FX.shock(b.x, b.y, 10, 170, 0.35, 'rgba(200,160,255,0.9)'); FX.puff(b.x, b.y, 12, 120); for (const p of G.players) if (!p.down && Math.hypot(p.x - b.x, p.y - b.y) < 160 + PR) hurt(p, 18 * G.lv.dmgMul); G.hz.push({ k: 'wave', x: b.x, y: b.y, r: 160, r1: 380, v: 320, w: 26, t: 0, dmg: 10 * G.lv.dmgMul, hit: [] }); } } else if (b.stT <= 0) rest(b, 0.5); } },
@@ -2255,7 +2406,7 @@ const Game = (() => {
     if (b.dead) { b.dt += dt; if (b.kind === 'clock' && Math.random() < dt * 1.6) FX.pop(b.x + 40 + Math.random() * 20, b.y - 200, pick(['Z', 'z', 'Zz']), '#9fc8ff', '#2a4a8a', 22, 1.4); if (b.dt > 0.1 && b.dt < 2.5 && Math.random() < dt * 8) FX.sparkle(b.x + (Math.random() - 0.5) * 160, b.y - 120 + (Math.random() - 0.5) * 140, 'gold', 2, 60, 0.6); return; }
     if (b.st === 'enter') { b.lift = Math.max(0, b.lift - dt * 1100); if (b.lift <= 0) { b.st = 'rest'; b.stT = 1.2; G.cam.sh = 18; Snd.sfx('stomp'); FX.shock(b.x, b.y, 30, 300, 0.6); FX.puff(b.x, b.y, 14, 140); FX.pop(b.x, b.y - 260, b.name + ' 등장!', '#ff6fae', '#6a1040', 34, 1.6); for (const p of G.players) { const d = Math.hypot(p.x - b.x, p.y - b.y); if (d < 200) { p.x += (p.x - b.x) / (d || 1) * 120; p.y += (p.y - b.y) / (d || 1) * 90; clampIsl(p, 0.97); } } } return; }
     if (b.stun > 0) { b.stun -= dt; if (Math.random() < dt * 6) FX.stars(b.x, b.y - 200, 'gold', 1, 60); return; }
-    if (!b.tg || b.tg.down || Math.random() < dt * 0.3) { const al = G.players.filter((q) => !q.down); if (al.length) b.tg = al.sort((p, q) => Math.hypot(p.x - b.x, p.y - b.y) - Math.hypot(q.x - b.x, q.y - b.y))[Math.random() < 0.7 ? 0 : rint(al.length)]; }
+    if (!b.tg || b.tg.down || b.tg.away || Math.random() < dt * 0.3) { const al = G.players.filter((q) => !q.down && !q.away); if (al.length) b.tg = al.sort((p, q) => Math.hypot(p.x - b.x, p.y - b.y) - Math.hypot(q.x - b.x, q.y - b.y))[Math.random() < 0.7 ? 0 : rint(al.length)]; }
     const t = b.tg; if (!t) return;
     if (b.rage && Math.random() < dt * 5) FX.spawn({ x: b.x + (Math.random() - 0.5) * 80, y: b.y - 170, vx: (Math.random() - 0.5) * 30, vy: -50, life: 0.8, sp: Art.S.puff, s0: 0.4, s1: 1.1, a0: 0.7, a1: 0 });
     if (b.st === 'rest' || b.st === 'chase') {
@@ -2279,12 +2430,12 @@ const Game = (() => {
   /* ── 하트 줍기·아이템 ── */
   // 하트 보석·아이템: 같이 하는 사람 친구 모두가 주워요
   function updGems(dt) {
-    const hs = G.players.filter((q) => !q.bot && !q.down);
+    const hs = G.players.filter((q) => !q.bot && !q.down && !q.away);
     for (let i = G.gems.length - 1; i >= 0; i--) {
       const g = G.gems[i]; g.t += dt; if (g.pop > 0) g.pop -= dt;
       if (!g.mag) for (const q of hs) { if (Math.hypot(q.x - g.x, q.y - 20 - g.y) < pickR(q)) { g.mag = true; g.to = q; break; } }
       if (!g.mag) continue;
-      let p = g.to; if (!p || p.down || p.bot) { p = null; let bd = 1e12; for (const q of hs) { const dd = (q.x - g.x) * (q.x - g.x) + (q.y - g.y) * (q.y - g.y); if (dd < bd) { bd = dd; p = q; } } g.to = p; if (!p) continue; }
+      let p = g.to; if (!p || p.down || p.bot || p.away) { p = null; let bd = 1e12; for (const q of hs) { const dd = (q.x - g.x) * (q.x - g.x) + (q.y - g.y) * (q.y - g.y); if (dd < bd) { bd = dd; p = q; } } g.to = p; if (!p) continue; }
       const dx = p.x - g.x, dy = p.y - 20 - g.y, d = Math.hypot(dx, dy);
       g.sp = Math.min(950, g.sp + 1500 * dt); g.x += dx / (d || 1) * g.sp * dt; g.y += dy / (d || 1) * g.sp * dt;
       if (d < 22) { G.gems.splice(i, 1); gainXp(p, g.v); sfxP(p, 'gem'); FX.sparkle(p.x, p.y - 34, g.tier === 2 ? 'gold' : g.tier ? 'lav' : 'pink', 2, 60, 0.3); }
@@ -2423,6 +2574,7 @@ const Game = (() => {
     G.t += dt; G.stats.time += dt;
     rebuild();
     for (const p of G.players) {
+      if (p.away) continue;
       p.inv -= dt; p.hurtT -= dt; p.flash -= dt; p.happy -= dt; p.cheer -= dt; p.blinkT -= dt; if (p.blinkT < -0.12) p.blinkT = rand(2, 5);
       if (p.down) { const helpers = G.players.filter((q) => !q.down && Math.hypot(q.x - p.x, (q.y - p.y) * 1.25) < window.HEART_RV.R).length; if (helpers) { p.rv += dt; if (p.rv >= window.HEART_RV.T) { p.down = false; p.rv = 0; p.hp = maxHp(p) * window.HEART_RV.hp; p.inv = 1.6; FX.ring(p.x, p.y - 20, 'mint', 10, 100, 0.6); FX.sparkle(p.x, p.y - 30, 'mint', 10, 120, 0.6); FX.hearts(p.x, p.y - 40, 4); Snd.sfx('revive'); if (p === G.me) emit('toast', '친구가 깨워 줬어요!'); } } else p.rv = Math.max(0, p.rv - dt * window.HEART_RV.drop); p.vx = p.vy = 0; continue; }
       if (p.net) netDrive(p, dt); else {
@@ -2434,7 +2586,7 @@ const Game = (() => {
       if (Math.abs(p.vx) > 12) p.face = p.vx > 0 ? 1 : -1;
       }
       const rg = 0.7 * (p.P.clover || 0); if (rg) healP(p, rg * dt);
-      if (G.phase !== 'intro' && G.phase !== 'fail' && G.phase !== 'over') for (const id in p.W) WF[id](p, p.W[id] - 1, dt);
+      if (G.phase !== 'intro' && G.phase !== 'fail' && G.phase !== 'over' && !(p.wasBot && window.HEART_TUT && HEART_TUT.state)) for (const id in p.W) WF[id](p, p.W[id] - 1, dt);
     }
     for (let i = G.botGain.length - 1; i >= 0; i--) { const b = G.botGain[i]; if (G.t >= b.at) { G.botGain.splice(i, 1); const o = options(b.p, 1)[0]; apply(b.p, o); b.p.lv++; } }
     updShots(dt); updEnemies(dt); if (G.boss) updBoss(G.boss, dt); updHazards(dt); updGems(dt); updPhase(dt); FX.update(dt);
@@ -2448,7 +2600,7 @@ const Game = (() => {
   const sentGems = new Map(); let sentPW = [];
   function netSnap(full) {
     if (full) { sentGems.clear(); sentPW = []; }
-    const P = G.players.map((p) => [R1(p.x), R1(p.y), R1(p.vx), R1(p.vy), p.face, R2(p.hp), p.down ? 1 : 0, R2(p.rv), R2(p.inv), R2(p.hurtT), R2(p.flash), R2(p.happy), R2(p.cheer), p.lv, p.xp, p.need, R2(p.orb), p.busy ? 1 : 0, p.bot ? 1 : 0]);
+    const P = G.players.map((p) => [R1(p.x), R1(p.y), R1(p.vx), R1(p.vy), p.face, R2(p.hp), p.down ? 1 : 0, R2(p.rv), R2(p.inv), R2(p.hurtT), R2(p.flash), R2(p.happy), R2(p.cheer), p.lv, p.xp, p.need, R2(p.orb), p.busy ? 1 : 0, p.bot ? 1 : 0, p.away ? 1 : 0]);
     const PW = []; G.players.forEach((p, i) => { const s = JSON.stringify([p.W, p.P]); if (s !== sentPW[i]) { sentPW[i] = s; PW.push([i, p.W, p.P]); } });
     const E = []; for (const e of G.enemies) { if (e.boss) continue; E.push([e.id, e.type, R1(e.x), R1(e.y), (e.face > 0 ? 1 : 0) | (e.dead ? 2 : 0) | (e.wind > 0 ? 4 : 0) | (e.flash > 0 ? 8 : 0) | (e.hitT > 0 ? 16 : 0), e.hitT > 0 || DATA.EN[e.type].elite ? R1(Math.max(0, e.hp) / e.max * 100) : -1]); }
     const b = G.boss, B = b ? [b.id, b.kind, b.name, R1(b.x), R1(b.y), R1(b.hp), R1(b.max), b.face, R2(b.flash), R2(b.sq), b.st, R1(b.lift || 0), R2(b.walk), b.rage ? 1 : 0, R2(b.stun), R2(b.weak), b.ringing ? 1 : 0, b.go ? 1 : 0, b.dead ? 1 : 0, R2(b.dt), R1(b.vx || 0)] : null;
@@ -2487,7 +2639,7 @@ const Game = (() => {
       const p = G.players[i]; if (!p) return;
       if (p !== me) { p.nx = a[0]; p.ny = a[1]; p.vx = a[2]; p.vy = a[3]; p.face = a[4]; }
       const hp0 = p.hp, dn0 = p.down;
-      p.hp = a[5]; p.down = !!a[6]; p.rv = a[7]; p.inv = a[8]; p.hurtT = a[9]; p.flash = a[10]; p.happy = a[11]; p.cheer = a[12]; p.lv = a[13]; p.xp = a[14]; p.need = a[15]; p.orb = a[16]; p.busy = !!a[17]; p.bot = !!a[18];
+      p.hp = a[5]; p.down = !!a[6]; p.rv = a[7]; p.inv = a[8]; p.hurtT = a[9]; p.flash = a[10]; p.happy = a[11]; p.cheer = a[12]; p.lv = a[13]; p.xp = a[14]; p.need = a[15]; p.orb = a[16]; p.busy = !!a[17]; p.bot = !!a[18]; const aw0 = p.away; p.away = !!a[19]; if (p.away || aw0) { p.x = p.nx; p.y = p.ny; }
       if (p === me) {
         if (p.hp < hp0 - 0.5 && !p.down) { G.cam.sh = Math.min(12, G.cam.sh + 5); Snd.sfx('hurt'); emit('hurt'); }
         if (p.down && !dn0) { Snd.sfx('down'); emit('toast', '기절했어요! 친구가 3초 동안 꼭 붙어 있으면 깨어나요'); }
@@ -2600,7 +2752,7 @@ const Game = (() => {
     g.globalAlpha = 1;
     // 섬
     const gr = Art.S.ground, gs = gr.s, x0 = Math.max(0, V.x0 * gs - 2), y0 = Math.max(0, V.y0 * gs - 2), x1 = Math.min(gr.c.width, V.x1 * gs + 2), y1 = Math.min(gr.c.height, V.y1 * gs + 2);
-    if (x1 > x0 && y1 > y0) { g.setTransform(V.k / gs, 0, 0, V.k / gs, V.ox, V.oy); g.drawImage(gr.c, x0, y0, x1 - x0, y1 - y0, x0, y0, x1 - x0, y1 - y0); }
+    if (x1 > x0 && y1 > y0) { g.setTransform(V.k / gs, 0, 0, V.k / gs, V.ox, V.oy); g.imageSmoothingQuality = 'low'; g.drawImage(gr.c, x0, y0, x1 - x0, y1 - y0, x0, y0, x1 - x0, y1 - y0); g.imageSmoothingQuality = window.HEART_SQ; }
     // 그림자
     for (const d of G.decor) if (d.r && inView(d.x, d.y, 80)) Render.shade(g, d.x, d.y + 2, d.r * 1.25, 0.55);
     for (const e of G.enemies) { if (!inView(e.x, e.y, 80)) continue; const D = DATA.EN[e.type]; if (e.boss) Render.shade(g, e.x, e.y, (e.kind === 'clock' ? 66 : 70) * (1 - Math.min(0.5, (e.lift || 0) / 600)), e.dead ? 0.5 : 0.9); else Render.shade(g, e.x, e.y, e.r * (D.hover ? 0.8 : 1.05), e.dead ? 0.6 * (1 - e.dt / 0.8) : D.hover ? 0.55 : 0.85); }
@@ -2640,7 +2792,7 @@ const Game = (() => {
     if (p.down) { if (G.on) window.HEART_RVZONE(g, p, t, 0); (p === G.me && window.ME2D ? Render.heroDownMe : Render.heroDown)(g, p.hero, p.x, p.y, HSC, t, Math.min(1, p.rv / window.HEART_RV.T)); if (G.on) window.HEART_RVZONE(g, p, t, 1); return; }
     const blink = p.blinkT < 0, mood = p.hurtT > 0 ? 'hurt' : p.happy > 0 ? 'happy' : blink ? 'blink' : 'smile';
     const A0 = g.globalAlpha; g.globalAlpha = A0 * (p.inv > 0 && p.hurtT < 0.2 && !G.cfg.show ? (Math.sin(t * 40) > 0 ? 0.55 : 1) : 1);
-    (p === G.me && window.ME2D ? Render.heroMe : Render.hero)(g, p.hero, p.x, p.y, HSC, { t, mv: p.mv, ph: p.ph, face: p.face, mood, flash: p.flash, cheer: p.cheer > 0, seed: p.seed, vx: p.vx });
+    (p === G.me && window.ME2D ? Render.heroMe : Render.hero)(g, p.hero, p.x, p.y, HSC, { t, mv: p.mv, ph: p.ph, face: p.face, mood, flash: p.flash, cheer: p.cheer > 0, seed: p.seed, vx: p.vx }); if (p === G.me && window.ME2D && G.on) window.HEART_BUDDY(g, p, t);
     g.globalAlpha = A0; if (A0 < 1) return;
     if (p.W.bubble) { const w = W.bubble, L = p.W.bubble - 1, n = w.n[L], R = w.R[L]; g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.45; for (let i = 0; i < n; i++) { const a = p.orb + i * TAU / n; put(g, Art.S.glow.sky, p.x + Math.cos(a) * R, p.y + Math.sin(a) * R * 0.8 - 26, 0.9); } g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; for (let i = 0; i < n; i++) { const a = p.orb + i * TAU / n, wob = 1 + Math.sin(t * 7 + i) * 0.05; putS(g, Art.S.bubble, p.x + Math.cos(a) * R, p.y + Math.sin(a) * R * 0.8 - 26, 0.72 * wob, 0.72 / wob, t * 0.5); } }
   }
@@ -2722,8 +2874,8 @@ const Game = (() => {
       G.me = G.players[cfg.guest.me] || G.players[0];
     } else {
       const hum = (cfg && cfg.humans) || [], used = [hero].concat(hum.map((h) => h.hero));
-      const others = shuffle(DATA.HEROES.map((h) => h.id).filter((id) => !used.includes(id))).slice(0, Math.max(0, 3 - hum.length));
-      G.players = [mkPlayer(hero, false, 0)].concat(hum.map((h, i) => { const p = mkPlayer(h.hero, false, i + 1); p.net = h.id; p.nick = h.nick; p.nx = p.x; p.ny = p.y; return p; }), others.map((id, i) => mkPlayer(id, true, hum.length + i + 1))); G.me = G.players[0];
+      const others = shuffle(DATA.HEROES.map((h) => h.id).filter((id) => !used.includes(id))).slice(0, (cfg && cfg.net) ? 0 : window.HEART_BOTS());
+      G.players = [mkPlayer(hero, false, 0)].concat(hum.map((h, i) => { const p = mkPlayer(h.hero, false, i + 1); p.net = h.id; p.nick = h.nick; p.dev = h.dev || ''; if (h.away) window.HEART_AWAY(p, true); p.nx = p.x; p.ny = p.y; return p; }), others.map((id, i) => mkPlayer(id, true, hum.length + i + 1))); G.me = G.players[0];
       G.me.nick = (G.cfg.nick || '').trim() || '나'; const nk = shuffle(NICKS.slice()); G.players.forEach((p, i) => { if (p.bot) p.nick = nk[i]; });
     }
     if (G.cfg.show) { for (const p of G.players) { if (!p.bot) { for (const id in W) p.W[id] = 5; p.P = { shoe: 3, magnet: 5, hourglass: 3, crown: 3 }; } } }
@@ -2732,7 +2884,7 @@ const Game = (() => {
   }
   function stop() { G.on = false; G.modal = null; Snd.music('title'); }
   function cqApply(rate) {
-    const b = G.boss; if (!b || b.dead) return; if (rate <= 0) { b.rage = true; FX.pop(b.x, b.y - 250, '약점을 못 찾았어요!', '#b48cff', '#3d1d70', 30, 1.4); return; } const dmg = b.max * (0.06 + 0.12 * rate);
+    const b = G.boss; if (!b || b.dead) return; if (!window.HEART_CQPASS(rate)) { b.rage = true; FX.pop(b.x, b.y - 250, '약점을 못 찾았어요!', '#b48cff', '#3d1d70', 30, 1.4); return; } const dmg = b.max * (0.06 + 0.12 * rate);
     b.stun = 2.5 + 2.5 * rate; b.weak = 6; b.rage = true; b.st = 'rest'; b.stT = 0.5; b.go = false; b.ringing = false; b.lift = 0;
     G.hz.length = 0; hitEnemy(b, dmg, G.me, 0, 0, 0); FX.flash(b.x, b.y - 100, 'pink', 220, 0.6, true); FX.ring(b.x, b.y - 80, 'pink', 30, 260, 0.7); FX.stars(b.x, b.y - 140, 'gold', 14, 220); FX.pop(b.x, b.y - 250, '약점 공격!', '#ff6fae', '#6a1040', 36, 1.5); G.cam.sh = 12; Snd.sfx('ult');
   }
@@ -2765,7 +2917,7 @@ const Game = (() => {
     G.cam.x = ISL.cx + Math.sin(G.t * 0.07) * 120; G.cam.y = ISL.cy + 40 + Math.cos(G.t * 0.05) * 30;
   }
   const resume = () => { G.modal = null; };
-  return { G, start, stop, update, draw, options, apply, cqApply, summon, initWorld, maxHp, retry, healP, spd, lvOf, title, titleUpdate, resume, netSnap, netApply, guestUpdate, quizPow, lvBack };
+  return { G, start, stop, update, draw, options, apply, cqApply, summon, initWorld, maxHp, retry, healP, spd, lvOf, title, titleUpdate, resume, netSnap, netApply, guestUpdate, quizPow, lvBack, gameOver };
 })();
 
 /* ---- ui.js ---- */
@@ -2783,7 +2935,7 @@ const UI = (() => {
     // 친구 고르기 카드
     const grid = E('cards'); grid.innerHTML = '';
     for (const h of DATA.HEROES) {
-      const c = el('button', 'hcard', `<canvas width="240" height="200"></canvas><div class="hn">${esc(Art.HERO[h.id].name)}</div><div class="hw"><img src="${icons[h.w]}" alt=""><span>${esc(DATA.W[h.w].name)}</span></div><div class="ht">${esc(h.tip)}</div>`);
+      const c = el('button', 'hcard', `<canvas width="240" height="200"></canvas><div class="hn">${esc(Art.HERO[h.id].name)}</div><div class="hw"><img src="${icons[h.w]}" alt=""><span><small style="opacity:.7">힘 </small>${esc(DATA.W[h.w].name)}</span></div><div class="ht">${esc(h.tip)}</div>`);
       c.dataset.id = h.id; c.style.setProperty('--hc', Art.HERO[h.id].color); c.onclick = () => { sel = h.id; Snd.sfx('click'); markSel(); };
       grid.appendChild(c);
     }
@@ -2819,8 +2971,9 @@ const UI = (() => {
     let nick = (E('nick').value || '').replace(/\s+/g, ' ').trim().slice(0, 8); if (nick) saveNick(nick);
     if (extra && extra.nick) nick = extra.nick;
     close(); sel = hero; screen('none'); E('hud').classList.remove('hide'); E('show').classList.toggle('hide', cfg.mode !== 'show'); E('bPause').classList.toggle('hide', !!(extra && extra.guest));
-    const q = Main.Q; Game.start(hero, Object.assign({ pick: cfg.pick || q.pick, show: cfg.mode === 'show', auto: q.auto, L: extra ? 1 : (q.L || 1), noquiz: false, nick }, extra || {}));
-    E('mePt').src = (window.ME2D && window.ME2D.pt) || pts[hero]; E('meName').textContent = G.me.nick; E('meHero').textContent = Art.HERO[hero].name; skillSig = ''; friendSig = ''; hud(true);
+    const q = Main.Q; Game.start(hero, Object.assign({ teach: false, pick: cfg.pick || q.pick, show: cfg.mode === 'show', auto: q.auto, L: extra ? 1 : (q.L || 1), noquiz: false, nick }, extra || {}));
+    E('mePt').src = (window.ME2D && window.ME2D.pt) || pts[hero]; E('meName').textContent = G.me.nick; E('meHero').textContent = Art.HERO[hero].name + '의 힘'; skillSig = ''; friendSig = ''; hud(true);
+    if (window.ME2D && cfg.mode !== 'show') setTimeout(() => { if (!G.on || !G.me) return; const nm = Art.HERO[hero].name; FX.pop(G.me.x, G.me.y - 150, nm + window.HEART_JOSA(nm, '이', '가') + ' 힘을 빌려줬어요!', Art.HERO[hero].color || '#ff6fae', '#5a1838', 24, 2.2); FX.hearts(G.me.x + (G.me.bdx || -54), G.me.y - 60, 5); }, 3000);   // LEVEL 띠가 지나간 뒤
     setTimeout(() => toast(cfg.mode === 'show' ? '아래 단추로 보스와 투덜이를 불러 봐요!' : '화면을 누른 채 밀면 움직여요 · 공격은 자동이에요!'), 400);
   }
 
@@ -2833,9 +2986,9 @@ const UI = (() => {
     E('me').classList.toggle('low', me.hp / mh < 0.3 && !me.down);
     const sig = JSON.stringify([me.W, me.P]);
     if (sig !== skillSig) { skillSig = sig; const box = E('skills'); box.innerHTML = ''; for (const id in me.W) box.appendChild(skillIcon(id, me.W[id], 'w')); for (const id in me.P) box.appendChild(skillIcon(id, me.P[id], 'p')); }
-    const fs = G.players.filter((p) => p !== G.me).map((p) => p.hero + p.nick).join();
-    if (fs !== friendSig) { friendSig = fs; const box = E('friends'); box.innerHTML = ''; for (const p of G.players) if (p !== G.me) box.appendChild(el('div', 'fr', `<img src="${pts[p.hero]}" alt=""><div><span>${esc(p.nick)}<small>${esc(p.name)}</small></span><div class="bar fhp"><i></i></div></div>`)); }
-    const rows = E('friends').children; let j = 0; for (const p of G.players) { if (p === G.me) continue; const r = rows[j++]; if (!r) continue; r.querySelector('i').style.width = (p.hp / Game.maxHp(p) * 100) + '%'; r.classList.toggle('down', p.down); }
+    const fs = G.players.filter((p) => p !== G.me).map((p) => p.hero + p.nick + (p.away ? '~' : '')).join();
+    if (fs !== friendSig) { friendSig = fs; const box = E('friends'); box.innerHTML = ''; for (const p of G.players) if (p !== G.me) box.appendChild(el('div', 'fr', `<img src="${pts[p.hero]}" alt=""><div><span>${esc(p.nick)}<small>${p.away ? '잠깐 나감' : esc(p.name)}</small></span><div class="bar fhp"><i></i></div></div>`)); }
+    const rows = E('friends').children; let j = 0; for (const p of G.players) { if (p === G.me) continue; const r = rows[j++]; if (!r) continue; r.querySelector('i').style.width = (p.hp / Game.maxHp(p) * 100) + '%'; r.classList.toggle('down', p.down || !!p.away); r.classList.toggle('away', !!p.away); }
     E('kN').textContent = G.stats.kills;
     let msg = '', tm = '';
     if (G.phase === 'intro') msg = '준비!'; else if (G.phase === 'wave') { msg = '투덜이들이 몰려와요!'; tm = mmss((DATA.WAVE_S - G.waveT) * 1000); } else if (G.phase === 'boss') { msg = '보스를 물리쳐요!'; tm = mmss(G.bossT * 1000); } else if (G.phase === 'clear') msg = 'LEVEL 클리어!'; else if (G.phase === 'fail') msg = '다시 도전!'; else if (G.phase === 'over') msg = '모두 기절했어요'; else if (G.phase === 'done') msg = '최종 스테이지 완료!'; else if (G.phase === 'free') msg = '스킬 구경 중 — 마음껏 시험해 봐요';
@@ -2851,7 +3004,7 @@ const UI = (() => {
   function hurtFlash() { const h = E('hurt'); h.classList.remove('in'); void h.offsetWidth; h.classList.add('in'); }
   function onLevel(lv) { banner('LEVEL ' + lv.L, lv.title + ' — 투덜이들을 웃게 만들어요!', 'lvl', 2.6); Snd.sfx('lvl', 0.6); }
   function onBoss(b) { banner(b.name + ' 등장!', G.cfg.show ? '마음껏 스킬을 시험해 봐요' : '1분 30초 안에 물리치면 다음 LEVEL!', 'boss', 2.4); }
-  function onClear(b) { if (!G.cfg.show) try { window.dispatchEvent(new CustomEvent('minigame-clear', { detail: { game: 'heart', level: G.L, diff: window.HEART_D(), team: G.players.filter((p) => !p.bot).length, guest: !!G.guest } })); } catch (e) { /* 반 별: 같이 한 방은 방장 기기가 팀 몫으로 하나 보내요 */ } banner('LEVEL ' + G.L + ' 클리어!', G.L === 7 ? '다음 이야기가 열렸어요! LEVEL 15까지 계속 도전!' : G.L >= window.HEART_MAXL ? '마지막 보스까지 물리쳤어요!' : b.kind === 'clock' ? '시계왕이 새근새근 잠들었어요' : '외로웠던 악마둥이가 하늘빛 하트로 돌아왔어요!', 'clear', 3.8); for (const p of G.players) { p.cheer = 3; p.happy = 3; } }
+  function onClear(b) { if (!G.cfg.show && !G.cfg.teach) try { window.dispatchEvent(new CustomEvent('minigame-clear', { detail: { game: 'heart', level: G.L, diff: window.HEART_D(), team: G.players.filter((p) => !p.bot).length, guest: !!G.guest } })); } catch (e) { /* 반 별: 같이 한 방은 방장 기기가 팀 몫으로 하나 보내요 */ } banner('LEVEL ' + G.L + ' 클리어!', G.L === 7 ? '다음 이야기가 열렸어요! LEVEL 15까지 계속 도전!' : G.L >= window.HEART_MAXL ? '마지막 보스까지 물리쳤어요!' : b.kind === 'clock' ? '시계왕이 새근새근 잠들었어요' : '외로웠던 악마둥이가 하늘빛 하트로 돌아왔어요!', 'clear', 3.8); for (const p of G.players) { p.cheer = 3; p.happy = 3; } }
   function onFail(why) { banner(why === 'time' ? '시간이 다 됐어요!' : '모두 기절했어요!', '얻은 능력은 그대로! 다시 도전해요', 'fail', 2.8); }
 
   /* ── 모달(퀴즈·카드) ── */
@@ -2913,19 +3066,19 @@ const UI = (() => {
   }
   // 보스 약점 분석: 같은 문제를 같이 하는 친구 기기 모두에 내요(혼자 할 때는 하트 친구들이 함께 풀어요)
   let cqView = null, cqRemoteFn = null;
-  const cqInfo = (p) => ({ hero: p.hero, nick: p.nick, bot: !!p.bot });
+  const cqInfo = (p) => ({ hero: p.hero, nick: p.nick, bot: !!p.bot, away: !!p.away });
   function cqShow(kind, name, q, order, crew, me) {
     const m = E('modal'); m.className = 'cq'; clearTimeout(modalTimer); clearInterval(qTimer);
     box().onclick = null;
-    box().innerHTML = `<div class="cqh"><img src="${pts[kind]}" alt=""><div><b>보스 약점 분석!</b><small>모두 함께 맞힐수록 ${esc(name)}에게 큰 공격이 들어가요</small></div></div>` + qHtml(q, order) + `<div class="crew">${crew.map((c, i) => `<div class="cm" data-i="${i}"><img src="${i === me && window.ME2D ? window.ME2D.pt : pts[c.hero]}" alt=""><span>${i === me ? '나' : esc(c.bot ? Art.HERO[c.hero].name : c.nick)}</span><em>${i === me ? '골라요!' : '생각 중…'}</em></div>`).join('')}</div>`;
+    box().innerHTML = `<div class="cqh"><img src="${pts[kind]}" alt=""><div><b>보스 약점 분석!</b><small>${esc(window.HEART_CQSUB(crew))}</small></div></div>` + qHtml(q, order) + `<div class="crew">${crew.map((c, i) => `<div class="cm" data-i="${i}"><img src="${i === me && window.ME2D ? window.ME2D.pt : pts[c.hero]}" alt=""><span>${i === me ? '나' : esc(c.bot ? Art.HERO[c.hero].name : c.nick)}</span><em>${i === me ? '골라요!' : c.bot ? '응원해요!' : c.away ? '잠깐 나감' : '생각 중…'}</em></div>`).join('')}</div>`;
     const v = {
       onAnswer: null, locked: false, revealed: false,
       mark(i, t) { const em = box().querySelector(`.cm[data-i="${i}"] em`); if (em && !v.revealed) em.textContent = t; },
       lock(oi) { v.locked = true; for (const btn of box().querySelectorAll('.opt')) { const i = +btn.dataset.i; btn.disabled = true; if (i === q.a) btn.classList.add('right'); else if (i === oi) btn.classList.add('wrong'); else btn.classList.add('dim'); } },
       reveal(res, rate) {
         v.revealed = true; if (!v.locked) v.lock(-1);
-        crew.forEach((c, i) => setTimeout(() => { const cm = box().querySelector(`.cm[data-i="${i}"]`); if (!cm) return; cm.classList.add(res[i] ? 'ok' : 'no'); cm.querySelector('em').textContent = res[i] ? '정답!' : '아쉬워!'; Snd.sfx(res[i] ? 'beep' : 'hit', 0.7); }, 250 + i * 330));
-        setTimeout(() => { if (!box().querySelector('.cqh')) return; const fb = el('div', 'fb ok', `<b>정답률 ${Math.round(rate * 100)}%! ${rate >= 0.75 ? '약점을 찾았어요!' : rate >= 0.5 ? '약점이 보여요!' : '조금은 흔들렸어요!'}</b><span class="qf">${esc(q.e)}</span><div class="rate"><i style="width:${rate * 100}%"></i></div>`); box().appendChild(fb); }, 250 + crew.length * 330 + 150);
+        crew.forEach((c, i) => setTimeout(() => { const cm = box().querySelector(`.cm[data-i="${i}"]`); if (!cm) return; const r = res[i]; if (r !== true && r !== false) { cm.querySelector('em').textContent = c.away ? '잠깐 나감' : '응원해요!'; return; } cm.classList.add(r ? 'ok' : 'no'); cm.querySelector('em').textContent = r ? '정답!' : '아쉬워!'; Snd.sfx(r ? 'beep' : 'hit', 0.7); }, 250 + i * 330));
+        setTimeout(() => { if (!box().querySelector('.cqh')) return; const fb = el('div', window.HEART_CQPASS(rate) ? 'fb ok' : 'fb no', `<b>${esc(window.HEART_CQMSG(res, rate))}</b><span class="qf">${esc(q.e)}</span><div class="rate"><i style="width:${rate * 100}%"></i></div>`); box().appendChild(fb); }, 250 + crew.length * 330 + 150);
       },
     };
     for (const btn of box().querySelectorAll('.opt')) btn.onclick = () => { if (v.onAnswer) v.onAnswer(+btn.dataset.i); };
@@ -2933,16 +3086,16 @@ const UI = (() => {
   }
   function classQuiz(b) {
     const q = DATA.nextQ(), order = q.k === 'ox' ? [0, 1] : shuffle(q.o.map((_, i) => i)), crew = G.players, me = crew.indexOf(G.me);
-    const res = crew.map((p) => (p.bot ? Math.random() < 0.72 : null));
+    const cnt = (p) => !p.bot && !p.away;   // 진짜 사람만 셈
+    const res = crew.map((p) => (cnt(p) ? null : -1));
     const v = cqShow(b.kind, b.name, q, order, crew.map(cqInfo), me);
     Net.cqStart({ kind: b.kind, name: b.name, q, order, crew: crew.map(cqInfo) });
-    crew.forEach((p, i) => { if (p.bot) setTimeout(() => v.mark(i, '골랐어요!'), 900 + Math.random() * 3500); });
     let done = false, mine = false;
-    const waiting = () => crew.some((p, i) => !p.bot && res[i] === null);
+    const waiting = () => crew.some((p, i) => cnt(p) && res[i] === null);
     const reveal = () => {
-      if (done) return; done = true; clearInterval(qTimer); cqRemoteFn = null;
-      for (let i = 0; i < res.length; i++) if (res[i] === null) res[i] = false;
-      const rate = res.filter(Boolean).length / crew.length;
+      if (done) return; done = true; clearInterval(qTimer); cqRemoteFn = null; window.HEART_CQSKIP = null;
+      for (let i = 0; i < res.length; i++) if (res[i] === null) res[i] = cnt(crew[i]) ? false : -1;
+      const nn = res.filter((r) => r === true || r === false).length, rate = nn ? res.filter((r) => r === true).length / nn : 0;
       Net.cqEnd(res, rate); v.reveal(res, rate);
       modalTimer = setTimeout(() => { close(); Game.cqApply(rate); }, G.cfg.auto ? 1700 : 4300);
     };
@@ -2952,7 +3105,8 @@ const UI = (() => {
       if (waiting()) { v.mark(me, '골랐어요!'); Net.cqMark(me); } else reveal();
     };
     v.onAnswer = answer;
-    cqRemoteFn = (i, ok) => { if (done || !crew[i] || crew[i].bot || res[i] !== null) return; res[i] = ok; v.mark(i, '골랐어요!'); Net.cqMark(i); if (mine && !waiting()) reveal(); };
+    cqRemoteFn = (i, ok) => { if (done || !crew[i] || !cnt(crew[i]) || res[i] !== null) return; res[i] = ok; v.mark(i, '골랐어요!'); Net.cqMark(i); if (mine && !waiting()) reveal(); };
+    window.HEART_CQSKIP = (p) => { if (done) return; const i = crew.indexOf(p); if (i >= 0 && res[i] === null) res[i] = -1; if (mine && !waiting()) reveal(); };
     timer(window.HEART_GK().qt, () => { if (!mine) answer(-1); reveal(); });
     if (G.cfg.auto) modalTimer = setTimeout(() => answer(Math.random() < 0.8 ? q.a : (q.a + 1) % q.o.length), 600);
   }
@@ -2962,7 +3116,6 @@ const UI = (() => {
     const v = cqShow(d.kind, d.name, d.q, d.order, d.crew, me); cqView = v;
     let mine = false;
     v.onAnswer = (oi) => { if (mine) return; mine = true; const ok = oi === d.q.a; G.stats.n++; if (ok) G.stats.ok++; v.lock(oi); Snd.sfx(ok ? 'ok' : 'no'); v.mark(me, '골랐어요!'); Net.send({ t: 'cqa', ok }); };
-    d.crew.forEach((c, i) => { if (c.bot) setTimeout(() => v.mark(i, '골랐어요!'), 900 + Math.random() * 3500); });
     timer(window.HEART_GK().qt, () => v.onAnswer(-1));
     if (G.cfg.auto) modalTimer = setTimeout(() => v.onAnswer(Math.random() < 0.8 ? d.q.a : (d.q.a + 1) % d.q.o.length), 700);
   }
@@ -2994,7 +3147,7 @@ const UI = (() => {
    빈 자리는 하트 친구(컴퓨터)가 채워요. 친구가 중간에 나가면 그 자리도 하트 친구가 이어받아요.
    연결 서버를 바꾸려면 public/peer-config.js 의 window.PEER_OPTS 를 고쳐요. */
 const Net = (() => {
-  const PREFIX = 'heart-squad-', MAX = 4, CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const PREFIX = 'heart-squad-', MAX = 4, CODE_CHARS = '0123456789';
   const G = Game.G, E = (id) => document.getElementById(id);
   const S = { mode: 'solo', peer: null, conns: {}, host: null, code: '', myId: 'me', lobby: [], list: [], seq: 0, timer: 0, snapT: 0, sendT: 0, screen: null, hero: 'sarang', nick: '', lastSnap: 0, started: false, full: false, pend: [], waitT: 0 };
   const okBrowser = typeof Peer === 'function' && typeof RTCPeerConnection === 'function';
@@ -3031,10 +3184,14 @@ const Net = (() => {
   }
   function init() {
     hookFx(); hookUi();
+    setInterval(() => {
+      if (S.mode === 'guest' && S.host && S.host.open) gsend({ t: 'k' });
+      if (S.mode === 'host') { const now = performance.now(); for (const id in S.conns) { const c = S.conns[id]; if (c._last && now - c._last > 12000) dropGuest(c); } }
+    }, 2500);
     if (!okBrowser) E('bMulti').classList.add('hide');
     const nm = new URLSearchParams(location.search).get('name'), ni = E('nick');
     if (nm && ni && !ni.value) ni.value = nm.slice(0, 8);
-    addEventListener('pagehide', () => { if (S.mode !== 'solo') reset(); });
+    addEventListener('pagehide', () => { if (S.mode !== 'solo') { S.soft = true; reset(); S.soft = false; } });
   }
 
   // ---------- 보내기 ----------
@@ -3057,7 +3214,7 @@ const Net = (() => {
       if (S.sendT <= 0 && G.me) { S.sendT = 1 / 15; const me = G.me, busy = !!(G.modal && G.modal.k !== 'pause'); gsend({ t: 'in', x: Math.round(me.x), y: Math.round(me.y), vx: Math.round(me.vx), vy: Math.round(me.vy), b: busy ? 1 : 0 }); }
       if (!G.modal && S.pend.length) UI.netModal(S.pend.shift());
       S.waitT -= dt;
-      if (performance.now() - S.lastSnap > 4000 && S.waitT <= 0) { S.waitT = 3; UI.toast('방장 기기를 기다리는 중이에요… (방장 화면이 켜져 있어야 해요)'); }
+      const quiet = performance.now() - S.lastSnap; if (quiet > 25000) relost('방장과 연결이 끊겼어요'); else if (quiet > 5000) waitOverlay(true, '방장 기기를 기다리는 중이에요', '방장 화면이 꺼져 있으면 켜 주세요 · 방 코드 ' + S.code);
     }
   }
 
@@ -3075,7 +3232,7 @@ const Net = (() => {
     Game.apply(p, valid ? { kind: o.kind, id: o.id, lv: o.lv } : Game.options(p, 1)[0]);
   }
   function hostRecv(c, d) {
-    if (!d || S.mode !== 'host') return;
+    if (!d || S.mode !== 'host' || !c._id) return;
     const p = G.on ? G.players.find((q) => q.net === c._id) : null;
     if (d.t === 'in') { if (p && num(d.x) && num(d.y)) { p.nx = d.x; p.ny = d.y; p.nvx = num(d.vx) ? d.vx : 0; p.nvy = num(d.vy) ? d.vy : 0; p.busy = !!d.b; } }
     else if (d.t === 'ap') { if (p) applyFrom(p, d.o); }
@@ -3096,7 +3253,7 @@ const Net = (() => {
   function chips(list, meId) {
     let h = '';
     for (const g of list) h += `<div class="cm"><img src="${g.id === meId && window.ME2D ? window.ME2D.pt : pt(g.hero)}" alt=""><span>${esc(g.nick)}${g.id === meId ? ' (나)' : ''}</span><em>${g.id === 'h' ? '방장 👑' : esc(heroName(g.hero))}</em></div>`;
-    for (let i = list.length; i < MAX; i++) h += '<div class="cm empty"><div class="rmq">?</div><span>빈 자리</span><em>하트 친구가 함께해요</em></div>';
+    for (let i = list.length; i < MAX; i++) h += '<div class="cm empty"><div class="rmq">?</div><span>빈 자리</span><em>친구를 기다려요</em></div>';
     return `<div class="crew">${h}</div>`;
   }
   function setMsg(t) { const m = E('nMsg'); if (m) m.textContent = t || ''; }
@@ -3108,7 +3265,7 @@ const Net = (() => {
   }
   function renderMenu(msg) {
     S.screen = 'menu';
-    show(`<b class="pt2">친구랑 같이 하기</b><div class="rmsub">한 명이 방을 만들고, 친구들은 방 코드로 들어와요 (최대 4명)</div>
+    show(`<b class="pt2">친구랑 같이 하기</b><div class="rmsub">한 명이 방을 만들고, 친구들은 방 코드로 들어와요 (진짜 친구끼리 2~4명)</div>
       ${chips([{ id: 'me', hero: S.hero, nick: S.nick }], 'me').replace(/<div class="cm empty">[\s\S]*$/, '</div>')}
       <div class="sb"><button class="btn" id="nMake">방 만들기</button><button class="btn mint" id="nJoin">방 들어가기</button></div>
       <button class="btn gray small" id="nBack">친구 다시 고르기</button><div class="rmmsg" id="nMsg"></div>`);
@@ -3119,11 +3276,11 @@ const Net = (() => {
   }
   function renderJoin(msg, code) {
     S.screen = 'join';
-    show(`<b class="pt2">방 들어가기</b><div class="rmsub">방장 화면에 보이는 코드 4글자를 적어요</div>
-      <label class="nick"><span>방 코드</span><input id="nCode" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" value="${esc(code || '')}"></label>
+    show(`<b class="pt2">방 들어가기</b><div class="rmsub">방장 화면에 보이는 숫자 4개를 적어요</div>
+      <label class="nick"><span>방 코드</span><input id="nCode" maxlength="4" autocomplete="off" inputmode="numeric" pattern="[0-9]*" spellcheck="false" value="${esc(code || '')}"></label>
       <div class="sb"><button class="btn gray small" id="nBack">뒤로</button><button class="btn" id="nGo">들어가기</button></div><div class="rmmsg" id="nMsg"></div>`);
     const inp = E('nCode');
-    inp.oninput = () => { inp.value = inp.value.toUpperCase().replace(/[^A-Z]/g, ''); };
+    inp.oninput = () => { inp.value = inp.value.replace(/[^0-9]/g, ''); };
     inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); join(inp.value); } };
     E('nGo').onclick = () => { Snd.sfx('click'); join(inp.value); };
     E('nBack').onclick = () => { Snd.sfx('click'); reset(); renderMenu(); };
@@ -3133,33 +3290,33 @@ const Net = (() => {
   function renderHost() {
     S.screen = 'host';
     show(`<b class="pt2">방 코드</b><div class="rmcode">${esc(S.code)}</div>
-      <div class="rmsub">친구들은 '방 들어가기'에서 이 코드를 적어요 · 방장 화면은 모험 내내 켜 두어요</div>
+      <div class="rmsub">${S.resume ? esc(window.HEART_RESUMESUB(S.resume, S.lobby)) : "친구들은 '방 들어가기'에서 이 숫자를 적어요 · 방장 화면은 모험 내내 켜 두어요"}</div>
       ${chips(lobbyList(), 'h')}
-      <div class="sb"><button class="btn gray small" id="nClose">방 닫기</button><button class="btn big" id="nStart">모험 시작!</button></div><div class="rmmsg" id="nMsg"></div>`);
+      <div class="sb"><button class="btn gray small" id="nClose">방 닫기</button><button class="btn big" id="nStart">${S.resume ? '이어 하기!' : '모험 시작!'}</button></div><div class="rmmsg" id="nMsg"></div>`);
     E('nStart').onclick = () => { Snd.sfx('go'); hostStart(); };
-    E('nClose').onclick = () => { Snd.sfx('click'); reset(); S.screen = null; UI.screen('title'); };
+    E('nClose').onclick = () => { Snd.sfx('click'); window.HEART_HOST_FORGET(); S.resume = null; reset(); S.screen = null; UI.screen('title'); };
   }
   function renderWait() {
     S.screen = 'wait';
     show(`<b class="pt2">방 ${esc(S.code)}</b><div class="rmsub">방장이 출발하면 바로 같이 출발해요</div>
       ${chips(S.list, S.myId)}
       <button class="btn gray small" id="nLeave">방 나가기</button><div class="rmmsg" id="nMsg"></div>`);
-    E('nLeave').onclick = () => { Snd.sfx('click'); reset(); S.screen = null; UI.screen('title'); };
+    E('nLeave').onclick = () => { Snd.sfx('click'); window.HEART_ROOM_FORGET(); reset(); S.screen = null; UI.screen('title'); };
   }
   function renderLost(msg) {
     S.screen = 'lost';
     show(`<b class="pt2">연결이 끊겼어요</b><div class="rmsub">${esc(msg)}</div><button class="btn" id="nOk">처음으로</button>`);
     E('nOk').onclick = () => { Snd.sfx('click'); S.screen = null; UI.home(); };
   }
-  function waitOverlay(on, t1, t2) { E('netWait').classList.toggle('hide', !on); if (on) { E('nwT').textContent = t1 || ''; E('nwS').textContent = t2 || ''; } }
+  function waitOverlay(on, t1, t2) { const hb0 = E('nwHome'); if (hb0) hb0.style.display = 'none'; E('netWait').classList.toggle('hide', !on); if (on) { E('nwT').textContent = t1 || ''; E('nwS').textContent = t2 || ''; } }
 
   // ---------- 방장 ----------
   function makeRoom() {
     reset(); S.mode = 'host'; S.myId = 'h'; S.lobby = []; S.seq = 0;
     setMsg('방을 만드는 중이에요…'); openHost(0);
   }
-  function openHost(tries) {
-    const code = Array.from({ length: 4 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
+  function openHost(tries, fixed) {
+    const code = fixed || Array.from({ length: 4 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
     let peer; try { peer = new Peer(PREFIX + code, peerOpts()); } catch (e) { reset(); renderMenu('이 기기에서는 친구 연결을 쓸 수 없어요'); return; }
     S.peer = peer; S.code = code; let opened = false;
     peer.on('open', () => { if (S.peer !== peer) return; opened = true; renderHost(); });
@@ -3167,34 +3324,58 @@ const Net = (() => {
     peer.on('disconnected', () => { setTimeout(() => { try { if (S.peer === peer && !peer.destroyed && peer.disconnected) peer.reconnect(); } catch (e) { /* */ } }, 1500); });
     peer.on('error', (err) => {
       if (S.peer !== peer) return;
-      if (err && err.type === 'unavailable-id' && tries < 6) { S.peer = null; try { peer.destroy(); } catch (e) { /* */ } openHost(tries + 1); return; }
+      if (err && err.type === 'unavailable-id' && tries < (fixed ? 30 : 6)) { S.peer = null; try { peer.destroy(); } catch (e) { /* */ } if (fixed) { setMsg('아까 방이 정리되기를 기다리는 중이에요… (' + (tries + 1) + ')'); setTimeout(() => { if (S.mode === 'host' && !S.peer && S.resume) openHost(tries + 1, fixed); }, 3000); } else openHost(tries + 1); return; }
       if (!opened) { reset(); renderMenu(err && err.type === 'browser-incompatible' ? '이 기기에서는 친구 연결을 쓸 수 없어요' : '친구 연결 서버에 닿지 못했어요. 인터넷을 확인하고 다시 해 봐요'); }
     });
   }
   function onConn(c) {
     c.on('open', () => {
       if (S.mode !== 'host') { try { c.close(); } catch (e) { /* */ } return; }
+      c._last = performance.now();
+      const m0 = c.metadata || {};
+      if (G.on && S.started && rejoin(c, m0)) return;
+      if (!G.on && m0.dev) { const o = S.lobby.find((g) => g.dev === m0.dev); if (o) { const oc = S.conns[o.id]; if (oc) { oc._id = null; try { oc.close(); } catch (e) { /* */ } } delete S.conns[o.id]; S.lobby = S.lobby.filter((g) => g !== o); } }
       if (G.on || S.lobby.length >= MAX - 1) { try { c.send({ t: 'full', why: G.on ? 'busy' : 'full' }); } catch (e) { /* */ } setTimeout(() => { try { c.close(); } catch (e) { /* */ } }, 500); return; }
       const m = c.metadata || {}, id = 'g' + (++S.seq), hero = DATA.HEROES.some((h) => h.id === m.hero) ? m.hero : DATA.HEROES[S.seq % DATA.HEROES.length].id;
       const nick = String(m.nick || '').replace(/\s+/g, ' ').trim().slice(0, 8) || heroName(hero);
-      c._id = id; S.conns[id] = c; S.lobby.push({ id, hero, nick });
+      c._id = id; S.conns[id] = c; S.lobby.push({ id, hero, nick, dev: String(m.dev || '').slice(0, 24) });
       c.send({ t: 'welcome', id, code: S.code }); sendLobby(); Snd.sfx('beep');
     });
-    c.on('data', (d) => hostRecv(c, d));
+    c.on('data', (d) => { c._last = performance.now(); hostRecv(c, d); });
     c.on('close', () => dropGuest(c));
     c.on('error', () => dropGuest(c));
+  }
+  // 게임 중에 다시 들어온 친구: 그 자리(레벨·능력·체력)를 그대로 이어받음 (heart_inject.py, 2026-11-26)
+  function rejoin(c, m) {
+    const dev = String(m.dev || '').slice(0, 24), nick = String(m.nick || '').replace(/\s+/g, ' ').trim().slice(0, 8);
+    let p = dev ? G.players.find((q) => q !== G.me && !q.bot && q.dev === dev) : null;
+    if (!p) p = G.players.find((q) => q !== G.me && !q.bot && q.away && q.nick === nick);
+    if (!p) return false;
+    const old = p.net && S.conns[p.net]; if (old && old !== c) { old._id = null; try { old.close(); } catch (e) { /* */ } }
+    if (p.net) delete S.conns[p.net];
+    const id = 'g' + (++S.seq); c._id = id; S.conns[id] = c; p.net = id; if (dev) p.dev = dev;
+    const wasAway = !!p.away; if (wasAway) window.HEART_BACK(p);
+    const lob = S.lobby.find((g) => g.dev && g.dev === p.dev) || S.lobby.find((g) => g.nick === p.nick); if (lob) lob.id = id; else S.lobby.push({ id, hero: p.hero, nick: p.nick, dev: p.dev });
+    const list = G.players.map((q) => ({ hero: q.hero, nick: q.nick, bot: !!q.bot, id: q === G.me ? 'h' : q.net || null }));
+    try { c.send({ t: 'welcome', id, code: S.code }); c.send({ t: 'start', list, L: G.L, gr: window.HEART_G(), df: window.HEART_D(), re: 1, pos: [Math.round(p.x), Math.round(p.y)] }); } catch (e) { /* */ }
+    S.full = true; if (wasAway) { G.ev.toast(p.nick + ' 친구가 다시 들어왔어요!'); Snd.sfx('beep'); }
+    return true;
   }
   function sendLobby() { hsend({ t: 'lobby', list: lobbyList() }); if (S.screen === 'host') renderHost(); }
   function dropGuest(c) {
     const id = c._id; if (!id || !S.conns[id]) return;
     delete S.conns[id]; S.lobby = S.lobby.filter((g) => g.id !== id);
     try { c.close(); } catch (e) { /* */ }
-    if (G.on && S.started) { const p = G.players.find((q) => q.net === id); if (p) { delete p.net; p.bot = true; p.busy = false; G.ev.toast(p.nick + ' 친구가 나갔어요. 하트 친구가 대신 함께해요'); } }
+    if (G.on && S.started) { const p = G.players.find((q) => q.net === id); if (p) { window.HEART_AWAY(p); G.ev.toast(p.nick + ' 친구 연결이 끊겼어요 · 방 코드 ' + S.code + '로 다시 들어올 수 있어요'); } }
     if (S.mode === 'host') sendLobby();
   }
   function hostStart() {
-    const humans = S.lobby.map((g) => ({ id: g.id, hero: g.hero, nick: g.nick }));
-    rec = false; UI.begin(S.hero, { net: true, humans, nick: S.nick });
+    if (!S.lobby.length && !S.resume) { if (S.screen !== 'host') home(); setMsg('친구가 1명 이상 들어와야 출발할 수 있어요 (혼자 하려면 처음 화면의 「모험 시작!」)'); return; }
+    const R = S.resume; S.resume = null;
+    const humans = S.lobby.map((g) => ({ id: g.id, hero: g.hero, nick: g.nick, dev: g.dev }));
+    if (R) for (const sp of R.players) if (!sp.me && !humans.some((h) => sp.dev && h.dev === sp.dev)) humans.push({ id: null, hero: sp.hero, nick: sp.nick, dev: sp.dev, away: true });
+    rec = false; UI.begin(S.hero, { net: true, humans, nick: S.nick, L: R ? R.L : 1 });
+    G.me.dev = window.HEART_DEV(); if (R) window.HEART_RESTORE(R);
     X.length = SN.length = U.length = M.length = 0; G.sndP = [];
     const list = G.players.map((p) => ({ hero: p.hero, nick: p.nick, bot: !!p.bot, id: p === G.me ? 'h' : p.net || null }));
     hsend({ t: 'start', list, L: G.L, gr: window.HEART_G(), df: window.HEART_D() });
@@ -3203,22 +3384,23 @@ const Net = (() => {
 
   // ---------- 친구 ----------
   function join(code) {
-    code = String(code || '').toUpperCase().replace(/[^A-Z]/g, '');
-    if (code.length !== 4) { setMsg('코드 4글자를 적어요'); return; }
-    reset(); S.mode = 'guest'; S.code = code; setMsg('들어가는 중이에요…');
+    code = String(code || '').replace(/[^0-9]/g, '');
+    if (code.length !== 4) { setMsg('방 코드 숫자 4개를 적어요'); return; }
+    const re = S.re, rt = S.retry; reset(); S.re = re; S.retry = rt; S.mode = 'guest'; S.code = code; if (!re) setMsg('들어가는 중이에요…');
     let peer; try { peer = new Peer(undefined, peerOpts()); } catch (e) { reset(); renderJoin('이 기기에서는 친구 연결을 쓸 수 없어요', code); return; }
     S.peer = peer; let welcomed = false;
-    S.timer = setTimeout(() => { if (!welcomed && S.peer === peer) { reset(); renderJoin('방에 들어가지 못했어요. 코드를 확인하고 다시 해 봐요', code); } }, 12000);
+    S.timer = setTimeout(() => { if (!welcomed && S.peer === peer) { if (S.re) { reWait(0); return; } reset(); renderJoin('방에 들어가지 못했어요. 코드를 확인하고 다시 해 봐요', code); } }, 12000);
     peer.on('open', () => {
       if (S.peer !== peer) return;
-      const c = peer.connect(PREFIX + code, { reliable: true, serialization: 'json', metadata: { hero: S.hero, nick: S.nick } });
+      const c = peer.connect(PREFIX + code, { reliable: true, serialization: 'json', metadata: { hero: S.hero, nick: S.nick, dev: window.HEART_DEV() } });
       S.host = c;
       c.on('data', (d) => { if (S.host !== c) return; if (d && d.t === 'welcome') welcomed = true; guestRecv(d); });
-      c.on('close', () => { if (S.host === c) lost('방장과 연결이 끊겼어요. 방장 기기를 확인하고 다시 들어와요'); });
-      c.on('error', () => { if (S.host === c) lost('방장과 연결이 끊겼어요. 방장 기기를 확인하고 다시 들어와요'); });
+      c.on('close', () => { if (S.host === c) relost('방장과 연결이 끊겼어요'); });
+      c.on('error', () => { if (S.host === c) relost('방장과 연결이 끊겼어요'); });
     });
     peer.on('error', (err) => {
       if (S.peer !== peer) return;
+      if (S.re) { reWait(err && err.type === 'peer-unavailable' ? 1 : 0); return; }
       if (err && err.type === 'peer-unavailable') { reset(); renderJoin('그 코드의 방을 찾지 못했어요. 코드를 다시 확인해 봐요', code); }
       else if (!welcomed) { reset(); renderJoin('친구 연결 서버에 닿지 못했어요. 인터넷을 확인하고 다시 해 봐요', code); }
     });
@@ -3226,9 +3408,9 @@ const Net = (() => {
   function guestRecv(d) {
     if (!d || S.mode !== 'guest') return;
     switch (d.t) {
-      case 'welcome': S.myId = d.id; clearTimeout(S.timer); renderWait(); break;
-      case 'lobby': S.list = d.list || []; if (S.screen === 'wait') renderWait(); break;
-      case 'full': { const code = S.code; reset(); renderJoin(d.why === 'busy' ? '지금 모험 중이에요. 한 판이 끝나면 다시 들어와요' : '방이 꽉 찼어요 (최대 4명)', code); break; }
+      case 'welcome': S.myId = d.id; clearTimeout(S.timer); window.HEART_ROOM_SAVE(S.code, S.hero, S.nick); if (S.re) { S.re = null; S.reWait = true; } else renderWait(); break;
+      case 'lobby': S.list = d.list || []; if (S.reWait) { S.reWait = false; S.retry = null; waitOverlay(false); UI.home(); renderWait(); } else if (S.screen === 'wait') renderWait(); break;
+      case 'full': { if (S.re || S.reWait || S.retry) { S.re = S.reWait = S.retry = null; lost(d.why === 'busy' ? '친구들이 이미 모험 중이에요. 한 판이 끝나면 다시 들어와요' : '방이 꽉 찼어요 (최대 4명)'); break; } const code = S.code; reset(); renderJoin(d.why === 'busy' ? '지금 모험 중이에요. 한 판이 끝나면 다시 들어와요' : '방이 꽉 찼어요 (최대 4명)', code); break; }
       case 'start': guestStart(d); break;
       case 's': if (S.started && G.on) guestSnap(d); break;
       case 'lvup': if (S.started && G.on) { if (G.modal) S.pend.push({ k: 'lvup', p: G.me }); else UI.netModal({ k: 'lvup', p: G.me }); } break;
@@ -3239,17 +3421,19 @@ const Net = (() => {
       case 'cqr': UI.cqReveal(d); break;
       case 'end': if (G.on) { S.started = false; waitOverlay(false); UI.result(); } break;
       case 'wait': S.started = false; waitOverlay(false); E('result').classList.add('hide'); if (G.on || (G.modal && G.modal.k === 'result')) UI.home(); renderWait(); break;
-      case 'bye': lost('방장이 방을 닫았어요'); break;
+      case 'bye': if (d.soft && (S.started || S.reWait)) relost('방장이 나갔어요'); else { window.HEART_ROOM_FORGET(); lost('방장이 방을 닫았어요'); } break;
     }
   }
   function guestStart(d) {
     const me = (d.list || []).findIndex((a) => a.id === S.myId);
     if (me < 0) return;
-    E('result').classList.add('hide'); waitOverlay(false); S.pend.length = 0;
+    E('result').classList.add('hide'); waitOverlay(false); S.pend.length = 0; S.reWait = false; S.retry = null; const keepSt = d.re && G.on && G.stats ? G.stats : null;
     if (d.gr) window.__heartHostG = d.gr;
     if (d.df) window.__heartHostD = d.df;
     UI.begin(d.list[me].hero, { guest: { list: d.list, me }, nick: d.list[me].nick });
     S.started = true; S.lastSnap = performance.now(); S.screen = null;
+    if (keepSt) G.stats = keepSt;   // 다시 들어와도 그 판 기록(웃게 한 투덜이·문제) 그대로
+    if (d.re && d.pos && G.me) { G.me.x = d.pos[0]; G.me.y = d.pos[1]; }   // 방장이 정한 자리(친구 옆)에서
   }
   function guestSnap(d) {
     S.lastSnap = performance.now();
@@ -3261,7 +3445,27 @@ const Net = (() => {
     for (const n of d.M || []) Snd.music(n);
     if (d.md === 'pause') waitOverlay(true, '잠깐 쉬어요', '방장이 다시 시작하면 이어서 해요'); else waitOverlay(false);
   }
+  // 튕김 대처: 게임 중에 끊기면 처음으로 보내지 않고 같은 방에 다시 들어가 봄(5분까지) (heart_inject.py, 2026-11-26)
+  function relost(why) {
+    if (S.mode !== 'guest') return;
+    if (!(S.started && G.on) && !S.retry && !S.reWait) { lost(why === '방장이 나갔어요' ? '방장이 방을 나갔어요' : '방장과 연결이 끊겼어요. 방장 기기를 확인하고 다시 들어와요'); return; }
+    if (!S.retry) S.retry = { t0: performance.now(), host: why === '방장이 나갔어요' };
+    const peer = S.peer; S.peer = null; S.host = null; S.started = false; S.reWait = false; clearTimeout(S.timer);
+    if (peer) setTimeout(() => { try { peer.destroy(); } catch (e) { /* */ } }, 300);
+    reWait(S.retry.host ? 1 : 0);
+  }
+  function reWait(gone) {
+    const R = S.retry; if (!R || S.mode !== 'guest') return;
+    if (gone) R.host = true;
+    if (performance.now() - R.t0 > 300000) { S.retry = null; S.re = null; lost('방장과 다시 이어지지 않았어요. 방장이 방을 다시 열면 처음 화면의 「아까 방으로 돌아가기」를 눌러요'); return; }
+    waitOverlay(true, R.host ? '방장이 나갔어요' : '연결이 끊겼어요', (R.host ? '방장이 다시 들어오면 이어서 해요' : '같은 방에 다시 들어가는 중이에요…') + ' · 방 코드 ' + S.code);
+    let hb = E('nwHome');
+    if (!hb) { hb = document.createElement('button'); hb.id = 'nwHome'; hb.className = 'btn gray small'; hb.textContent = '처음으로'; E('netWait').querySelector('.pbox').appendChild(hb); }
+    hb.style.display = ''; hb.onclick = () => { Snd.sfx('click'); S.retry = null; S.re = null; window.HEART_ROOM_FORGET(); reset(); waitOverlay(false); UI.home(); };
+    clearTimeout(R.tm); R.tm = setTimeout(() => { if (S.retry !== R || S.mode !== 'guest') return; S.re = true; join(S.code); }, R.host ? 4000 : 2000);
+  }
   function lost(msg) {
+    if (S.retry) clearTimeout(S.retry.tm); S.retry = null; S.re = null; S.reWait = false;
     if (S.mode !== 'guest') return;
     reset(); waitOverlay(false);
     if (G.on || (G.modal && G.modal.k === 'result')) { UI.home(); }
@@ -3277,6 +3481,7 @@ const Net = (() => {
   function heal(p, v) { if (S.mode === 'guest' && S.started) { gsend({ t: 'heal', v }); return; } Game.healP(p, v, true); }
   function onResult() {
     if (S.mode === 'host' && S.started) { S.started = false; rec = false; hsend({ t: 'end' }); }
+    if (S.mode === 'host') window.HEART_HOST_FORGET();
     const g = S.mode === 'guest', h = S.mode === 'host';
     E('rAgain').textContent = h ? '다시 출발!' : g ? '대기실로' : '다시 하기';
     E('rHome').textContent = h ? '대기실로' : g ? '방 나가기' : '처음으로';
@@ -3285,43 +3490,53 @@ const Net = (() => {
   function again() { if (S.mode === 'host') hostStart(); else if (S.mode === 'guest') { UI.home(); renderWait(); } }
   function home() {
     if (S.mode === 'host') { hsend({ t: 'wait' }); UI.home(); renderHost(); }
-    else { reset(); UI.home(); }
+    else { window.HEART_ROOM_FORGET(); reset(); UI.home(); }
   }
   function reset() {
     clearTimeout(S.timer);
     const peer = S.peer;
-    if (S.mode === 'host') hsend({ t: 'bye' });
+    if (S.mode === 'host') hsend({ t: 'bye', soft: S.soft ? 1 : 0 });
     if (S.mode === 'guest') gsend({ t: 'bye' });
-    S.peer = null; S.host = null; S.conns = {}; S.lobby = []; S.list = []; S.mode = 'solo'; S.myId = 'me'; S.code = ''; S.started = false; S.pend.length = 0;
+    S.peer = null; S.host = null; S.conns = {}; S.resume = null; S.lobby = []; S.list = []; S.mode = 'solo'; S.myId = 'me'; S.code = ''; S.started = false; S.pend.length = 0;
     rec = false; G.sndP = null;
     if (peer) setTimeout(() => { try { peer.destroy(); } catch (e) { /* */ } }, 300);
   }
   return {
+    reopen(sv) {
+      S.hero = sv.hero || 'sarang'; S.nick = sv.nick || heroName(S.hero); reset(); S.mode = 'host'; S.myId = 'h'; S.lobby = []; S.seq = 0; S.resume = sv;
+      show(`<b class="pt2">방 ${esc(sv.code)} 다시 여는 중</b><div class="rmsub">아까 방이 정리될 때까지 1분쯤 걸릴 수 있어요</div><button class="btn gray small" id="nBack">그만두기</button><div class="rmmsg" id="nMsg"></div>`);
+      E('nBack').onclick = () => { Snd.sfx('click'); S.resume = null; window.HEART_HOST_FORGET(); reset(); S.screen = null; UI.screen('title'); };
+      openHost(0, String(sv.code));
+    },
+    joinCode(hero, nick, code) { menu(hero || 'sarang', nick || ''); renderJoin('', code); join(code); },
     init, tick, menu, apply, heal, cqStart, cqMark, cqEnd, onResult, again, home, reset, send: gsend,
     get mode() { return S.mode; }, get started() { return S.started; }, get myIdx() { return G.players.indexOf(G.me); },
-    get state() { return { mode: S.mode, code: S.code, myId: S.myId, screen: S.screen, started: S.started, lobby: lobbyList().map((g) => g.nick) }; },
+    get state() { return { mode: S.mode, code: S.code, myId: S.myId, screen: S.screen, started: S.started, lobby: lobbyList().map((g) => g.nick), retry: !!S.retry, reWait: !!S.reWait, resume: !!S.resume }; }, get _S() { return S; },
   };
 })();
 
 /* ---- main.js ---- */
 /* 시작·화면 크기·자동 화질·조이스틱 표시 */
+window.HEART_SQ = new URLSearchParams(location.search).get('sq') || 'high';   // 캐릭터·적 그림을 줄여 그리는 품질(시험 ?sq=low|medium|high)
 const Main = (() => {
   const Q = Object.fromEntries(new URLSearchParams(location.search)); for (const k of ['auto', 'start', 'show', 'fps', 'mute', 'pick']) Q[k] = Q[k] === '1'; Q.speed = +Q.speed || 1; Q.L = +Q.L || 1;
-  let RS = [1.5, 2, 2.5], CAP = [170, 300, 440];
-  let mU = 0, mD = 0, cv, g, cssW = 1, cssH = 1, rs = 1, last = 0, ema = 1 / 60, qLvl = 1, qMax = 2, dyn = 1, qT = 0, fpsEl = null, fc = 0, fT = 0, badT = 0, goodT = 0, upNeed = 8;
+  const PB = [1.0e6, 1.6e6, 2.1e6, 3.3e6], CAP = [170, 300, 440];   // 화소 단계(캔버스 기기 화소 예산), 효과 수 단계
+  let mU = 0, mD = 0, cv, g, cssW = 1, cssH = 1, rs = 1, last = 0, ema = 1 / 60, qLvl = 1, qMax = 2, dyn = 1, qT = 0, fpsEl = null, fc = 0, fT = 0, badT = 0, goodT = 0, upNeed = 8, pL = 1, pMax = 3, rlast = 0;
   window.__errs = []; addEventListener('error', (e) => window.__errs.push(String(e.message || e))); addEventListener('unhandledrejection', (e) => window.__errs.push('promise: ' + String(e.reason)));
   function resize() {
     cssW = Math.max(1, innerWidth); cssH = Math.max(1, innerHeight); const dpr = window.devicePixelRatio || 1;
-    rs = Math.max(0.5, Math.min(dpr, RS[qLvl]) * dyn); cv.width = Math.round(cssW * rs); cv.height = Math.round(cssH * rs); cv.style.width = cssW + 'px'; cv.style.height = cssH + 'px';
-    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = qLvl >= 2 ? 'high' : qLvl ? 'medium' : 'low';
+    const top = Math.min(dpr, 2), fl = pL >= 1 ? Math.min(1.25, top) : Math.min(1, top); rs = Math.max(0.5, clamp(Math.sqrt(PB[pL] / (cssW * cssH)), fl, top) * dyn); cv.width = Math.round(cssW * rs); cv.height = Math.round(cssH * rs); cv.style.width = cssW + 'px'; cv.style.height = cssH + 'px';
+    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = window.HEART_SQ;
   }
   function setQ(l) { qLvl = l; FX.setCap(CAP[l]); Game.G.qCap = [0.8, 0.92, 1][l]; resize(); }
   function quality(dt) {
-    if (Q.q != null) return; ema = ema * 0.94 + dt * 0.06; qT += dt;
-    if (ema > 1 / 28) { badT += dt; goodT = 0; } else { badT = Math.max(0, badT - dt * 0.5); if (ema < 1 / 45) goodT += dt; else goodT = 0; }
-    const ph = Game.G.on && (Game.G.phase === 'wave' || Game.G.phase === 'boss');
-    if (badT > 1.5 && qT > 2) { if (qLvl > 0) setQ(qLvl - 1); else if (dyn > 0.62) { dyn = Math.round((dyn - 0.1) * 100) / 100; resize(); } badT = goodT = qT = 0; upNeed = Math.min(64, upNeed * 2); }
-    else if (goodT > upNeed && ph) { if (dyn < 1) { dyn = Math.min(1, dyn + 0.1); resize(); } else if (qLvl < qMax) setQ(qLvl + 1); badT = goodT = qT = 0; }
+    if (Q.q != null) return; const nw = performance.now(); dt = rlast ? Math.min(0.5, (nw - rlast) / 1000) : dt; rlast = nw;   // 실제 시간으로(아주 느린 기기도 제때 내림)
+    ema = ema * 0.94 + dt * 0.06; qT += dt;
+    const G = Game.G, ph = G.on && (G.phase === 'wave' || G.phase === 'boss'), pm = G.on && G.net && !G.guest ? Math.min(2, pMax) : pMax;
+    if (ema > 1 / 28) { badT += dt; goodT = 0; } else { badT = Math.max(0, badT - dt * 0.5); if (ema < 1 / 45 && ph) goodT += dt; else if (ema >= 1 / 45) goodT = 0; }   // 올리기는 싸우는 중에 빠른 때만 셈
+    if (pL > pm) { pL = pm; resize(); }
+    if (badT > 1.5 && qT > 2) { if (pL > 1) { pL--; resize(); } else if (qLvl > 0) setQ(qLvl - 1); else if (pL > 0) { pL--; resize(); } else if (dyn > 0.62) { dyn = Math.round((dyn - 0.1) * 100) / 100; resize(); } badT = goodT = qT = 0; upNeed = Math.min(64, upNeed * 2); }
+    else if (goodT > upNeed && ph) { if (dyn < 1) { dyn = Math.min(1, dyn + 0.1); resize(); } else if (qLvl < qMax) setQ(qLvl + 1); else if (pL < pm) { pL++; resize(); } badT = goodT = qT = 0; }
   }
   function drawJoy() {
     const j = Input.joy; if (!j.on || !Game.G.on) return; const R = Input.R;
@@ -3339,19 +3554,19 @@ const Main = (() => {
       const t1 = performance.now(); Game.draw(g, cssW, cssH, rs); drawJoy(); const t2 = performance.now();
       if (fpsEl) { mU = mU * 0.95 + (t1 - t0) * 0.05; mD = mD * 0.95 + (t2 - t1) * 0.05; }
     } catch (e) { window.__errs.push(String(e && e.stack || e)); console.error(e); }
-    if (fpsEl) { fc++; fT += dt; if (fT >= 0.5) { fpsEl.textContent = Math.round(fc / fT) + ' fps · 계산 ' + mU.toFixed(1) + 'ms · 그리기 ' + mD.toFixed(1) + 'ms · 화질 ' + qLvl + (dyn < 1 ? ' (' + dyn + ')' : '') + ' · 적 ' + Game.G.enemies.length + ' · 효과 ' + FX.count(); fc = 0; fT = 0; } }
+    if (fpsEl) { fc++; fT += dt; if (fT >= 0.5) { fpsEl.textContent = Math.round(fc / fT) + ' fps · 계산 ' + mU.toFixed(1) + 'ms · 그리기 ' + mD.toFixed(1) + 'ms · 화소 ' + pL + ' (' + rs.toFixed(2) + '배) · 효과 단계 ' + qLvl + (dyn < 1 ? ' (' + dyn + ')' : '') + ' · 적 ' + Game.G.enemies.length + ' · 효과 ' + FX.count(); fc = 0; fT = 0; } }
     requestAnimationFrame(frame);
   }
   function title() { Game.title(); Snd.music('title'); }
   async function boot() {
     cv = document.getElementById('cv'); g = cv.getContext('2d', { alpha: false });
     const cores = navigator.hardwareConcurrency || 4, mem = navigator.deviceMemory || 4, dpr = window.devicePixelRatio || 1, low = mem <= 2 || cores <= 2;   // deviceMemory는 2·4·8처럼만 알려 줌(3GB 패드도 2)
-    if (low) RS = [1, 1.5, 1.5]; qMax = 2; qLvl = Q.q != null ? clamp(+Q.q, 0, 2) : (low ? 1 : 2);
+    qMax = 2; qLvl = low ? 1 : 2; pL = Q.q != null ? clamp(+Q.q, 0, 3) : (low ? 0 : 1); if (Q.q != null) qLvl = 2;
     resize(); addEventListener('resize', resize);
     const fontsDone = Promise.all([...document.fonts].map((f) => f.load().catch(() => 0)));
     await Promise.race([fontsDone, new Promise((r) => setTimeout(r, 3500))]);
     await new Promise((r) => setTimeout(r, 30));
-    const z0 = clamp(Math.min(cssW / 1150, cssH / 700), 0.5, 1.5), K = clamp(Math.ceil(z0 * rs * 1.15 * 4) / 4, 1, low ? 2 : 2.5);
+    const z0 = clamp(Math.min(cssW / 1150, cssH / 700), 0.5, 1.5), K = clamp(Math.ceil(z0 * Math.min(Math.min(dpr, 2), Math.max(1, Math.sqrt(PB[3] / (cssW * cssH)))) * 4) / 4, 1, low ? 2 : 2.5);   // 가장 높은 화소 단계에서 1:1(단계가 낮으면 조금 줄여 그려 또렷, 그보다 크게 그리면 줄이는 칠하기만 무거움)
     Art.init(low ? 0.6 : 1, K); FX.init(); Render.init(); Game.initWorld(); setQ(qLvl);
     Input.init(); Input.bind(document.getElementById('joy')); UI.init(); Net.init();
     addEventListener('pointerdown', () => Snd.init(), { once: true }); document.addEventListener('visibilitychange', UI.visibility);
@@ -3363,7 +3578,7 @@ const Main = (() => {
     window.GG = Game.G; window.__net = Net; window.__ready = true;
   }
   function startDirect(hero) { const b = document.querySelector(`.hcard[data-id="${hero}"]`); if (b) b.click(); document.getElementById('selGo').click(); }
-  return { boot, title, Q, get rs() { return rs; }, get q() { return qLvl; } };
+  return { boot, title, Q, get rs() { return rs; }, get q() { return qLvl; }, get pL() { return pL; } };
 })();
 window.addEventListener('load', () => Main.boot());
 </script>
