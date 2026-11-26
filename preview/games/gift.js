@@ -16,7 +16,7 @@
   if (window.PLAZA_GIFT) return;
   var me = document.currentScript;
   var DAY_MAX = 6, GAME_MAX = 3, GAME_CAP = { castle: 5 }, CHANCE_MAX = 2, PLAY_SEC = 180, PLAY_CHANCE = 0.2;
-  var NAMES = { jangteo: '뚝딱 장터', jangteo3d: '오늘은 내가 요리사!', heart: '하트 특공대', sarang: '사랑둥이 대모험', castle: '꿈빛 성 탐정단', island: '하트섬 원정대', escape: '사랑둥이 방탈출', jelly: '젤리와 팡', giant: '거인과 꼬마', magnet: '자석 친구', pyramid_run: '피라미드 대탈출' };
+  var NAMES = { jangteo: '오늘은 내가 요리사!', jangteo3d: '오늘은 내가 요리사!', heart: '하트 특공대', sarang: '사랑둥이 대모험', castle: '꿈빛 성 탐정단', island: '하트섬 원정대', escape: '사랑둥이 방탈출', jelly: '젤리와 팡', giant: '거인과 꼬마', magnet: '자석 친구', pyramid_run: '피라미드 대탈출' };
   var queue = [], ready = false;
   function jget(k, d) { try { var v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v } catch (e) { return d } }
   function jput(k, v) { try { localStorage.setItem(k, JSON.stringify(v)) } catch (e) { } }

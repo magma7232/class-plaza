@@ -56,7 +56,6 @@
   function R(top) { return 'top:' + top + ';right:calc(10px + env(safe-area-inset-right,0px))' }
   var GAME_POS = {
     jangteo3d: { land: 'top:calc(10px + env(safe-area-inset-top,0px));right:345px', port: R('38%') },   // 위쪽 요리 방법·소리·멈춤 단추 줄의 왼쪽(오른쪽 칸은 모험 주방 시간·별·작업 단추)
-    jangteo: { land: R('31%'), port: R('31%') },        // 2D판: 시간 카드와 작업 단추 사이
     heart: { land: R('62%'), port: R('62%') },          // 친구 칸과 '웃게 만든 투덜이' 사이
     sarang: { land: 'top:38%;left:calc(10px + env(safe-area-inset-left,0px))', port: 'top:38%;left:calc(10px + env(safe-area-inset-left,0px))' },   // 고정 조이스틱(왼쪽 아래) 위
     castle: { land: R('38%'), port: R('38%') },
