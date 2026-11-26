@@ -694,6 +694,7 @@
       u.searchParams.set("from", "plaza");
       u.searchParams.set("back", backUrl());
       if (T.params) for (var pk in T.params) u.searchParams.set(pk, T.params[pk]); // 예: 피라미드 ?play(처음 화면 없이 떨어지는 장면부터)
+      if (typeof T.color === "number") u.searchParams.set("pc", ("00000" + T.color.toString(16)).slice(-6)); // 포털 색 → 게임 첫 화면의 빛 터널(games/enter.js)도 같은 색으로 이어 탐
       if (window.NET && NET.online && NET.name) u.searchParams.set("name", NET.name);
       // 선생님 기기: 이야기 건너뛰기 언제나. 서버 반(선생님으로 들어옴) 또는 광장 주소 끝에 ?teacher(공개 주소처럼 서버가 없을 때)
       if (window.NET && NET.online ? NET.role === "teacher" : new URLSearchParams(location.search).has("teacher")) u.searchParams.set("teacher", "1"); // 서버 반에서는 선생님으로 들어온 기기만(월드 깬 수에서 빠지는 표시라서, 검토 3)
