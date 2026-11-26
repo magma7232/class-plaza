@@ -242,6 +242,8 @@
   //   광장 밖(PLAZA_QUIZ 없음)·퀴즈를 끈 판은 바로 통과
   window.PLAZA_QUIZ_GATES = true;
   let gating = false;
+  const isTeacher = () => { try { return !!(window.PLAZA_TEACHER && window.PLAZA_TEACHER()); } catch (e) { return false; } };   // 선생님 기기(광장이 teacher=1을 붙여 줌)
+  let teachWin = false;
   function gateQuiz(o) {
     const PQ = window.PLAZA_QUIZ;
     if (!PQ || !PQ.ask || mode === 'multi') return Promise.resolve({ correct: true, first: false, skipped: true });
@@ -288,7 +290,11 @@
         draw(c, sx, sy, s) { Art2.bush(c, sx, sy, s, t, kind); if (this.cool <= 0) { Art.glowFast(c, sx, sy - 30 * s, 50, [255, 170, 210], 0.4 + Math.sin(t * 3) * 0.15); Art.shiny(c, sx - 14, sy - 50 * s, 6, t, 1); Art.shiny(c, sx + 18, sy - 34 * s, 5, t, 2); } },
         act() { return { label: '살펴보기', fn: () => { if (this.cool > 0) { toast('조금 있다가 다시 살펴봐요.'); return; } this.cool = 25; player.hp = player.max; Sound.play('heal'); FX.burst(player.x, player.y, 60, 'heart', 14, { speed: 160 }); FX.beam(player.x, player.y, 'rgba(255,180,220,', 0.9); toast(text, '#ffd1e6'); } }; } };
     },
-    portal(x, to, o = {}) { return Object.assign({ kind: 'portal', id: 'p_' + to, x, y: o.y || 432, z: 0, to }, o); },
+    portal(x, to, o = {}) {
+      const p = Object.assign({ kind: 'portal', id: 'p_' + to, x, y: o.y || 432, z: 0, to }, o);
+      if (p.locked && isTeacher()) p.locked = null;   // 선생님 기기: 모든 길이 열려 있음(학생은 그대로)
+      return p;
+    },
     breakable(id, x, y, kind) { return makeBreakable(id, x, y, kind); },
     pad(id, x, y, kind, power) { return { kind: 'prop', sub: 'pad', id, x, y, z: 0, pk: kind, squash: 0, power: power || 1000, cool: 0, draw(c, sx, sy, s) { Art2.pad(c, this.pk, sx, sy, s, t, this.squash); } }; },
     stars(list) { return list.map(([x, y, z], i) => ({ kind: 'star', id: 'st' + Math.round(x) + '_' + i, x, y, z, got: false, cool: 0, ph: Math.random() * 6 })); },
@@ -499,7 +505,7 @@
     } else if (e.k === 'phase') {
       shake = 12; Sound.play('slam'); FX.flash('#ffffff', 0.35, 0.25);
       // 꼭 푸는 문제: 보스의 심술 방패 — 처음에 맞히면 보스 체력 -8%·6초 무적, 아니면 3초 무적
-      if (b && !player.dead) {
+      if (b && !player.dead && !teachWin) {   // 선생님 '보스 바로 이기기' 중에는 방패 문제를 건너뜀
         const bid = b.id;
         gateQuiz({ why: '보스의 심술 방패! 문제를 풀어 깨뜨려요', icon: '💥', big: '보스 체력 깎기 + 6초 무적', small: '3초 무적' }).then((r) => {
           if (r.skipped || state !== 'play' || !player || player.dead) return;
@@ -1738,7 +1744,7 @@
     const gk = U.GRADE_K[U.grade()] || U.GRADE_K[4], dk = U.DIFF_K[gameDiff] || U.DIFF_K[3];
     gradeK = { hp: gk.hp * dk.hp, dmg: gk.dmg * dk.dmg }; SIM.setHpK(gradeK.hp);
     mode = o.mode; myName = o.name || '사랑둥이'; myColor = o.color || 'red';
-    saveKey = mode === 'multi' ? 'sarang2:multi:' + myName : 'sarang2:solo';
+    saveKey = mode === 'multi' ? 'sarang2:multi:' + myName : o.teach ? 'sarang2:teacher' : 'sarang2:solo';   // 선생님 바로 가기 판은 따로 저장(이어하기를 덮지 않게)
     const sv = o.cont;
     Q = sv ? Object.assign(C.newQ(), sv.Q) : C.newQ();
     for (const k of ['inv', 'kills', 'found', 'flags', 'stats']) if (!Q[k]) Q[k] = {};
@@ -1834,6 +1840,78 @@
     $('tList').innerHTML = list.map((p) => `<tr><td><span class="dot c-${esc(p.color)}"></span>${esc(p.name)}</td><td>${esc(p.mapName || '-')}</td><td>${esc(p.q || '')}</td><td>${p.hp | 0}</td></tr>`).join('');
   }
 
+  // ---------------- 선생님 점검 바로 가기(2026-11-26) ----------------
+  // 선생님: "학생처럼 다 깨야 해서 마지막 장소·보스·끝 화면을 보려면 30분". 선생님 기기(PLAZA_TEACHER)에만 back.js 🧑‍🏫 창에 목록이 보임.
+  // 그곳에 '막 도착한' 이야기 단계로 맞추고(앞에서 할 일·하트 조각·친구·마음 문은 다 한 것으로) 그 맵을 엶. 저장은 선생님 칸(sarang2:teacher)에 따로
+  const T_PLACES = [   // [맵, 이야기 단계, 이름, 그룹]
+    ['heart', 'intro', '하트 마을 (처음)', '1 꿈나라'], ['cotton', 'toCotton', '솜사탕 마을', '1 꿈나라'], ['drowsy', 'clouds', '졸음 들판', '1 꿈나라'],
+    ['toss', 'trumpet', '뒤척이 숲', '1 꿈나라'], ['pillow', 'toCastle', '보스 · 코골이 대왕', '1 꿈나라'],
+    ['pencil', 'toPencil', '연필 마을', '2 학용품 나라'], ['notebook', 'numbers', '공책 평원', '2 학용품 나라'], ['tower', 'toTower', '보스 · 심술 지우개 대장', '2 학용품 나라'],
+    ['gloom', 'toGloom', '심술 마을', '3 심술 나라'], ['thorn', 'keys', '가시 정원', '3 심술 나라'], ['mirror', 'mirror', '거울 미로', '3 심술 나라'], ['throne', 'toThrone', '최종 보스 · 악마둥이', '3 심술 나라'],
+  ];
+  const T_MINI = [['sheep', '양 세기 (분홍둥이)'], ['rhythm', '기상 나팔 (리듬)'], ['measure', '길이 재기'], ['ruler', '눈금 붙이기 (자 왕자)'], ['simon', '거울 문 (순서 기억)']];
+  function teachPrep(st) {   // 이 단계에 오기 전에 끝냈어야 할 것을 채움
+    const at = (s) => C.idx(st) >= C.idx(s), q = Q;
+    q.step = st;
+    for (const id in SIM.MAPS) if (!SIM.MAPS[id].safe) q.flags['gate_' + id] = true;   // 마음 문(꼭 푸는 문제)은 지난 것으로
+    if (at('practice2')) q.kills.dummy = 5;
+    if (at('toOwl')) q.kills.cloud = 8;
+    if (at('toCastle')) q.flags.trumpet = true;
+    if (at('toPencil')) { q.flags.princessAwake = true; q.shards = Math.max(q.shards, 1); if (!q.followers.includes('princess')) q.followers.push('princess'); }
+    if (at('numbers')) q.flags.glueQuest = true;
+    if (at('toTower')) { q.flags.bridge = true; q.inv.number = Math.max(q.inv.number || 0, 10); }
+    if (at('toGloom')) { q.flags.princeOk = true; q.shards = Math.max(q.shards, 2); if (!q.followers.includes('prince')) q.followers.push('prince'); }
+    if (at('keys')) for (let i = 1; i <= 5; i++) { q.flags['c_g' + i] = true; q.flags['t_g' + i] = true; }
+    if (at('mirror')) q.inv.key = Math.max(q.inv.key || 0, 3);
+    if (at('toThrone')) q.flags.mirrorOpen = true;
+    if (at('done')) q.shards = 3;
+  }
+  function teachReset() {   // 하던 대화·미니게임·엔딩 창을 닫음
+    if (Mini.active) Mini.cancel();
+    dialog = null; askBox = null; banner = null; locked = false; timers = []; transformFx = null; outro = null; intro = null;
+    for (const id of ['title', 'join', 'teacher', 'ending']) $(id).classList.add('hidden');
+    document.body.classList.remove('menu', 'mini'); padEl.classList.remove('talking');
+  }
+  function teachStart() {   // 처음 화면이면 혼자 하기를 새로 시작(이어하기 저장은 안 건드림)
+    if (state === 'play' && mode !== 'multi') return;
+    Net.startSolo(); startGame({ mode: 'solo', cont: null, teach: true });
+  }
+  function teachGo(id, st, pre) {
+    teachStart(); teachReset(); teachWin = false;
+    saveKey = 'sarang2:teacher';
+    teachPrep(st);
+    if (pre) pre();
+    fade.dir = 0; fade.a = 0;
+    loadMap(id);
+    if (id === 'heart' && st === 'intro') C.intro();
+  }
+  function bossReady(ms) {   // 보스가 생길 때까지(맵에 들어가고 한두 장면 뒤)
+    return new Promise((res) => { const t0 = performance.now(); (function wait() { const b = bossMon(); if (b || performance.now() - t0 > ms) res(b); else setTimeout(wait, 80); })(); });
+  }
+  async function teachBoss(win) {
+    const P = { snoreKing: ['pillow', 'toCastle'], eraserBoss: ['tower', 'toTower'], devil: ['throne', 'toThrone'] };
+    let b = bossMon();
+    if (!map || !map.boss || !b || b.type !== win.type || b.st === 'down') { const [id, st] = P[win.type]; teachGo(id, st); b = await bossReady(3000); }
+    if (!b) throw new Error('보스를 찾지 못했어요');
+    teachReset(); player.hp = player.max; player.dead = false;
+    introShown = true;   // 등장 장면 없이 바로
+    if (win.left) { teachWin = true; Net.hit(mapId, b.id, Math.max(1, Math.round((b.hp - Math.max(8, b.max * 0.03)) / (b.st === 'hurt' ? 1.5 : 1)))); }   // 한두 대만 남김
+    else { teachWin = true; Net.hit(mapId, b.id, 999999); }   // 바로 이김 → 보스 끝 장면·이야기
+  }
+  window.PLAZA_TEACHER_JUMPS = function () {
+    if (!isTeacher() || mode === 'multi') return [];
+    const out = T_PLACES.map(([id, st, name, g]) => ({ label: name, group: '곳 바로 가기 · ' + g.slice(2), icon: SIM.MAPS[id].boss ? '👑' : SIM.MAPS[id].safe ? '🏠' : '🌿', hint: SIM.MAPS[id].name, fn: () => teachGo(id, st) }));
+    const BN = { snoreKing: '코골이 대왕', eraserBoss: '심술 지우개 대장', devil: '악마둥이' };
+    for (const type of ['snoreKing', 'eraserBoss', 'devil']) {
+      out.push({ label: BN[type] + ' 한 대 남기기', group: '보스', icon: '💥', hint: '체력을 거의 다 깎아 둠', fn: () => teachBoss({ type, left: true }) });
+      out.push({ label: BN[type] + ' 바로 이기기', group: '보스', icon: '🏆', hint: type === 'devil' ? '콩닥이 이야기 → 축제 → 끝' : '보스 끝 장면·이야기', fn: () => teachBoss({ type }) });
+    }
+    out.push({ label: '하트 축제 (마지막 이야기)', group: '끝 장면', icon: '🎉', hint: '하트 조각 3개를 모은 뒤 → 엔딩', fn: () => teachGo('heart', 'done', () => { Q.flags.festival = false; }) });
+    out.push({ label: '엔딩 화면만', group: '끝 장면', icon: '🏁', hint: '다 깼을 때 기록 화면', fn: () => { teachStart(); teachReset(); saveKey = 'sarang2:teacher'; teachPrep('done'); Q.flags.festival = true; showEnding(); } });
+    for (const [n, label] of T_MINI) out.push({ label, group: '미니게임', icon: '🎮', hint: U.grade() + '학년 문제', fn: () => { teachStart(); teachReset(); G.mini(n, () => {}); } });
+    return out;
+  };
+
   // 테스트용 바로가기 (화면에는 안 보임)
   window.__game = {
     get state() { return { state, mapId, step: Q && Q.step, hp: player && Math.round(player.hp), dialog: !!dialog, ask: !!askBox, mini: Mini.name, x: player && Math.round(player.x), y: player && Math.round(player.y), z: player && Math.round(player.z), mons: mons.size, dead: player && player.dead, fade: fade.dir, inv: Q && Q.inv, shards: Q && Q.shards, followers: Q && Q.followers, mode, net: netStatus, remote: remote.size, love: Math.round(love), combo, wave: !!waveInfo, gold: goldId, intro: !!intro, outro: !!outro, fx: FX.count }; },
@@ -1848,7 +1926,7 @@
     hurtBoss(d) { const b = bossMon(); if (b) Net.hit(mapId, b.id, d); },
     killAll(type) { for (const m of mons.values()) if (alive(m) && (!type || m.type === type)) Net.hit(mapId, m.id, 9999); },
     mons() { return [...mons.values()].map((m) => ({ id: m.id, type: m.type, x: Math.round(m.x), y: Math.round(m.y), hp: m.hp, st: m.st, wave: m.wave })); },
-    ents() { return ents.map((e) => ({ kind: e.kind, sub: e.sub, id: e.id, x: e.x, y: e.y, hidden: !!(e.hidden && e.hidden()), broken: e.broken })); },
+    ents() { return ents.map((e) => ({ kind: e.kind, sub: e.sub, id: e.id, x: e.x, y: e.y, hidden: !!(e.hidden && e.hidden()), broken: e.broken, locked: !!(e.locked && e.locked()) })); },
     act(id) { const e = ents.find((q) => q.id === id); if (e) { const a = actOf(e); if (a) a.fn(); } },
     winMini() { const c = Mini._cur(); if (c) { c.s.res = 'win'; c.s.resT = 5; } },
     mini(name) { G.mini(name, () => {}); },

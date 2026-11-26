@@ -20,6 +20,7 @@
   var queue = [], ready = false;
   function jget(k, d) { try { var v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v } catch (e) { return d } }
   function jput(k, v) { try { localStorage.setItem(k, JSON.stringify(v)) } catch (e) { } }
+  function isT() { return !!(window.PLAZA_TEACHER && window.PLAZA_TEACHER()) }   // 선생님 기기(back.js 0-2번)
   function today() { return new Date().toDateString() }
   function log() {
     var l = jget('plaza.giftLog', null);
@@ -102,16 +103,24 @@
     cardT.push(setTimeout(function () {
       var i = o.querySelector('.i'); i.className = 'i o'; i.textContent = C.emoji;
       if (C.css) i.style.background = C.css;
-      o.querySelector('div:last-child').innerHTML = '<b>' + C.name + '<em class="r' + C.rarity + '">' + R[C.rarity] + (C.kind === 'home' ? ' · 집 소품' : '') + '</em></b><small>' + (gold ? '🌟 최상 모드 좋은 선물 · ' : '') + where(C) + '</small>';
+      o.querySelector('div:last-child').innerHTML = '<b>' + C.name + '<em class="r' + C.rarity + '">' + R[C.rarity] + (C.kind === 'home' ? ' · 집 소품' : '') + '</em></b><small>' + (gold ? '🌟 최상 모드 좋은 선물 · ' : '') + (isT() ? '🧑‍🏫 선생님 점검 · 옷장에 안 들어가요' : where(C)) + '</small>';
       chime();
     }, 950));
-    cardT.push(setTimeout(function () { o.className = (gold ? 'gold ' : '') + 'out' }, 6200));
-    cardT.push(setTimeout(function () { o.remove(); cardOn = false; var n = cardQ.shift(); n && show(n[0], n[1], n[2]) }, 6800));
+    var tk = isT() ? 0.5 : 1;   // 선생님 점검 판은 절반만 떠 있게(끝 화면·결과 숫자를 오래 가리지 않게, 2026-11-26 검토)
+    cardT.push(setTimeout(function () { o.className = (gold ? 'gold ' : '') + 'out' }, Math.max(2600, 6200 * tk)));
+    cardT.push(setTimeout(function () { o.remove(); cardOn = false; var n = cardQ.shift(); n && show(n[0], n[1], n[2]) }, Math.max(3200, 6800 * tk)));
   }
   // ---- 주기 ----
   function drop(source, opt) {
     opt = opt || {};
     if (!ready) { queue.length < 20 && queue.push([source, opt]); return null }
+    if (isT()) {   // 선생님 기기(back.js 10번): 어떤 상자가 뜨는지 보여 주기만, 받거나 적지 않음. 화면을 오래 누른 선물(chance)은 안 띄움
+      if (opt.kind === 'chance') return null;
+      var tid = (opt.rare && pickRare()) || pick() || Object.keys(cat())[0]; if (!tid) return null;
+      var tn = NAMES[String(opt.game || source).split(/[-:]/)[0]];
+      show(tid, '🧑‍🏫 점검 · ' + (opt.kind === 'diff' ? (tn ? tn + ' ' : '') + '「' + (opt.dname || '') + '」 첫 클리어' + (opt.rare ? ' 좋은 선물' : ' 선물') : (opt.title || (tn ? tn + ' ' : '') + '깬 선물')) + '(기록 안 함)', !!opt.rare);
+      return null;
+    }
     if (opt.kind === 'diff') {   // 난이도별 첫 클리어: 하루 한도와 상관없이(게임마다 4개까지라 넘치지 않음)
       var rid = (opt.rare && pickRare()) || pick(); if (!rid) return null;
       give(rid);
@@ -146,6 +155,7 @@
     var place = d.place || d.level || d.boss || d.world || 'end';
     // 난이도별 첫 클리어(back.js 8번): 끝까지 깼고 diff가 있으면, 그 난이도를 처음 깼을 때 상자 하나(최상은 좋은 상자) — 예전 깬 선물 대신
     var dv = d.diff | 0;
+    if (isT() && dv >= 1 && dv <= 4 && (!window.PLAZA_IS_FINAL || window.PLAZA_IS_FINAL(d))) { drop('diff:' + g + ':' + dv, { kind: 'diff', game: g, rare: dv === 4, dname: (window.PLAZA_DIFF_NAMES || {})[dv] || '' }); diffJust[g] = Date.now(); return }
     if (dv >= 1 && dv <= 4 && window.PLAZA_DIFF_CLAIM && (!window.PLAZA_IS_FINAL || window.PLAZA_IS_FINAL(d))) {
       if (window.PLAZA_DIFF_CLAIM(d.diffGame || null, dv)) {
         var DN = window.PLAZA_DIFF_NAMES || { 1: '하', 2: '중', 3: '상', 4: '최상' };

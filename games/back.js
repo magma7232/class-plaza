@@ -25,6 +25,15 @@
     return g >= 1 && g <= 6 ? g : 4;
   };
 })();
+/* 0-2) 선생님 기기(2026-11-26): 주소에 teacher=1(광장이 선생님 기기에서만 붙여 줌: 광장 주소 ?teacher 또는 서버 반에 선생님으로 들어옴).
+ *  window.PLAZA_TEACHER() → true/false. 학생 주소에는 teacher=1이 없어서 언제나 false. 점검 단추·바로 가기 창은 10번 */
+(function () {
+  if (window.PLAZA_TEACHER) return;
+  var t = false;
+  try { t = new URLSearchParams(location.search).get("teacher") === "1"; } catch (e) {}
+  window.PLAZA_TEACHER = function () { return t; };
+  window.PLAZA_TEACHER_USED = false; // 이 판에서 바로 가기를 썼나(10번)
+})();
 
 (function () {
   "use strict";
@@ -248,6 +257,7 @@
     var team = Math.max(1, Math.min(4, d.team | 0 || 1));
     if (!ROOM || !q.get("ticket")) return;
     var fin = window.PLAZA_IS_FINAL ? !!window.PLAZA_IS_FINAL(d) : true; // 끝까지 깼나(7번)
+    if (window.PLAZA_TEACHER && window.PLAZA_TEACHER()) return; // 선생님 기기가 깬 것은 반 별·월드 깬 수에 안 셈(2026-11-26, 서버를 다시 올리지 않아도 되게 여기서 막음)
     if (!d.guest) {
       clears.push({ game: String(d.game || "game"), team: team, w: WKEY, fin: fin });
       flushClears();
@@ -314,12 +324,23 @@
     fsIcon();
     onBody(function () { document.body.appendChild(fs); dodge(); });
   }
+  // 옆에 붙는 작은 동그라미 단추들(⛶ 전체 화면, 🧑‍🏫 선생님 점검 10번): '광장으로' 옆에 차례로 붙고 함께 비켜 앉음
+  var side = [];
+  function sideOn() { var n = 0; if (fs && fs.isConnected) n++; side.forEach(function (x) { if (x.isConnected) n++; }); return n; }
+  function isSide(el) { if (fs && (el === fs || fs.contains(el))) return true; for (var i = 0; i < side.length; i++) if (el === side[i] || side[i].contains(el)) return true; return false; }
   function placeFs() {
-    if (!fs || !fs.isConnected) return;
-    var r = b.getBoundingClientRect();
-    fs.style.top = Math.round(r.top + (r.height - 38) / 2) + "px";
-    fs.style.left = Math.round(fsSide === "right" ? r.right + 6 : r.left - 6 - 38) + "px";
+    var r = b.getBoundingClientRect(), k = 0;
+    [fs].concat(side).forEach(function (x) {
+      if (!x || !x.isConnected) return;
+      x.style.top = Math.round(r.top + (r.height - 38) / 2) + "px";
+      x.style.left = Math.round(fsSide === "right" ? r.right + 6 + 44 * k : r.left - 6 - 38 - 44 * k) + "px";
+      k++;
+    });
   }
+  window.__plazaDock = function (btn) {   // 10번이 🧑‍🏫 단추를 여기 붙임
+    side.push(btn);
+    onBody(function () { document.body.appendChild(btn); placeFs(); dodge(); });
+  };
   window.addEventListener("plaza-fs-ready", makeFs);
   var armed = 0,
     timer = null;
@@ -327,7 +348,8 @@
     armed = 0;
     b.classList.remove("ask");
     b.textContent = "🏠 광장으로";
-    if (fs) { fs.style.visibility = ""; placeFs(); }
+    [fs].concat(side).forEach(function (x) { if (x) x.style.visibility = ""; });
+    placeFs();
   }
   b.addEventListener("click", function (e) {
     e.preventDefault();
@@ -336,7 +358,7 @@
       armed = 1;
       b.classList.add("ask");
       b.textContent = "한 번 더 누르면 광장으로";
-      if (fs) fs.style.visibility = "hidden";   // 길어진 단추가 ⛶ 자리를 덮음 → 그동안 ⛶는 숨김(검토: 두 번째 누름이 ⛶에 맞을 뻔)
+      [fs].concat(side).forEach(function (x) { if (x) x.style.visibility = "hidden"; });   // 길어진 단추가 ⛶ 자리를 덮음 → 그동안 ⛶는 숨김(검토: 두 번째 누름이 ⛶에 맞을 뻔)
       clearTimeout(timer);
       timer = setTimeout(disarm, 3000);
       return;
@@ -363,7 +385,7 @@
     var x = Math.min(Math.max(q.left + q.width / 2, 0), innerWidth - 1), y = Math.min(Math.max(q.top + q.height / 2, 0), innerHeight - 1);
     var list = document.elementsFromPoint(x, y);
     for (var i = 0; i < list.length; i++) {
-      if (list[i] === b || b.contains(list[i]) || (fs && list[i] === fs) || (fs && fs.contains(list[i]))) continue;   // '광장으로' 단추 자신은 건너뛰고 그 밑에서 가장 위에 있는 것
+      if (list[i] === b || b.contains(list[i]) || isSide(list[i])) continue;   // '광장으로' 단추 자신은 건너뛰고 그 밑에서 가장 위에 있는 것
       return list[i] === el || el.contains(list[i]);
     }
     return false;
@@ -372,11 +394,11 @@
     placeFs();
     if (!b || !b.isConnected || armed) return;
     var r0 = b.getBoundingClientRect();
-    var fw = fs && fs.isConnected ? 44 : 0;   // ⛶ 단추 자리까지 함께 비킴
+    var fw = 44 * sideOn();   // ⛶·🧑‍🏫 단추 자리까지 함께 비킴
     // 퀴즈 카드처럼 이 단추보다 위에 덮인 판이 있으면 그동안은 자리를 그대로 둬요(덮인 동안 게임 단추가 '안 보임'으로 재져서 단추 위로 돌아오던 것)
     if (document.elementFromPoint) {
       var top = document.elementFromPoint(Math.min(Math.max(r0.left + r0.width / 2, 0), innerWidth - 1), Math.min(Math.max(r0.top + r0.height / 2, 0), innerHeight - 1));
-      if (top && top !== b && !b.contains(top)) return;
+      if (top && top !== b && !b.contains(top) && !isSide(top)) return;
     }
     var cur = parseFloat(up ? b.style.marginBottom : b.style.marginTop) || 0, base = { l: r0.left - (fsSide === "left" ? fw : 0), r: r0.right + (fsSide === "right" ? fw : 0), t: r0.top + (up ? cur : -cur), b: r0.bottom + (up ? cur : -cur) };
     var els = document.querySelectorAll("button,a,[role=button],input,select"), shift = 0;
@@ -384,7 +406,7 @@
       var t = base.t + (up ? -shift : shift), bt = base.b + (up ? -shift : shift), hit = null;
       for (var i = 0; i < els.length; i++) {
         var el = els[i];
-        if (el === b || el === fs || !el.getClientRects().length) continue;
+        if (el === b || isSide(el) || !el.getClientRects().length) continue;
         var q = el.getBoundingClientRect();
         if (q.width < 4 || q.height < 4 || q.width > innerWidth * 0.6) continue;   // 화면 전체를 덮는 층은 빼요
         if (q.right > base.l + 2 && q.left < base.r - 2 && q.bottom > t + 2 && q.top < bt - 2 && tappable(el, q)) { hit = q; break; }
@@ -493,6 +515,7 @@
       var d = (e && e.detail) || {};
       if (!window.PLAZA_IS_FINAL(d)) return;
       memCleared = true;
+      if (window.PLAZA_TEACHER && window.PLAZA_TEACHER()) return; // 선생님 기기 점검은 깬 기록에 안 적음
       try {
         var c = JSON.parse(localStorage.getItem("plaza.cleared") || "{}");
         if (!c[key]) { c[key] = new Date().toISOString().slice(0, 10); localStorage.setItem("plaza.cleared", JSON.stringify(c)); }
@@ -562,6 +585,7 @@
   // 그 게임을 그 난이도로 처음 깼으면 적고 true(gift.js가 부름). 이미 깼으면 false
   window.PLAZA_DIFF_CLAIM = function (g, d) {
     g = G(g); d = ok(d); if (!d) return false;
+    if (window.PLAZA_TEACHER && window.PLAZA_TEACHER()) return false; // 선생님 기기는 기록 안 함(선물 상자는 gift.js가 '점검' 표시로 보여만 줌)
     if (window.PLAZA_DIFF_CLEARED(g)[d]) return false;
     var day = new Date().toISOString().slice(0, 10);
     (memClr[g] = memClr[g] || {})[d] = day;
@@ -669,4 +693,104 @@
     s.onload = go;
     (document.head || document.documentElement).appendChild(s);
   } catch (e) {}
+})();
+
+/* 10) 선생님 점검 도구(2026-11-26 선생님: "마지막 장소·마지막 레벨·깼을 때 화면을 확인하려면 30분씩 걸린다. 선생님 모드로 들어가면
+ *  모든 게 해제돼 있고 바로 원하는 판·마지막 단계·끝 화면으로").
+ *  - 선생님 기기(PLAZA_TEACHER(), 0-2번)에만 작은 「🧑‍🏫」 단추: '🏠 광장으로'·⛶ 옆(4번 비켜 앉기 규칙 그대로).
+ *    광장으로 단추가 없는 게임(새 게임 4개·파일로 연 것)은 왼쪽 가운데. 누르면 '바로 가기' 창.
+ *  - 게임이 주는 약속: window.PLAZA_TEACHER_JUMPS = function () { return [{ label: '3층부터', fn: function () {…}, group: '층', icon: '🏰' }, …]; }
+ *    (배열도 됨, 창을 열 때마다 다시 물음 → 지금 화면에 맞는 목록을 줄 수 있음). back.js는 게임 파일보다 늦게 읽혀도 상관없음(창을 열 때 읽음).
+ *    fn이 Promise를 돌려줘도 됨. 오류가 나면 창 아래에 빨간 글. 다른 파일이 덧붙일 때는 window.PLAZA_TEACHER_EXTRA(함수 배열, 이야기 극장의 '화 고르기').
+ *  - 바로 가기를 누르면 window.PLAZA_TEACHER_USED = true, 'plaza-teacher-jump' 신호({label}).
+ *  - 선생님 기기에서 깬 것은 반 별·월드 깬 수(3번)·깬 기록(7번)·난이도 첫 클리어 기록(8번)에 안 들어감. 선물 상자는 '점검' 표시로 보여 주기만(gift.js).
+ *  - 게임은 PLAZA_TEACHER()일 때 잠긴 장·단계를 모두 열어 둔다(학생 기기는 그대로).
+ *  - 시험: window.PLAZA_TEACHER_MENU() 창 열기, .close() */
+(function () {
+  if (!window.PLAZA_TEACHER || !window.PLAZA_TEACHER() || window.PLAZA_TEACHER_MENU) return;
+  var FONT = "font-family:system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;";
+  var css = document.createElement("style");
+  css.textContent =
+    "#plazaTeach{position:fixed;z-index:2147483000;width:38px;height:38px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:20px;line-height:1;" +
+    "border:2px solid rgba(255,255,255,.9);background:rgba(112,72,232,.94);color:#fff;box-shadow:0 3px 10px rgba(0,0,0,.25);cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}" +
+    "#plazaTeach.solo{left:calc(8px + env(safe-area-inset-left,0px));top:38%}" +
+    "#ptOv{position:fixed;inset:0;z-index:2147483550;background:rgba(25,30,55,.55);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:16px 10px;box-sizing:border-box;" + FONT + "}" +
+    "#ptOv .ptC{margin:auto 0;background:#fff;border-radius:20px;padding:14px 14px 12px;width:520px;max-width:100%;box-sizing:border-box;box-shadow:0 12px 40px rgba(0,0,0,.35);color:#2b3a4f}" +
+    "#ptOv .ptH{display:flex;align-items:center;gap:8px}#ptOv .ptH b{font-size:20px;font-weight:900;flex:1}" +
+    "#ptOv .ptX{all:unset;cursor:pointer;width:36px;height:36px;border-radius:50%;background:#eef1f5;text-align:center;line-height:36px;font-size:18px;font-weight:900}" +
+    "#ptOv .ptS{font-size:13px;color:#6a7a90;font-weight:700;margin:2px 0 8px}" +
+    "#ptOv .ptG{font-size:13px;font-weight:900;color:#7048e8;margin:8px 2px 4px}" +
+    "#ptOv .ptL{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}" +
+    "#ptOv .ptB{all:unset;box-sizing:border-box;cursor:pointer;touch-action:manipulation;padding:10px 10px;border-radius:12px;background:#f3f0ff;border:2px solid #d0bfff;font-size:15px;font-weight:800;color:#3b2a7a;text-align:left;line-height:1.25}" +
+    "#ptOv .ptB:active{background:#e5dbff}#ptOv .ptB small{display:block;font-size:11px;font-weight:700;color:#7a6aa8;margin-top:2px}" +
+    "#ptOv .ptE{color:#e03131;font-size:13px;font-weight:800;margin-top:8px;min-height:1em}" +
+    "#ptToast{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:2147483540;pointer-events:none;background:rgba(112,72,232,.95);color:#fff;border-radius:999px;padding:8px 16px;font-size:15px;font-weight:900;transition:opacity .4s;white-space:nowrap;max-width:94vw;overflow:hidden;text-overflow:ellipsis;" + FONT + "}";
+  (document.head || document.documentElement).appendChild(css);
+  function esc(t) { return String(t == null ? "" : t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  var tt = null, ttT = 0;
+  function toast(msg, ms) {
+    if (!document.body) return;
+    if (!tt) { tt = document.createElement("div"); tt.id = "ptToast"; document.body.appendChild(tt); }
+    tt.textContent = msg; tt.style.opacity = "1";
+    clearTimeout(ttT); ttT = setTimeout(function () { tt.style.opacity = "0"; }, ms || 2600);
+  }
+  window.PLAZA_TEACHER_TOAST = toast;
+  function list() {
+    var J = window.PLAZA_TEACHER_JUMPS, a = [];
+    try { a = typeof J === "function" ? J() : J; } catch (e) { console.error(e); a = []; }
+    a = Array.isArray(a) ? a.slice() : [];
+    // 덧붙이는 목록(이야기 극장 story.js의 '화 고르기' 등): window.PLAZA_TEACHER_EXTRA = [함수 → 목록, …]
+    (window.PLAZA_TEACHER_EXTRA || []).forEach(function (f) { try { var x = typeof f === "function" ? f() : f; if (Array.isArray(x)) a = a.concat(x); } catch (e) { console.error(e); } });
+    return a.filter(function (x) { return x && x.label && typeof x.fn === "function"; });
+  }
+  var ov = null;
+  function close() { if (ov) { ov.remove(); ov = null; } }
+  function open() {
+    close();
+    var items = list();
+    ov = document.createElement("div"); ov.id = "ptOv";
+    var h = '<div class="ptC" role="dialog" aria-label="선생님 점검"><div class="ptH"><b>🧑‍🏫 선생님 점검 · 바로 가기</b><button type="button" class="ptX" aria-label="닫기">✕</button></div>' +
+      '<div class="ptS">선생님 기기에서만 보여요 · 반 별·선물·깬 기록에 안 들어가요</div>';
+    if (!items.length) h += '<div class="ptS" style="font-size:15px;color:#2b3a4f">이 화면에는 바로 가기가 없어요. 게임을 시작한 뒤 다시 눌러 보세요.</div>';
+    var g0 = null, open0 = false;
+    items.forEach(function (it, i) {
+      var g = it.group || "";
+      if (g !== g0) { if (open0) h += "</div>"; h += (g ? '<div class="ptG">' + esc(g) + "</div>" : "") + '<div class="ptL">'; g0 = g; open0 = true; }
+      h += '<button type="button" class="ptB" data-i="' + i + '">' + esc((it.icon ? it.icon + " " : "") + it.label) + (it.hint ? "<small>" + esc(it.hint) + "</small>" : "") + "</button>";
+    });
+    if (open0) h += "</div>";
+    h += '<div class="ptE"></div></div>';
+    ov.innerHTML = h;
+    ["pointerdown", "touchstart", "mousedown", "keydown", "click", "touchend", "pointerup"].forEach(function (t) { ov.addEventListener(t, function (e) { e.stopPropagation(); }, false); });
+    ov.addEventListener("click", function (e) {
+      if (e.target === ov || (e.target.closest && e.target.closest(".ptX"))) return close();
+      var bt = e.target.closest && e.target.closest(".ptB");
+      if (!bt) return;
+      var it = items[+bt.getAttribute("data-i")];
+      if (!it) return;
+      var errBox = ov.querySelector(".ptE");
+      window.PLAZA_TEACHER_USED = true;
+      try { window.dispatchEvent(new CustomEvent("plaza-teacher-jump", { detail: { label: it.label } })); } catch (er) {}
+      var fail = function (er) { console.error(er); if (ov && errBox) errBox.textContent = "⚠️ 바로 가기 오류: " + ((er && er.message) || er); else toast("⚠️ 바로 가기 오류: " + ((er && er.message) || er), 5000); };
+      try {
+        if (!it.keep) close();
+        var r = it.fn();
+        if (r && typeof r.then === "function") r.then(null, fail);
+        toast("🧑‍🏫 " + it.label);
+      } catch (er) { fail(er); }
+    });
+    (document.body || document.documentElement).appendChild(ov);
+  }
+  open.close = close;
+  window.PLAZA_TEACHER_MENU = open;
+  var tb = document.createElement("button");
+  tb.id = "plazaTeach"; tb.type = "button"; tb.textContent = "🧑‍🏫"; tb.setAttribute("aria-label", "선생님 점검");
+  tb.addEventListener("click", function (e) { e.preventDefault(); e.stopPropagation(); ov ? close() : open(); });
+  ["pointerdown", "touchstart", "mousedown", "touchend"].forEach(function (t) { tb.addEventListener(t, function (e) { e.stopPropagation(); }, { passive: true }); });
+  if (window.__plazaDock) window.__plazaDock(tb);
+  else {
+    tb.className = "solo";
+    var add = function () { document.body.appendChild(tb); };
+    if (document.body) add(); else document.addEventListener("DOMContentLoaded", add);
+  }
 })();

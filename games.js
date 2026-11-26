@@ -327,7 +327,7 @@
     var card = document.getElementById("card");
     if (!card || !card.hidden) return false;
     cAsk = true;
-    G.fns.sa(CASTLE.emoji + " " + CASTLE.name, "들어갈까요?", "<div>" + CASTLE.goal + "</div>", [
+    G.fns.sa(CASTLE.emoji + " " + CASTLE.name, "들어갈까요?", "<div>" + CASTLE.goal + "</div>" + lockNote(CASTLE), [
       {
         label: "아니요",
         fn: function () {
@@ -381,7 +381,11 @@
     out.sort(function (a, b) { var i = ORDER.indexOf(a.wid), j = ORDER.indexOf(b.wid); return (i < 0 ? 99 : i) - (j < 0 ? 99 : j); });
     return out;
   }
-  function wOpen(T) { return !T || !T.wid || !window.PLAZA_WORLDS || window.PLAZA_WORLDS.isOpen(T.wid); }
+  // 선생님 기기(서버 반에 선생님으로 들어옴, 또는 서버 없을 때 광장 주소 ?teacher): 잠긴 월드도 들어갈 수 있음(2026-11-26 점검용).
+  // 사슬·자물쇠 그림(worlds.js)은 학생 화면과 같게 그대로 보여 줌 → 학생에게 어떻게 보이는지 알 수 있게
+  function isTeacher() { try { return window.NET && NET.online ? NET.role === "teacher" : new URLSearchParams(location.search).has("teacher"); } catch (e) { return false; } }
+  function wOpen(T) { return !T || !T.wid || !window.PLAZA_WORLDS || isTeacher() || window.PLAZA_WORLDS.isOpen(T.wid); }
+  function lockNote(T) { return T && T.wid && window.PLAZA_WORLDS && isTeacher() && !window.PLAZA_WORLDS.isOpen(T.wid) ? "<div style='margin-top:6px;font-size:13px;color:#7048e8;font-weight:800'>🔒 학생에게는 아직 잠긴 월드예요(선생님은 들어갈 수 있어요)</div>" : ""; }
   // 잠긴 문 사슬을 붙일 자리: 문 소용돌이 판(m)과 그 안의 가운데·크기(판 좌표)
   function hostOf(T) {
     if (!T) return null;
@@ -496,7 +500,7 @@
           if (a) a.click();
         },
       });
-    G.fns.sa(best.emoji + " " + best.name, "들어갈까요?", "<div>" + best.goal + "</div>", btns.concat([
+    G.fns.sa(best.emoji + " " + best.name, "들어갈까요?", "<div>" + best.goal + "</div>" + lockNote(best), btns.concat([
       {
         label: "🚪 들어가기",
         main: true,
@@ -530,6 +534,34 @@
     worlds: worldsList, // 월드 목록(순서대로 모드 차례, worlds.js)
     hostOf: hostOf,
     isOpen: wOpen,
+    isTeacher: isTeacher,
+    // 선생님 순간이동(2026-11-26, teacher.js 🧭): 문 바로 앞에 서서 "들어갈까요?"가 뜨게. what = 'center' | 'castle' | 문 key(pyramid…) | 'portal:번호'
+    teleport: function (what) {
+      var N = window.NET, G = N && N.G;
+      if (!G || !G.tp || G.S.loc !== "village" || G.S.deco) return false;
+      if (ask) closeAsk(G);
+      if (cAsk) { cAsk = false; G.fns.$i(); }
+      if (dAsk) { dAsk = null; G.fns.$i(); }
+      cSkip = false; dSkip = null; skip = null; lockSkip = null;
+      var card = document.getElementById("card");
+      if (card && !card.hidden && card.getAttribute("data-wlock") === "1") { lockShown = null; card.removeAttribute("data-wlock"); G.fns.$i(); }
+      if (what === "center") { G.tp(0, 7.5, Math.PI); return true; }
+      if (what === "castle") { G.tp(CASTLE.x, CASTLE.z + 0.9, Math.PI); return true; }
+      if (/^portal:/.test(what)) {
+        var T = G.Te[+what.slice(7)];
+        if (!T || T.gx == null) return false;
+        // 문 가운데 선 바로 안쪽에 세우고 '방금 문 앞에서 걸어 들어온 것'으로 적어 둠 → 다음 장면에 "들어갈까요?"
+        G.tp(T.gx - T.fx * 0.25, T.gz - T.fz * 0.25, Math.atan2(-T.fx, -T.fz));
+        T._passS = 1;
+        return true;
+      }
+      var P = window.PLAZA_DOORS, D = P && P[what];
+      if (!D) return false;
+      var ang = Math.PI;
+      try { var e = D.m.matrixWorld.elements; ang = Math.atan2(e[12] - D.x, e[14] - D.z); } catch (er) {}
+      G.tp(D.x, D.z, ang);
+      return true;
+    },
     // 광장이 켜질 때 포탈 이름표를 게임 이름으로 바꿔요
     applyTe: function (Te) {
       for (var k in LIST) {
@@ -613,7 +645,7 @@
       ask = best;
       askOpen = best.open;
       best.open = 1;
-      G.fns.sa(best.emoji + " " + best.name, "들어갈까요?", "<div>" + best.goal + "</div>", [
+      G.fns.sa(best.emoji + " " + best.name, "들어갈까요?", "<div>" + best.goal + "</div>" + lockNote(best), [
         {
           label: "아니요",
           fn: function () {

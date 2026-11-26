@@ -155,6 +155,8 @@ function localGrade(){
   if (!(g >= 1 && g <= 6)) try { g = +new URLSearchParams(location.search).get('grade'); } catch (e){}
   return g >= 1 && g <= 6 ? Math.round(g) : 4;
 }
+function isTeacher(){ try { return !!(window.PLAZA_TEACHER && window.PLAZA_TEACHER()); } catch (e){ return false; } }   // 선생님 기기(광장 back.js 0-2번, 주소 teacher=1) — back.js가 늦게 와도 쓸 때마다 물음
+let tNoQuiz = false;   // 선생님: 바로 가기를 쓴 뒤 문제 손님 건너뛰기
 let grade = 4;   // 이번 판 학년(친구랑 하면 방장 학년)
 // 난이도 하·중·상·최상(2026-11-26 선생님: 기본은 상 = 예전 숫자. 깰 때마다 선물, 최상은 좋은 선물 — 광장 back.js PLAZA_DIFF). 학년 배율과 곱해요
 const DIFF_ADJ = {1: {pat: 1.5, spawn: 1.35, max: -1, burn: 1.6, work: .85}, 2: {pat: 1.22, spawn: 1.15, max: 0, burn: 1.3, work: .92}, 3: {pat: 1, spawn: 1, max: 0, burn: 1, work: 1}, 4: {pat: .82, spawn: .85, max: 1, burn: .8, work: 1.08}};
@@ -395,6 +397,7 @@ const QUIZ_EVERY = 3, QUIZ_TIP = {big: 10, small: 3};
 window.PLAZA_QUIZ_GATES = true;   // 고르는 ❓ 말풍선은 끄고 문제 손님으로만
 const DISH_ICON = {jumeokbap: '🍙', kimbap: '🍱', tteokbokki: '🍢'};
 function quizAsk(rid){
+  if (tNoQuiz && isTeacher()) return Promise.resolve({correct: true, first: false, skipped: true});   // 선생님 바로 가기를 쓴 뒤에는 문제 손님 건너뜀(선생님 판만)
   const o = {game: 'jangteo', why: '음식을 받은 손님이 문제를 내요!', icon: DISH_ICON[rid] || '🍙', grade,   // 친구랑 하면 방장 학년(grade)
     big: `팁 +${QUIZ_TIP.big} 코인 · 손님들이 더 기다려 줘요`, small: `팁 +${QUIZ_TIP.small} 코인`};
   try { if (window.PLAZA_QUIZ && window.PLAZA_QUIZ.ask) return window.PLAZA_QUIZ.ask(o); } catch (e){}
@@ -1163,7 +1166,7 @@ function start(m){
 }
 function togglePause(){ if (!running || net.mode !== 'solo') return; paused = !paused; paused ? show('pauseOv') : hide('pauseOv'); }
 // 처음 하는 학생은 보여 주기 → 따라 하기 뒤에 시작(2026-11-25 선생님: "규칙 설명 글이 너무 많다"), 해 본 학생은 바로
-const tutAuto = () => tut && !tut.isDone() && new URLSearchParams(location.search).get('tut') !== '0';   // ?tut=0: 점검용(연습 없이)
+const tutAuto = () => tut && !tut.isDone() && new URLSearchParams(location.search).get('tut') !== '0' && !isTeacher();   // ?tut=0: 점검용(연습 없이) · 선생님 기기는 저절로 안 함(🧑‍🏫 '연습 처음부터 보기'로)
 document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => { const m = b.dataset.mode; if (tutAuto()) tut.begin(() => start(m)); else start(m); }));
 document.getElementById('againBtn').onclick = () => start(modeKey);
 document.getElementById('homeBtn').onclick = () => { hide('endOv'); if (net.mode === 'host'){ hostSend({t:'wait'}); renderHostLobby(); } else if (net.mode === 'guest'){ netLeave(); show('titleOv'); } else show('titleOv'); };
@@ -2072,6 +2075,29 @@ window.__dd.tut = tut;
 function tutBtnSync(){ const b = document.getElementById('tutBtn'); if (b) b.style.display = tut.isDone() ? '' : 'none'; }
 document.getElementById('tutBtn').onclick = () => { hide('titleOv'); tut.begin(() => { show('titleOv'); }); };
 tutBtnSync();
+
+// ---------- 선생님 점검 바로 가기(2026-11-26, 3D판과 같은 약속) ----------
+// 광장 back.js 10번: 선생님 기기(주소 teacher=1)에만 🧑‍🏫 단추 → 이 목록. 학생 기기에서는 목록이 비어 있고 아무것도 안 바뀜.
+// 2D판은 장이 없어서: 바로 시작(연습 없이) · 10초 남기기 · 결과 화면 · 연습 처음부터
+function tClear(){   // 바로 가기 전에 막힘 치우기: 연습·꼭 푸는 문제 카드·멈춤
+  tNoQuiz = true;
+  if (tut && tut.active){ tut.abort(); tutClean(); }
+  try { if (window.PLAZA_QUIZ && PLAZA_QUIZ.asking && PLAZA_QUIZ.asking()) PLAZA_QUIZ.close(); } catch (e){}
+  paused = false; hide('pauseOv');
+}
+function tResult(n){ tClear(); if (!running) start(modeKey === 'normal' ? 'normal' : 'peace'); served = n; coins = n * 12; endRound(); }
+window.PLAZA_TEACHER_JUMPS = function (){
+  if (!isTeacher()) return [];
+  if (net.mode === 'guest') return [{label: '바로 가기는 방장 기기에서만 돼요', icon: '👑', group: '친구랑 하기', hint: '방장이 고르면 친구 기기도 같이 가요', fn(){}}];
+  const L = [{label: tNoQuiz ? '문제 손님 다시 켜기' : '문제 손님 끄기', icon: '❓', group: '바로 가기 설정', hint: tNoQuiz ? '지금은 꺼져 있어요(바로 가기를 쓰면 저절로 꺼짐)' : '음식을 내도 문제가 안 나와요', fn(){ tNoQuiz = !tNoQuiz; }},
+    {label: '🌈 시간 제한 없이 바로', icon: '▶', group: '바로 시작(연습 없이)', hint: '천천히 해요 모드', fn(){ tClear(); start('peace'); }},
+    {label: '⏱️ 시간 제한 있게 바로', icon: '▶', group: '바로 시작(연습 없이)', hint: '손님이 기다려요 모드', fn(){ tClear(); start('normal'); }}];
+  if (running && !(tut && tut.active)) L.push({label: '10초 남기기', icon: '⏳', group: '지금 판', hint: '시계를 10초로 → 끝나면 결과 화면', fn(){ tClear(); timeLeft = Math.min(timeLeft, 10); }});
+  L.push({label: '결과 화면 · 대박 가게', icon: '🏁', group: '끝 화면', hint: '9그릇 만든 결과', fn(){ tResult(9); }},
+    {label: '결과 화면 · 첫 장사', icon: '🏁', group: '끝 화면', hint: '1그릇 만든 결과', fn(){ tResult(1); }},
+    {label: '연습 처음부터 보기', icon: '🎓', group: '연습', hint: '보여 주기 → 따라 하기(끝나면 처음 화면)', fn(){ tNoQuiz = false; if (tut && tut.active){ tut.abort(); tutClean(); } running = false; paused = false; hide('pauseOv'); hide('endOv'); hide('titleOv'); tut.begin(() => show('titleOv')); }});
+  return L;
+};
 
 reset('peace'); running = false;
 layout();
