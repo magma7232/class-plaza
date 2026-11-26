@@ -47,6 +47,44 @@
   };
   d.addEventListener("fullscreenchange", changed);
   d.addEventListener("webkitfullscreenchange", changed);
+  // ---- 가로로 돌려 주세요(2026-11-26 선생님: "패드 세로로 하지 말고 무조건 가로로 돌려야 한다고 안내") ----
+  // 손가락 기기(패드·휴대폰)를 세로로 들면 화면 전체를 덮는 안내. 마우스 컴퓨터(선생님)는 창이 좁아도 안 띄움.
+  // 판은 누르기를 막지 않는다(pointer-events:none) — 게임 단추 자리 계산·점검(elementsFromPoint)을 흐트러뜨리지 않게. 화면이 다 덮여서 어차피 못 함.
+  // 전체 화면이 되면 화면 방향을 가로로 묶어 봄(안드로이드 크롬, 안 되면 조용히). 주소에 rot=0이면 안 띄움(점검 사진용).
+  (function () {
+    var noRot = false;
+    try { noRot = new URLSearchParams(location.search).get("rot") === "0"; } catch (e) {}
+    var touchDev = false;
+    try { touchDev = matchMedia("(pointer: coarse)").matches || (navigator.maxTouchPoints > 0 && matchMedia("(hover: none)").matches); } catch (e) {}
+    if (noRot || !touchDev) return;
+    var ov = null;
+    function build() {
+      if (ov || !d.body) return;
+      var st = d.createElement("style");
+      st.textContent = "#plazaRot{position:fixed;inset:0;z-index:2147483646;display:none;align-items:center;justify-content:center;flex-direction:column;gap:18px;" +
+        "background:linear-gradient(160deg,#ffe3ef,#e4e6ff);color:#3a1830;font-family:'Jua','Noto Sans KR',sans-serif;text-align:center;pointer-events:none;padding:24px}" +
+        "#plazaRot.on{display:flex}#plazaRot .pad{width:96px;height:140px;border:9px solid #3a1830;border-radius:18px;background:#fff;position:relative;animation:plazaRotA 2.2s ease-in-out infinite}" +
+        "#plazaRot .pad:after{content:'';position:absolute;left:50%;bottom:6px;width:16px;height:4px;margin-left:-8px;border-radius:2px;background:#3a1830}" +
+        "#plazaRot b{font-size:clamp(26px,7vw,40px);line-height:1.3}#plazaRot span{font-size:clamp(16px,4.2vw,22px);opacity:.8}" +
+        "@keyframes plazaRotA{0%,25%{transform:rotate(0)}55%,100%{transform:rotate(-90deg)}}";
+      d.head.appendChild(st);
+      ov = d.createElement("div"); ov.id = "plazaRot";
+      ov.innerHTML = '<div class="pad"></div><b>패드를 가로로 돌려 주세요</b><span>가로 화면에서만 할 수 있어요</span>';
+      d.body.appendChild(ov);
+    }
+    function check() {
+      build(); if (!ov) return;
+      var portrait = window.innerHeight > window.innerWidth * 1.05;
+      if (ov.classList.contains("on") !== portrait) ov.classList.toggle("on", portrait);
+    }
+    window.PLAZA_ROT = { check: check, get on() { return !!(ov && ov.classList.contains("on")); } };
+    addEventListener("resize", check); addEventListener("orientationchange", function () { setTimeout(check, 200); });
+    if (d.readyState === "loading") d.addEventListener("DOMContentLoaded", check); else check();
+    subs.push(function (on) {   // 전체 화면이 되면 가로로 묶기(세로로 들고 있어도 화면이 가로로 돌아감)
+      if (!on) return;
+      try { var p = screen.orientation && screen.orientation.lock && screen.orientation.lock("landscape"); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+    });
+  })();
   if (!supported || standalone) return;
   // 첫 터치(손가락)에 전체 화면. 펜·마우스는 건너뜀. pointerup/touchend는 '사용자 동작'으로 인정됨
   var touched = false;
