@@ -74,6 +74,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#3a2516;touch-action:n
   <h1>오늘은 내가 요리사!</h1>
   <h2>분식 가게 · 혼자 또는 친구랑 같이</h2>
   <div class="gradeTag" id="tGrade">4학년 난이도</div>
+  <div class="row" id="diffRow" style="margin:6px 0 2px"></div>
   <p class="tLine">주문 카드를 보고 요리해서 손님에게 내요! 🍙🍢</p>
   <div class="row">
     <button class="b1" data-mode="peace">🌈 시간 제한 없이<small>천천히 해요</small></button>
@@ -155,6 +156,11 @@ function localGrade(){
   return g >= 1 && g <= 6 ? Math.round(g) : 4;
 }
 let grade = 4;   // 이번 판 학년(친구랑 하면 방장 학년)
+// 난이도 하·중·상·최상(2026-11-26 선생님: 기본은 상 = 예전 숫자. 깰 때마다 선물, 최상은 좋은 선물 — 광장 back.js PLAZA_DIFF). 학년 배율과 곱해요
+const DIFF_ADJ = {1: {pat: 1.5, spawn: 1.35, max: -1, burn: 1.6, work: .85}, 2: {pat: 1.22, spawn: 1.15, max: 0, burn: 1.3, work: .92}, 3: {pat: 1, spawn: 1, max: 0, burn: 1, work: 1}, 4: {pat: .82, spawn: .85, max: 1, burn: .8, work: 1.08}};
+function localDiff(){ try { if (window.PLAZA_DIFF) return window.PLAZA_DIFF(); } catch (e){} const d = +new URLSearchParams(location.search).get('diff'); return d >= 1 && d <= 4 ? d : 3; }
+let diff = 3;   // 이번 판 난이도(친구랑 하면 방장 난이도)
+function diffMode(m, d){ const a = DIFF_ADJ[d] || DIFF_ADJ[3]; return Object.assign({}, m, {patience: m.patience * a.pat, spawn: m.spawn * a.spawn, maxOrders: Math.max(1, m.maxOrders + a.max), burn: m.burn * a.burn, chop: m.chop * a.work, roll: m.roll * a.work, cook: m.cook * a.work}); }
 function gradeMode(base, g){
   const a = GRADE_ADJ[g] || GRADE_ADJ[4];
   return Object.assign({}, base, {patience: base.patience * a.pat, spawn: base.spawn * a.spawn, maxOrders: Math.max(1, base.maxOrders + a.max), burn: base.burn * a.burn,
@@ -202,11 +208,12 @@ function collides(x, y, r){
   return false;
 }
 
-function reset(m, g){
+function reset(m, g, dv){
   roundSeq++;
   try { net.qPend = {}; } catch (e) { /* 처음 불릴 때는 net이 아직 없음 */ }   // 친구가 풀던 문제 결과는 새 판에 들어가지 않게(검토 2)
   grade = g >= 1 && g <= 6 ? g : localGrade();   // 친구 기기는 방장이 보낸 학년(start의 g)
-  modeKey = m; mode = gradeMode(MODES[m], grade);
+  diff = dv >= 1 && dv <= 4 ? dv : localDiff();   // 친구 기기는 방장 난이도
+  modeKey = m; mode = diffMode(gradeMode(MODES[m], grade), diff);
   buildStations();
   player = makeChef(net.myId, net.name, net.myCi, SPAWNS[0][0], SPAWNS[0][1]);
   players = [player];
@@ -377,7 +384,7 @@ function spawnOrder(force){
   if (orderSeq < first.length) rid = first[orderSeq];
   else { const ks = Object.keys(mw).filter(k => mw[k] > 0); let r = Math.random() * ks.reduce((a, k) => a + mw[k], 0); rid = ks[ks.length - 1]; for (const k of ks){ r -= mw[k]; if (r < 0){ rid = k; break; } } }
   const col = free[Math.floor(Math.random() * free.length)];
-  orders.push({id: ++orderSeq, rid, col, t:0, anim:0, leaving:false, served:false, out:0, q: orderSeq % QUIZ_EVERY === 2,   // q: 문제 손님(id 2·5·8…, ++orderSeq 다음에 셈)
+  orders.push({id: ++orderSeq, rid, col, t:0, anim:0, leaving:false, served:false, out:0, q: true,   // 2026-11-25 선생님: 모든 요리를 낼 때마다 문제
     animal: ANIMALS[(orderSeq * 5 + col) % ANIMALS.length]});
   sfx('ding');
 }
@@ -388,7 +395,7 @@ const QUIZ_EVERY = 3, QUIZ_TIP = {big: 10, small: 3};
 window.PLAZA_QUIZ_GATES = true;   // 고르는 ❓ 말풍선은 끄고 문제 손님으로만
 const DISH_ICON = {jumeokbap: '🍙', kimbap: '🍱', tteokbokki: '🍢'};
 function quizAsk(rid){
-  const o = {game: 'jangteo', why: '손님이 문제를 내요!', icon: DISH_ICON[rid] || '🍙', grade,   // 친구랑 하면 방장 학년(grade)
+  const o = {game: 'jangteo', why: '음식을 받은 손님이 문제를 내요!', icon: DISH_ICON[rid] || '🍙', grade,   // 친구랑 하면 방장 학년(grade)
     big: `팁 +${QUIZ_TIP.big} 코인 · 손님들이 더 기다려 줘요`, small: `팁 +${QUIZ_TIP.small} 코인`};
   try { if (window.PLAZA_QUIZ && window.PLAZA_QUIZ.ask) return window.PLAZA_QUIZ.ask(o); } catch (e){}
   return Promise.resolve({correct: true, first: false, skipped: true});
@@ -401,9 +408,19 @@ function quizTip(first, who){   // 방장·혼자 기기에서만
   toast = {text: `${by}${big ? '한 번에 정답! 손님들이 더 기다려 줘요 · ' : '문제를 풀었어요! '}팁 +${tip} 코인`, t: 3.2};
   sfx('serve'); burst(COLS / 2, ROWS / 2, 'star', big ? 12 : 6, '#ffd43b');
 }
+// 퀴즈 선물(3D판과 같음): 한 번에 맞히면 7%, 한 판에 2개까지, 상자·하루 한도는 광장 gift.js
+const QUIZ_GIFT = 0.07, QUIZ_GIFT_MAX = 2;
+let giftRound = -1, giftN = 0;
+function quizGift(r){
+  if (!r || !r.first || r.revealed) return;
+  if (giftRound !== roundSeq){ giftRound = roundSeq; giftN = 0; }
+  if (giftN >= QUIZ_GIFT_MAX || Math.random() >= QUIZ_GIFT) return;
+  giftN++;
+  try { dispatchEvent(new CustomEvent('plaza-gift', {detail: {game: 'jangteo', place: 'quiz' + giftN, kind: 'chance', chance: 1, title: '퀴즈 선물!'}})); } catch (e){}
+}
 let quizPend = 0, roundSeq = 0;   // 이 기기에서 아직 끝나지 않은 문제 수(연습이 퀴즈를 기다리게) · 판 번호(판이 바뀐 뒤 끝난 문제는 보상 없음)
 function askServer(o, p){   // 문제 손님에게 음식을 낸 사람의 기기에서 묻기
-  if (!p || p === player || net.mode !== 'host'){ const rs = roundSeq; quizPend++; quizAsk(o.rid).then(r => { quizPend = Math.max(0, quizPend - 1); if (rs === roundSeq && r && !r.skipped && r.correct) quizTip(r.first, null); }, () => { quizPend = Math.max(0, quizPend - 1); }); return; }
+  if (!p || p === player || net.mode !== 'host'){ const rs = roundSeq; quizPend++; quizAsk(o.rid).then(r => { quizPend = Math.max(0, quizPend - 1); if (rs === roundSeq && r && !r.skipped && r.correct){ quizTip(r.first, null); quizGift(r); } }, () => { quizPend = Math.max(0, quizPend - 1); }); return; }
   const c = net.conns[p.id]; if (!c || !c.open) return;
   const k = 'q' + (++net.qSeq || (net.qSeq = 1)); (net.qPend = net.qPend || {})[k] = p.id;
   try { c.send({t: 'ask', k, rid: o.rid}); } catch (e){}
@@ -579,7 +596,7 @@ function endRound(){
   if (net.mode === 'host'){ net.ev.length = 0; hostSend(makeSnap()); hostSend({t:'end', sv:served, cn:coins}); }
   showEnd();
   // 주문을 3개 이상 완성하면 '깼어요'(반 별 +1, 같이 한 방은 한 팀으로 별 하나)
-  if (served >= 3) try { window.dispatchEvent(new CustomEvent('minigame-clear', {detail:{game:'jangteo', served, coins, team:players.length}})); } catch (e){}
+  if (served >= 3) try { window.dispatchEvent(new CustomEvent('minigame-clear', {detail:{game:'jangteo', served, coins, team:players.length, diff}})); } catch (e){}
 }
 
 // ---------- 그림 도구 ----------
@@ -1033,7 +1050,7 @@ function drawHud(){
     });
     ctx.fillStyle = '#7a5236'; ctx.font = `${Math.round(ch * .17)}px Jua, sans-serif`; ctx.textAlign = 'left';
     ctx.fillText(rc.how, sx, y + ch * .68);
-    if (o.q){ const qr = Math.max(11, ch * .17), qx = x + cw - qr * .7, qy = y + qr * .55; ctx.lineWidth = 2.5; ctx.strokeStyle = OUT; ctx.beginPath(); ctx.arc(qx, qy, qr, 0, 7); fs(ctx, '#ffd43b');   // 문제 손님 표시
+    if (o.q && false){ const qr = Math.max(11, ch * .17), qx = x + cw - qr * .7, qy = y + qr * .55; ctx.lineWidth = 2.5; ctx.strokeStyle = OUT; ctx.beginPath(); ctx.arc(qx, qy, qr, 0, 7); fs(ctx, '#ffd43b');   // 문제 손님 표시
       ctx.fillStyle = OUT; ctx.font = `${Math.round(qr * 1.3)}px Jua, sans-serif`; ctx.textAlign = 'center'; ctx.fillText('?', qx, qy + qr * .08); }
     if (isFinite(mode.patience)){
       const v = Math.max(0, 1 - o.t / mode.patience);
@@ -1180,7 +1197,7 @@ function frame(ts){
 const ROOM_PREFIX = 'ddukddak-jangteo-';
 const CHEF_COLORS = ['#f07a2e', '#3f8fe0', '#3fae49', '#d6336c'];
 const SPAWNS = [[6.5, 4.5], [4.5, 4.5], [8.5, 4.5], [6.5, 2.5]];
-const MAX_CHEFS = 4;
+const MAX_CHEFS = 3;   // 2026-11-25 선생님: 최대 3명
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 const qs = new URLSearchParams(location.search);
 function loadName(){ try { return localStorage.getItem('ddukddak_name') || ''; } catch (e){ return ''; } }
@@ -1252,11 +1269,11 @@ function applySnap(d){
 function hostStart(m){
   net.lobby.forEach((g, i) => { const sp = SPAWNS[(i + 1) % SPAWNS.length]; players.push(makeChef(g.id, g.name, g.ci, sp[0], sp[1])); });
   net.ev.length = 0; net.snapT = 0; net.screen = null;
-  hostSend({t:'start', m, g: grade, list:players.map(p => [p.id, p.x, p.y, p.ci, p.name])});
+  hostSend({t:'start', m, g: grade, dv: diff, list:players.map(p => [p.id, p.x, p.y, p.ci, p.name])});
 }
 function guestStart(d){
   initAudio();
-  reset(d.m, d.g); buildBg();   // 친구 기기도 방장 학년 난이도로
+  reset(d.m, d.g, d.dv); buildBg();   // 친구 기기도 방장 학년·난이도로
   for (const [id, x, y, ci, name] of d.list){
     if (id === net.myId){ player.x = player.tx = x; player.y = player.ty = y; }
     else players.push(makeChef(id, name, ci, x, y));
@@ -1343,11 +1360,14 @@ function gradeTags(){   // 처음 화면의 학년 표시(광장 back.js가 늦�
   const g = localGrade(); t.textContent = gradeLabel(g); t.classList.toggle('big', g <= 2);
 }
 addEventListener('load', gradeTags);
+// 처음 화면 난이도 단추(광장 공통, back.js가 늦게 와도)
+function diffBtn(){ const r = document.getElementById('diffRow'); if (!r || r.firstChild || !window.PLAZA_DIFF_BUTTON) return; window.PLAZA_DIFF_BUTTON(null, r, () => {}); }
+addEventListener('plaza-diff-ready', diffBtn); addEventListener('load', diffBtn);
 function guestEnd(d){
   running = false; served = d.sv; coins = d.cn;
   showEnd();
   // 주문을 3개 이상 완성하면 '깼어요'(별은 방장 기기가 팀 몫으로 하나 보내요)
-  if (served >= 3) try { window.dispatchEvent(new CustomEvent('minigame-clear', {detail:{game:'jangteo', served, coins, team:players.length, guest:true}})); } catch (e){}
+  if (served >= 3) try { window.dispatchEvent(new CustomEvent('minigame-clear', {detail:{game:'jangteo', served, coins, team:players.length, guest:true, diff}})); } catch (e){}
 }
 
 // --- 화면 ---
@@ -1362,7 +1382,7 @@ function readName(){
 }
 function renderMenu(msg){
   net.screen = 'menu';
-  netBody.innerHTML = `<h1>친구랑 같이 하기</h1><h2>한 명이 방을 만들고, 친구들은 방 코드로 들어와요 (최대 4명)</h2>
+  netBody.innerHTML = `<h1>친구랑 같이 하기</h1><h2>한 명이 방을 만들고, 친구들은 방 코드로 들어와요 (최대 3명)</h2>
     <div class="field">내 이름 <input id="nName" maxlength="8" value="${esc(net.name)}"></div>
     <div class="row"><button class="b1" id="nMake">방 만들기<small>내가 방장</small></button><button class="b2" id="nJoin">방 들어가기<small>코드 적기</small></button></div>
     <div class="row"><button class="b3" id="nBack">뒤로</button></div><div class="msg" id="nMsg"></div>`;
@@ -1525,11 +1545,11 @@ function guestRecv(d){
   switch (d.t){
     case 'welcome': net.myId = d.id; net.myCi = d.ci; clearTimeout(net.timer); renderWait(); break;
     case 'lobby': net.list = d.list || []; if (net.screen === 'wait') renderWait(); break;
-    case 'full': { const code = net.code; netReset(); renderJoin(d.why === 'busy' ? '지금 게임 중이에요. 한 판이 끝나면 다시 들어와요' : '방이 꽉 찼어요 (최대 4명)', code); break; }
+    case 'full': { const code = net.code; netReset(); renderJoin(d.why === 'busy' ? '지금 게임 중이에요. 한 판이 끝나면 다시 들어와요' : '방이 꽉 찼어요 (최대 3명)', code); break; }
     case 'start': guestStart(d); break;
     case 's': if (running) applySnap(d); break;
     case 'end': guestEnd(d); break;
-    case 'ask': quizAsk(d.rid).then(r => { if (r && !r.skipped && r.correct && net.host && net.host.open) try { net.host.send({t: 'qr', k: d.k, f: r.first ? 1 : 0}); } catch (e){} }); break;   // 문제 손님(방장 학년 문제)
+    case 'ask': quizAsk(d.rid).then(r => { if (r && !r.skipped && r.correct) quizGift(r); if (r && !r.skipped && r.correct && net.host && net.host.open) try { net.host.send({t: 'qr', k: d.k, f: r.first ? 1 : 0}); } catch (e){} }); break;   // 문제 손님(방장 학년 문제)
     case 'wait': running = false; hide('endOv'); renderWait(); break;
     case 'bye': hostLost('방장이 방을 닫았어요'); break;
   }
@@ -1576,7 +1596,7 @@ window.__dd = {
   stn(x, y){ return st[y][x]; }, setTime(t){ timeLeft = t; },
   qorder(rid){ orderSeq = 4; spawnOrder(true); const o = orders[orders.length - 1]; o.rid = rid; return o.q; },   // 문제 손님 주문 하나(점검용)
   serveQ(i){ const o = orders.find(q => q.q && !q.served && !q.leaving); if (o) serveOrder(o, players[i || 0] || player); return !!o; },   // 문제 손님에게 바로 내기(점검용, i: 낸 요리사)
-  get gr(){ return {grade, mode: Object.assign({}, mode), local: localGrade()}; },   // 학년 난이도(점검용)
+  get gr(){ return {grade, diff, mode: Object.assign({}, mode), local: localGrade()}; },   // 학년 난이도(점검용)
   get os(){ return orders.filter(o => !o.served && !o.leaving).map(o => o.id + ':' + o.rid); },
   get mapStr(){ return MAP.map(r => typeof r === 'string' ? r : r.join('')).join('/'); }
 };
@@ -1732,7 +1752,7 @@ body.tutPractice .pad.tutLit{opacity:1;animation:tutPulse .7s ease-in-out infini
   function tteokStep(){
     const o = orderOf('tteokbokki'); if (!o) return null;
     const h = H();
-    if (plateWith(h, 'tteokbokki')) return step('serve-tteok', '❓ 손님은 문제를 내요! 떡볶이를 손님에게 서빙해요', '주문한 손님에게!', serveFor('tteokbokki'));
+    if (plateWith(h, 'tteokbokki')) return step('serve-tteok', '손님에게 낼 때마다 문제가 나와요! 떡볶이를 손님에게 서빙해요', '주문한 손님에게!', serveFor('tteokbokki'));
     const j = junk(x => isIng(x, 'eomuk') || isIng(x, 'tteok') || isIng(x, 'sauce') || emptyPlate(x)); if (j) return j;
     const pot = usedPot();
     if (pot.pot.state === 'cooking' || pot.pot.state === 'done'){
@@ -1870,7 +1890,7 @@ body.tutPractice .pad.tutLit{opacity:1;animation:tutPulse .7s ease-in-out infini
     const L = [{key: 'tteok', label: '🍢 떡볶이', setup: () => api.addOrder('tteokbokki', true), step: tteokStep, done: () => !orderOf('tteokbokki') && !api.quizBusy()}];
     if (one('sink') && one('ret')) L.push({key: 'wash', label: '🧽 설거지', setup: () => api.hurryPlates(), step: washStep, done: () => !washStep() && !api.platesComing()});   // 2D판은 접시가 끝없이 있어 설거지가 없어요
     const trash = {key: 'trash', label: '🗑️ 쓰레기통', setup: () => api.burnPot(), step: trashStep, done: () => !trashStep()};
-    if (api.grade() >= 2) L.push({key: 'kimbap', label: '🍙 김밥', setup: () => api.addOrder('kimbap', false), step: kimbapStep, done: () => !orderOf('kimbap') && !api.quizBusy()});
+    if (api.grade() >= 2) L.push({key: 'kimbap', label: '🍙 김밥', setup: () => api.addOrder('kimbap', !!api.quizEvery), step: kimbapStep, done: () => !orderOf('kimbap') && !api.quizBusy()});
     if (api.burnPot) L.push(trash);
     return L;
   }
@@ -2027,7 +2047,7 @@ tut = createTutorial({
       for (const s of dynList){ if (s.type === 'counter') s.item = null; else if (s.type === 'board'){ s.items = []; s.progress = 0; } else if (s.type === 'stove') resetPot(s.pot); }
     }
   },
-  addOrder: tutAddOrder, clearOrders(){ orders = []; },
+  addOrder: tutAddOrder, quizEvery: true, clearOrders(){ orders = []; },
   pressA(){ tutPress = true; try { target = findTarget(player); actionA(); } finally { tutPress = false; } },
   force(i){
     const h = player.hold;
