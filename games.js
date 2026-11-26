@@ -570,7 +570,7 @@
       lockAway(G, Y);
       castleGlow(S, Y); // 성 문 소용돌이는 선생님 화면에서도
       doorsGlow(S, Y); // 명소 입구 4곳도
-      if (N.online && N.role === "teacher") return; // 선생님 기기는 묻지 않아요
+      if (N.online && N.role === "teacher" && (!N.teacherWatching || N.teacherWatching(G))) return; // 선생님 기기는 반 활동을 진행할 때만 묻지 않아요(자유 시간에는 내 캐릭터로 들어가요, 2026-11-26)
       var ok = S.loc === "village" && !S.deco && (S.mode === "free" || S.mode === "gather" || S.mode === "rush");
       if (castleTick(G, S, Y, ok)) return;
       if (doorsTick(G, S, Y, ok)) return;

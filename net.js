@@ -99,6 +99,7 @@
       return;
     }
     this.ws = ws;
+    this.lastRecv = Date.now(); // 새 연결을 만드는 동안 오래된 '마지막 소식' 때문에 바로 끊지 않게(검토)
     ws.onopen = function () {
       self.retry = 0;
       self.lastRecv = Date.now();
@@ -161,6 +162,35 @@
           if (self.wantOpen) self.open(self.room, self.joinMsg);
         }
       }, 5000);
+  };
+  // 화면을 껐다 켜면(안드로이드) 웹소켓이 열린 것처럼 보여도 죽어 있을 때가 있어요
+  // → 'ping'을 보내 보고 3.5초 안에 아무 소식이 없을 때만 새로 연결(멀쩡한 연결은 그대로: 다시 들어오면 서버가 새 번호를 줘서 모둠·방장이 바뀜)
+  // 닫히는 중인 연결(다른 기기에서 같은 이름으로 들어와 서버가 끊은 것 등)은 원래 onclose가 처리하게 둬요(검토)
+  CloudLink.prototype.wake = function () {
+    var self = this;
+    if (!this.wantOpen || NET.kickedOut || this.probing) return;
+    var w = this.ws;
+    if (w && w.readyState >= 2) return;
+    var t0 = Date.now();
+    if (w && w.readyState === 1)
+      try {
+        w.send("ping");
+      } catch (e) {}
+    this.probing = setTimeout(function () {
+      self.probing = 0;
+      if (!self.wantOpen || NET.kickedOut) return;
+      var w2 = self.ws;
+      if (!w2) return void self.open(self.room, self.joinMsg); // (끊긴 채 다시 잇기 시계가 멈춰 있었으면)
+      if (w2 !== w || w2.readyState !== 1 || (self.lastRecv || 0) >= t0) return; // 그사이 새 연결·닫히는 중·소식이 옴
+      self.ws = null;
+      self.ready = false;
+      try {
+        w2.onclose = null;
+        w2.close();
+      } catch (e) {}
+      self.net.onCloudClosed(false);
+      self.open(self.room, self.joinMsg);
+    }, 3500);
   };
   CloudLink.prototype.close = function () {
     this.wantOpen = false;
@@ -300,35 +330,76 @@
     pendingHi: null,
   };
   window.NET = NET;
+  // 깨어날 때(화면 켜짐·앱으로 돌아옴): 서버 연결 확인
+  function onWake() {
+    if (document.visibilityState === "hidden") return;
+    if (NET.cloud && NET.started) NET.cloud.wake();
+  }
+  document.addEventListener("visibilitychange", onWake);
+  addEventListener("pageshow", onWake);
+  addEventListener("online", onWake);
+  // 이 자리로 다시 불러오기(반 코드·이름 그대로 바로 들어옴): 그림 문맥이 안 돌아오거나 뒤로-앞으로 캐시에서 되살아났을 때
+  function stashTeacherPw() {
+    try {
+      if (NET.online && NET.role === "teacher" && NET.pw) sessionStorage.setItem("uriban-tpw", NET.pw); // 이 탭에서만(창을 닫으면 사라짐), 돌아와 들어오면 바로 지움
+    } catch (e) {}
+  }
+  // 선생님이 포털로 게임에 갔다가 돌아오면(주소에 back=1) 비밀번호를 다시 치지 않게
+  addEventListener("pagehide", stashTeacherPw);
+  window.PLAZA_RELOAD_BACK = function () {
+    try {
+      if (NET.online) {
+        stashTeacherPw();
+        var u = new URL(location.href);
+        u.searchParams.set("back", "1");
+        location.replace(u.href);
+        return;
+      }
+    } catch (e) {}
+    location.reload();
+  };
 
   // ---------------------------------------------------------------- 시작
   NET.boot = function (startGame) {
     NET.startGame = startGame;
     if (location.protocol === "file:" && !CONFIG.server) return startGame();
     var done = false;
+    var back = /[?&]back=1(&|$)/.test(location.search);
+    function dropPw() {
+      try {
+        sessionStorage.removeItem("uriban-tpw");
+      } catch (e) {}
+    }
+    // 다시 불러오기(back=1)는 화면을 막 켜서 와이파이가 늦게 붙을 수 있어 조금 더 기다려요(검토: 3초면 가짜 친구 시험판으로 켜졌음)
     var timer = setTimeout(function () {
       if (!done) {
         done = true;
+        dropPw();
         startGame();
       }
-    }, 3000);
-    fetch((CONFIG.server || "") + "/api/hello", { cache: "no-store" })
-      .then(function (r) {
-        return r.ok ? r.json() : null;
-      })
-      .then(function (j) {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
-        if (j && j.app === "uriban-plaza") NET.showLogin();
-        else startGame();
-      })
-      .catch(function () {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
-        startGame();
-      });
+    }, back ? 9000 : 3000);
+    var t0 = Date.now();
+    (function hello() {
+      fetch((CONFIG.server || "") + "/api/hello", { cache: "no-store" })
+        .then(function (r) {
+          return r.ok ? r.json() : null;
+        })
+        .then(function (j) {
+          if (done) return;
+          done = true;
+          clearTimeout(timer);
+          if (j && j.app === "uriban-plaza") NET.showLogin();
+          else dropPw(), startGame();
+        })
+        .catch(function () {
+          if (done) return;
+          if (back && Date.now() - t0 < 7000) return void setTimeout(hello, 1500); // 와이파이가 아직 안 붙었으면 한 번 더
+          done = true;
+          clearTimeout(timer);
+          dropPw();
+          startGame();
+        });
+    })();
   };
 
   NET.showLogin = function () {
@@ -391,6 +462,17 @@
     $("nlGo").onclick = go;
     // 미니게임에서 돌아오면 같은 이름으로 바로 들어가요
     if (q.get("back") === "1" && !teacherMode && room && name) setTimeout(go, 50);
+    else if (q.get("back") === "1" && teacherMode && room) {
+      var tpw = null;
+      try {
+        tpw = sessionStorage.getItem("uriban-tpw");
+        sessionStorage.removeItem("uriban-tpw");
+      } catch (e) {}
+      if (tpw) {
+        $("nlPw").value = tpw;
+        setTimeout(go, 50);
+      }
+    }
     ["nlRoom", "nlName", "nlPw"].forEach(function (k) {
       $(k).addEventListener("keydown", function (e) {
         if (e.key === "Enter") go();
@@ -604,7 +686,7 @@
     Y.shirt = SHIRT[NET.look[1]];
     G.setLook(Y);
     if (NET.role === "teacher") {
-      Y.hidden = true; // 선생님은 보이지 않는 카메라로 돌아다녀요
+      Y.hidden = NET.teacherWatching(G); // 반 활동(모이기·OX 퀴즈·월드)을 진행할 때만 보이지 않는 카메라, 자유 시간에는 내 캐릭터로 포털도 들어가요(2026-11-26)
       Y.out = true;
     } else {
       $("bTeacher").hidden = true;
@@ -737,6 +819,12 @@
     if (!NET.G) return null;
     return E === NET.G.Y ? NET.id : E.netId;
   };
+  // 선생님 기기: 반 활동을 진행하는 동안만 내 캐릭터를 숨기고(보이지 않는 카메라), 자유 시간에는 보여요.
+  // 예전에는 늘 숨겨서, 패드 화면을 껐다 켜며 다시 들어오면(새로 불러오기) 갑자기 내 캐릭터가 사라지고 포털에도 못 들어갔어요(2026-11-26 선생님)
+  NET.teacherWatching = function (G) {
+    var S = G && G.S;
+    return !!S && (S.mode !== "free" || S.loc === "arena");
+  };
   NET.peerOf = function (E) {
     var id = NET.idOf(E);
     return id ? NET.peers[id] : null;
@@ -754,7 +842,7 @@
     var S = G.S,
       Y = G.Y;
     if (NET.role === "teacher") {
-      Y.hidden = true;
+      Y.hidden = NET.teacherWatching(G);
       Y.out = true;
     }
     // 월드에서 나왔는지 확인

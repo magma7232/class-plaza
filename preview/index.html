@@ -7439,7 +7439,29 @@ try {
       }
     } catch (e) { }
     // 브라우저 '뒤로'로 페이지가 그대로 되살아나면(뒤로-앞으로 캐시) 다시 불러서 뽑기·포털 상태를 새로
-    addEventListener("pageshow", e => { e.persisted && location.reload() });
+    addEventListener("pageshow", e => { e.persisted && (window.PLAZA_RELOAD_BACK ? PLAZA_RELOAD_BACK() : location.reload()) });   // 서버에 들어가 있으면 같은 이름으로 바로 다시(net.js)
+    // 패드 화면을 껐다 켠 뒤에도 내 캐릭터가 보이게(2026-11-26 선생님 학교 패드): 안드로이드는 화면이 꺼지면 그림 문맥(WebGL)을 잃었다가 되살린다.
+    // 되살린 뒤·다시 보일 때 내 3D 동물이 장면에 있고 켜져 있는지 보고, 아니면 다시 만든다. 4초 넘게 문맥이 안 돌아오면 이 자리로 다시 불러온다
+    (() => {
+      const cv = document.getElementById("c") || document.querySelector("canvas");
+      let lostAt = 0, chkT = 0;
+      const fix = () => {
+        if (!cur || cur === "orig" || !info(cur)) return;
+        const B = BEAR, m = B && B.mesh;
+        if (!B || !B.on || !m || !m.parent) { if (inst[cur]) { try { inst[cur].dispose() } catch (er) { } delete inst[cur] } use(cur, !1); return }   // 지워졌거나 장면에서 빠졌으면 새로
+        try { [].concat(m.material).forEach(t => { t && t.map && t.map.image && t.map.image.complete && (t.map.needsUpdate = !0) }) } catch (er) { }   // 그림을 다시 올림
+      };
+      const later = ms => { clearTimeout(chkT); chkT = setTimeout(fix, ms) };
+      cv && cv.addEventListener("webglcontextlost", e => { e.preventDefault(); lostAt = Date.now(); window.__glLost = 1 }, !1);
+      cv && cv.addEventListener("webglcontextrestored", () => { lostAt = 0; window.__glLost = 0; later(300) }, !1);
+      const wake = () => {
+        if (document.visibilityState === "hidden") return;
+        later(500);
+        lostAt && setTimeout(() => { lostAt && document.visibilityState !== "hidden" && Date.now() - lostAt > 3500 && (window.PLAZA_RELOAD_BACK ? PLAZA_RELOAD_BACK() : location.reload()) }, 4000);
+      };
+      document.addEventListener("visibilitychange", wake); addEventListener("pageshow", wake); addEventListener("focus", wake);
+      window.PLAZA_ME_FIX = fix;   // 점검용
+    })();
     let q = new URLSearchParams(location.search), first = /[?&]bear=0/.test(location.search) ? "orig" : q.get("char") || sget("plaza.char");
     (first === "orig" || info(first)) ? use(first, !1) : btn();
     pend && iconsFor();   // 선물 상자가 기다리면 아이템 그림을 미리 받아 둔다('시작하기'를 누르기 전에)
