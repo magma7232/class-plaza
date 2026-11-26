@@ -7,6 +7,7 @@
   const cv = $('game'), ctx = cv.getContext('2d');
   const stageEl = $('stage'), padEl = $('pad');
   let viewScale = 1, DPR = 1, portrait = false, touchUI = false, builtRS = 0;
+  let stageBox = { left: 0, top: 0, w: 960, h: 540 };
   const F = (px) => `${px}px Jua, "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
   const dscale = (y) => 0.86 + (U.clamp(y, FT, FB) - FT) / (FB - FT) * 0.18;
   const val = (v) => (typeof v === 'function' ? v() : v);
@@ -36,6 +37,7 @@
     }
     viewScale = sw / W;
     Object.assign(stageEl.style, { width: sw + 'px', height: sh + 'px', left: left + 'px', top: top + 'px' });
+    stageBox = { left, top, w: sw, h: sh };   // 튜토리얼 막 좌표(CSS)
     Object.assign(padEl.style, { left: left + 'px', width: sw + 'px' });
     if (portrait) { padEl.style.left = '0px'; padEl.style.width = vw + 'px'; }
     qSW = sw; qSH = sh; applyQ();
@@ -837,7 +839,7 @@
     if (outro) updateOutro(rdt);
 
     const paused = mode === 'solo' && busy() && !(outro && outro.t < 1.4);
-    const free = !busy() && !player.dead && !special;
+    const free = !busy() && !player.dead && !special && !tutHold();   // 튜토리얼 ▶ 설명 동안은 멈춤
     updatePlayer(dt, free);
     if (special) updateSpecial(dt);
     if (!paused) Net.tick(dt, { id: Net.myId, x: player.x, y: player.y, z: player.z, dead: player.dead }, false);
@@ -1756,6 +1758,7 @@
     dialog = null; askBox = null; banner = null; locked = false; timers = []; kongShown = null; player = null; followers = [];
     love = 0; loveFull = false; combo = 0; courage = 0;
     state = 'play'; fade.a = 1; fade.dir = -1; lastLines = '';
+    tutTried = false; if (tut) { tut = null; tutHide(); }
     let m = sv ? sv.map : 'heart', x = sv ? sv.x : null, y = sv ? sv.y : null;
     if (sv && SIM.MAPS[m].boss) { x = 170; y = 440; }
     loadMap(m, x, y);
@@ -1912,6 +1915,177 @@
     return out;
   };
 
+  // ---------------- 처음 하는 학생 튜토리얼(2026-11-26 선생님: "하이라이트 화면처럼, 허수아비 때리고 이런 걸로 기초 조작을") ----------------
+  // 하트 특공대 튜토리얼과 같은 모양: 어두운 막 + 밝힌 구멍(금빛·흰 테) + 통통 튀는 화살표 ❗ + 왼쪽 안내 친구 말풍선 ▶ + 위 「연습」·「튜토리얼 건너뛰기 ▶▶」.
+  // 원래 이야기·퀘스트 흐름 그대로 위에 얹음: 조작(이동·점프·대시) → 할머니와 대화(이야기) → 허수아비 퀘스트(하트 5번 · 큰 하트) → 사랑 폭발 → 출발.
+  // 막은 눌림을 막지 않음(pointer-events:none) → 게임 단추가 그대로 눌림. ▶ 설명 동안은 캐릭터만 멈춤(tutHold).
+  // 처음 하는 학생만(기기 기억 sarang.tut), 선생님 기기·친구랑 하기는 안 나옴. 시험: ?tut=0 끔 · ?tut=1 언제나 · window.__game.tut
+  const TUT_KEY = 'sarang.tut', tutQ = new URLSearchParams(location.search).get('tut');
+  let tut = null, tutMem = false, tutTried = false, tutEls = null;
+  function tutDone() { if (tutMem) return true; try { return localStorage.getItem(TUT_KEY) === '1'; } catch (e) { return false; } }
+  function tutSetDone() { tutMem = true; try { localStorage.setItem(TUT_KEY, '1'); } catch (e) { /* 무시 */ } }
+  const kb = () => !touchUI;
+  function g2s(x, y) {   // 게임 화면 좌표(W×H) → CSS 화면 좌표(자동 화질 캔버스 배율과 상관없음)
+    const r = stageBox;
+    if (zoom !== 1) { x = W / 2 + (x - W / 2) * zoom; y = H * 0.62 + (y - H * 0.62) * zoom; }
+    return { x: r.left + x * r.w / W, y: r.top + y * r.h / H, k: r.w / W * zoom };
+  }
+  function w2s(x, y, z) { return g2s(x - camX, y - (z || 0) * dscale(y)); }
+  function gRect(x, y, w, h) { const a = g2s(x, y), b = g2s(x + w, y + h); return { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y }; }
+  function elSpot(id, pad) {   // 동그란 조작 단추
+    const e = $(id); if (!e || !e.getClientRects().length) return null;
+    const r = e.getBoundingClientRect(); if (r.width < 4) return null;
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, r: Math.max(r.width, r.height) / 2 + (pad == null ? 8 : pad) };
+  }
+  function meSpot(r) { const p = w2s(player.x, player.y, player.z + 52); return { x: p.x, y: p.y, r: (r || 72) * p.k }; }
+  function entSpot(id, zc, r) { const e = ents.find((q) => q.id === id); if (!e) return null; const p = w2s(e.x, e.y, zc); return { x: p.x, y: p.y, r: r * p.k, mark: 1 }; }
+  const dummySpot = () => entSpot('dummy', 66, 76);
+  const sp = (...a) => a.filter(Boolean);
+  const TUT = [
+    { key: 'hi', ph: 'intro', lab: '연습', t: '사랑둥이 연습을 시작합니다.', sm: '연습을 시작해요.', at: () => [meSpot(80)] },
+    { key: 'hud', ph: 'intro', lab: '내 체력 · 사랑 게이지', t: '위는 내 체력, 아래는 사랑 게이지예요. 몬스터를 맑게 하면 사랑 게이지가 차요.', sm: '내 체력과 사랑 게이지예요.',
+      at: () => ({ rect: gRect(14, 57, 212, 50) }) },
+    { key: 'move', ph: 'intro', lab: '직접 해 보기', live: 1,
+      t: () => (kb() ? '방향키(또는 WASD)로 움직여 보세요.' : '조이스틱을 누른 채 밀어서 움직여 보세요.'), sm: () => (kb() ? '방향키로 움직여 보세요.' : '조이스틱을 밀어 보세요.'),
+      at: () => sp(elSpot('joy', 10), meSpot()), set: (S) => { S.x = player.x; S.y = player.y; }, ok: (S) => Math.hypot(player.x - S.x, (player.y - S.y) * 1.6) > 160 },
+    { key: 'jump', ph: 'intro', lab: '직접 해 보기', live: 1,
+      t: () => (kb() ? '스페이스 키로 점프해 보세요.' : '점프 단추를 눌러 보세요.'), sm: () => (kb() ? '스페이스 키로 점프!' : '점프를 눌러 보세요.'),
+      at: () => sp(elSpot('bJump'), meSpot()), ok: () => player.z > 25 },
+    { key: 'dash', ph: 'intro', lab: '직접 해 보기', live: 1,
+      t: () => (kb() ? 'Shift 키를 누르면 휙 달려요. 눌러 보세요.' : '대시 단추를 누르면 휙 달려요. 눌러 보세요.'), sm: () => (kb() ? 'Shift 키를 눌러 보세요.' : '대시를 눌러 보세요.'),
+      at: () => sp(elSpot('bDash'), meSpot()), ok: () => !!player.dash },
+    { key: 'talk', ph: 'intro', lab: '하트 할머니', live: 1,
+      t: () => (kb() ? '하트 할머니 옆으로 가서 E 키로 대화해 보세요.' : '하트 할머니 옆으로 가서 대화 단추를 눌러 보세요.'), sm: () => (kb() ? '할머니 옆에서 E 키!' : '할머니 옆에서 대화를 눌러요.'),
+      at: () => sp(entSpot('grandma', 58, 84), elSpot('bAct'), meSpot()) },
+    { key: 'heart', ph: 'practice', lab: '하트 던지기',
+      t: () => (kb() ? 'J 키를 톡 누르면 하트, 꾹 눌렀다 떼면 큰 하트가 나가요.' : '♥ 단추를 톡 누르면 하트, 꾹 눌렀다 떼면 큰 하트가 나가요.'), sm: () => '톡 누르면 하트, 꾹 누르면 큰 하트!',
+      at: () => sp(elSpot('bShoot')) },
+    { key: 'dummy', ph: 'practice', lab: '직접 해 보기', live: 1,
+      t: () => `허수아비 쪽을 보고 하트로 맞혀 보세요! (${Math.min(5, Q.kills.dummy || 0)}/5)`, sm: () => `허수아비를 하트로 맞혀요! (${Math.min(5, Q.kills.dummy || 0)}/5)`,
+      at: () => sp(dummySpot(), elSpot('bShoot'), meSpot()) },
+    { key: 'big', ph: 'practice2', lab: '직접 해 보기', live: 1,
+      t: () => (kb() ? '이번엔 J 키를 꾹 눌렀다가 떼서 큰 하트로 맞혀 보세요!' : '이번엔 ♥를 꾹 눌렀다가 떼서 큰 하트로 맞혀 보세요!'), sm: () => '꾹 눌렀다 떼서 큰 하트로!',
+      at: () => sp(dummySpot(), elSpot('bShoot'), meSpot()) },
+    { key: 'special', ph: 'toCotton', lab: '필살 · 사랑 폭발', live: 1, wait: 1.4,
+      t: () => (kb() ? '사랑 게이지가 가득 차면 필살! F 키로 사랑 폭발을 써 보세요.' : '사랑 게이지가 가득 차면 필살! 사랑 폭발을 눌러 보세요.'), sm: () => '게이지 가득! 사랑 폭발을 눌러요.',
+      at: () => { const L = sp(elSpot('bSpecial'), kb() ? meSpot() : null); L.rect = gRect(14, 82, 212, 26); return L; },
+      set: () => { gainLove(100); }, ok: (S) => { if (special) S.used = 1; if (!S.used && love < 100) gainLove(100); return !!S.used && !special; } },
+    { key: 'end', ph: 'toCotton', lab: '출발!', t: '이제 하트 마을을 지켜 보세요! 오른쪽 끝 포털로 출발!', sm: '이제 출발! 오른쪽 끝 포털로!', at: () => [meSpot(80)] },
+  ];
+  function tutHold() { return !!(tut && !TUT[tut.i].live); }
+  function tutBuild() {
+    if (tutEls) return;
+    const mask = document.createElement('canvas'); mask.id = 'tutMask'; mask.className = 'hidden';
+    const ov = document.createElement('div'); ov.id = 'tutOv'; ov.className = 'hidden';
+    ov.innerHTML = '<canvas class="guy" width="150" height="150"></canvas><div class="tb"><div class="tl"></div><div class="tx"></div><div class="dots"></div><button class="nx" aria-label="다음">▶</button></div>';
+    const bar = document.createElement('div'); bar.id = 'tutBar'; bar.className = 'hidden';
+    bar.innerHTML = '<span>연습</span><button id="tutSkip">튜토리얼 건너뛰기 ▶▶</button>';
+    const arrow = document.createElement('div'); arrow.id = 'tutArrow'; arrow.className = 'hidden';
+    arrow.innerHTML = '<b>!</b><svg viewBox="0 0 32 38"><path d="M16 37 L1 19 L9 19 L9 1 L23 1 L23 19 L31 19 Z" fill="#ffd43b" stroke="#7a4a00" stroke-width="2.5" stroke-linejoin="round"/></svg>';
+    for (const el of [mask, arrow, ov, bar]) document.body.appendChild(el);
+    tutEls = { mask, mctx: mask.getContext('2d'), ov, bar, arrow, tb: ov.querySelector('.tb'), tl: ov.querySelector('.tl'), tx: ov.querySelector('.tx'), dots: ov.querySelector('.dots'), nx: ov.querySelector('.nx'), guy: ov.querySelector('.guy'), sig: '', txt: '' };
+    let lastGo = 0;
+    tutEls.nx.addEventListener('click', (e) => { e.stopPropagation(); if (performance.now() - lastGo < 350) return; lastGo = performance.now(); tutGo(); });   // 두 번 톡톡으로 설명을 건너뛰지 않게
+    $('tutSkip').addEventListener('click', (e) => { e.stopPropagation(); if (tut) { Sound.play('click'); tutFinish(true); } });
+    for (const b of [tutEls.nx, $('tutSkip')]) for (const ty of ['pointerdown', 'touchstart', 'mousedown']) b.addEventListener(ty, (e) => { e.stopPropagation(); Sound.init(); }, { passive: true });
+  }
+  function tutGo() { if (!tut || !tut.vis || TUT[tut.i].live) return; Sound.play('click'); tutStep(tut.i + 1); }
+  addEventListener('keydown', (e) => {   // 키보드: ▶ 대신 엔터·스페이스(그 누름이 다음 단계에서 대화·점프로 새지 않게 지움)
+    if (tut && tut.vis && !TUT[tut.i].live && /^(Enter|Space|KeyE|KeyX|NumpadEnter)$/.test(e.code) && !e.repeat) { tutGo(); input.actP = false; input.jumpP = false; }
+  });
+  function tutStep(i) {
+    if (i >= TUT.length) { tutFinish(false); return; }
+    tut.i = i; tut.S = {}; tut.t0 = t; tut.vis = false; tut.okAt = 0; tutEls.sig = ''; tutEls.txt = '';
+    const st = TUT[i]; if (st.set) st.set(tut.S);
+  }
+  function tutStart(i) {
+    tutBuild(); tutTried = true;
+    tut = { i: 0, S: {}, t0: t, vis: false };
+    tutStep(i);
+  }
+  function tutHide() { if (tut && tut.cam) { camCenter = null; tut.cam = 0; } if (!tutEls) return; for (const k of ['mask', 'ov', 'bar', 'arrow']) tutEls[k].classList.add('hidden'); }
+  function tutFinish(skipped) {
+    tutSetDone(); tutHide(); tut = null;
+    if (skipped && player && state === 'play') toast('연습을 건너뛰었어요. 퀘스트 창을 보고 따라가요!', '#fff36a');
+  }
+  function tutTick() {
+    if (!tut) {
+      if (!tutTried && state === 'play' && mode === 'solo' && mapId === 'heart' && Q && player && tutQ !== '0' && (tutQ === '1' || !tutDone()) && !isTeacher()
+        && !dialog && fade.dir === 0) {
+        const i = TUT.findIndex((s) => s.ph === Q.step);
+        if (i >= 0) tutStart(i); else tutTried = true;
+      }
+      return;
+    }
+    // 이야기가 앞으로 갔으면(학생이 먼저 해 버림) 그 단계로, 맵을 떠났거나 다른 데로 건너뛰었으면(선생님·점검) 끝
+    if (state !== 'play' || mode !== 'solo' || mapId !== 'heart' || !player) { if (Q && C.at('toCotton')) tutSetDone(); tutHide(); tut = null; return; }
+    let st = TUT[tut.i];
+    if (C.idx(Q.step) > C.idx(st.ph)) {
+      const j = TUT.findIndex((s, k) => k > tut.i && s.ph === Q.step);
+      if (j < 0) { if (C.at('toCotton')) tutSetDone(); tutHide(); tut = null; return; }
+      tutStep(j); st = TUT[j];
+    }
+    if (!tut.okAt && st.ok && st.ok(tut.S)) { tut.okAt = performance.now(); Sound.play('ding'); }   // 해낸 순간을 기억(대시처럼 잠깐인 것도)
+    if (tut.okAt && performance.now() - tut.okAt > 450) { tutStep(tut.i + 1); return; }   // 잠깐(반짝 볼 틈) 뒤 다음
+    const vis = !(busy() || player.dead || special || banner || (st.wait && t - tut.t0 < st.wait));
+    if (vis !== tut.vis) {
+      tut.vis = vis;
+      if (!vis) tutHide();
+      else { for (const k of ['mask', 'ov', 'bar']) tutEls[k].classList.remove('hidden'); tutEls.sig = ''; }
+    }
+    // 허수아비 단계: 카메라가 허수아비를 화면 가운데에(오른쪽 아래 조작 단추 뒤에 숨지 않게), 내가 멀리 왼쪽이면 나를 따라감
+    const dm = (st.key === 'dummy' || st.key === 'big') && vis ? ents.find((q) => q.id === 'dummy') : null;
+    if (dm) { camCenter = Math.min(dm.x, player.x + W / 2 - 150); tut.cam = 1; } else if (tut.cam) { camCenter = null; tut.cam = 0; }
+    if (!vis) return;
+    toasts.length = 0;   // 게임 알림 글이 연습 말풍선과 겹치지 않게(말풍선이 같은 말을 함)
+    tutDraw(st);
+  }
+  function tutText(st) {
+    const small = U.grade() <= 2, v = small ? st.sm || st.t : st.t;
+    return typeof v === 'function' ? v() : v;
+  }
+  function tutDraw(st) {
+    const E = tutEls, text = tutText(st);
+    if (E.txt !== text) {
+      const fresh = E.tx.dataset.k !== st.key;
+      E.txt = text; E.tx.textContent = text; E.tx.dataset.k = st.key; E.tl.textContent = st.lab || '';
+      E.dots.innerHTML = TUT.map((_, i) => `<i class="${i <= tut.i ? 'on' : ''}"></i>`).join('');
+      E.ov.classList.toggle('nonx', !!st.live);
+      if (fresh) { E.tb.classList.add('pop'); setTimeout(() => E.tb.classList.remove('pop'), 180); }
+      if (!E.guyDone && player) {   // 안내 친구 = 내 사랑둥이
+        E.guyDone = 1;
+        try { const g = E.guy.getContext('2d'), ch = player.ch; g.clearRect(0, 0, 150, 150); Art.drawChar(g, ch, 75, 146, { t: 0, facing: 1, scale: 104 / ch.w, expr: 'joy', pose: 'cheer' }); } catch (e) { /* 그림 없음 */ }
+      }
+    }
+    // 말풍선 자리: 게임 화면 가운데 위(체력 칸 아래 · 조작 단추 위)
+    const b = stageBox, top = Math.round(b.top + 124 * b.h / H), left = Math.round(b.left + b.w / 2), mw = Math.round(Math.min(640, b.w * 0.62));
+    if (E.ovKey !== `${top},${left},${mw}`) { E.ovKey = `${top},${left},${mw}`; Object.assign(E.ov.style, { top: top + 'px', left: left + 'px', width: mw + 'px' }); E.bar.style.top = Math.max(54, Math.round(b.top + 60 * b.h / H)) + 'px'; E.bar.style.left = left + 'px'; }   // 띠: 🏠 광장으로·소리 단추 아래
+    const a = st.at ? st.at() : null, list = Array.isArray(a) ? a : a && !a.rect ? [a] : [], rect = a && a.rect;
+    const vw = innerWidth, vh = innerHeight;
+    const sig = `${vw}x${vh}|${st.live ? 1 : 0}|` + list.map((q) => `${q.x | 0},${q.y | 0},${q.r | 0}`).join(';') + (rect ? `|${rect.x | 0},${rect.y | 0},${rect.w | 0},${rect.h | 0}` : '');
+    const mk = list.find((q) => q.mark);
+    if (mk) {   // 위에서 콕: 통통 튀는 금빛 화살표 + ❗ (CSS 움직임이라 막을 다시 안 그림)
+      E.arrow.classList.remove('hidden');
+      const ak = `${mk.x | 0},${(mk.y - mk.r) | 0}`;
+      if (E.arrowKey !== ak) { E.arrowKey = ak; E.arrow.style.left = (mk.x | 0) + 'px'; E.arrow.style.top = ((mk.y - mk.r) | 0) + 'px'; }
+    } else E.arrow.classList.add('hidden');
+    if (sig === E.sig) return;   // 막은 단계가 바뀌거나 밝힐 곳이 움직였을 때만 다시 그림(낡은 패드)
+    E.sig = sig;
+    const m = E.mask, c = E.mctx;
+    if (m.width !== vw || m.height !== vh) { m.width = vw; m.height = vh; }
+    c.globalCompositeOperation = 'source-over'; c.clearRect(0, 0, vw, vh);
+    c.fillStyle = `rgba(0,0,0,${st.live ? 0.66 : 0.76})`; c.fillRect(0, 0, vw, vh);
+    c.globalCompositeOperation = 'destination-out';
+    const rr = (R) => { c.beginPath(); if (c.roundRect) c.roundRect(R.x, R.y, R.w, R.h, 10); else c.rect(R.x, R.y, R.w, R.h); };
+    const cut = (q) => { const g = c.createRadialGradient(q.x, q.y, q.r, q.x, q.y, q.r * 1.3); g.addColorStop(0, '#000'); g.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = '#000'; c.beginPath(); c.arc(q.x, q.y, q.r, 0, TAU); c.fill(); c.fillStyle = g; c.beginPath(); c.arc(q.x, q.y, q.r * 1.3, 0, TAU); c.fill(); };
+    if (rect) { c.fillStyle = '#000'; rr(rect); c.fill(); }
+    list.forEach(cut);
+    c.globalCompositeOperation = 'source-over';
+    const ring = (path) => { c.lineWidth = 7; c.strokeStyle = 'rgba(255,224,90,0.95)'; path(); c.stroke(); c.lineWidth = 2.5; c.strokeStyle = 'rgba(255,255,255,0.95)'; path(); c.stroke(); };
+    if (rect) ring(() => rr(rect));
+    list.forEach((q) => ring(() => { c.beginPath(); c.arc(q.x, q.y, q.r, 0, TAU); }));
+  }
+
   // 테스트용 바로가기 (화면에는 안 보임)
   window.__game = {
     get state() { return { state, mapId, step: Q && Q.step, hp: player && Math.round(player.hp), dialog: !!dialog, ask: !!askBox, mini: Mini.name, x: player && Math.round(player.x), y: player && Math.round(player.y), z: player && Math.round(player.z), mons: mons.size, dead: player && player.dead, fade: fade.dir, inv: Q && Q.inv, shards: Q && Q.shards, followers: Q && Q.followers, mode, net: netStatus, remote: remote.size, love: Math.round(love), combo, wave: !!waveInfo, gold: goldId, intro: !!intro, outro: !!outro, fx: FX.count }; },
@@ -1938,7 +2112,9 @@
     dash() { startDash(); },
     skipCine() { if (intro) intro.t = 9; if (outro) outro.t = 9; },
     get Q() { return Q; },
-    get gradeK() { return gradeK; }, get diff() { return gameDiff; },   // 점검: 학년 × 난이도 배율
+    get gradeK() { return gradeK; }, get diff() { return gameDiff; },
+    get tut() { return tut ? { i: tut.i, key: TUT[tut.i].key, vis: tut.vis, live: !!TUT[tut.i].live, done: tutDone() } : { done: tutDone() }; },
+    tutNext() { tutGo(); }, tutSkip() { if (tut) tutFinish(true); },   // 점검: 학년 × 난이도 배율
   };
 
   // ---------------- 로딩 ----------------
@@ -1959,7 +2135,7 @@
     dtAvg += (dt - dtAvg) * 0.1;
     if (Math.abs(dt - dtAvg) < 0.004) dt = dtAvg;   // 장면 간격의 작은 떨림(±4ms)은 평균으로: 움직임이 고르게
     if (fpsEl) { fpsN++; fpsT += raw; if (fpsT > 500) { const q = window.__q(); fpsEl.textContent = `${(fpsN * 1000 / fpsT).toFixed(0)}fps · 화질 ${q.lv} (${q.w}×${q.h}) · ${q.mean}ms`; fpsN = 0; fpsT = 0; } }
-    try { update(dt); render(); } catch (err) { console.error(err); }
+    try { update(dt); render(); tutTick(); } catch (err) { console.error(err); }
     requestAnimationFrame(frame);
   }
   // 소리 장치(AudioContext) 만들기가 낡은 패드에서 길어서(점검 크롬 45ms) 「혼자 하기」 순간이 아니라 처음 화면을 처음 누를 때 미리(누름 안에서만 소리가 허락됨)
