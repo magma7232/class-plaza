@@ -38,13 +38,59 @@
     Object.assign(stageEl.style, { width: sw + 'px', height: sh + 'px', left: left + 'px', top: top + 'px' });
     Object.assign(padEl.style, { left: left + 'px', width: sw + 'px' });
     if (portrait) { padEl.style.left = '0px'; padEl.style.width = vw + 'px'; }
-    cv.width = Math.round(sw * DPR); cv.height = Math.round(sh * DPR);
+    qSW = sw; qSH = sh; applyQ();
     cv.style.width = sw + 'px'; cv.style.height = sh + 'px';
     document.documentElement.style.setProperty('--u', viewScale + 'px');
     const need = U.clamp(viewScale * DPR, 1, 1.6);
-    if (map && need > builtRS + 0.25) { builtRS = need; Scenes.setRenderScale(need); scene = Scenes.build(map.theme, map.w); }
+    if (map && need > builtRS + 0.25) { builtRS = need; Scenes.setRenderScale(need); scene = buildScene(map.theme, map.w); }
     if (!builtRS) { builtRS = need; Scenes.setRenderScale(need); }
   }
+
+  // ---------------- 자동 화질(2026-11-26 선생님: 학교 갤럭시탭에서 미세하게 뚝뚝 끊김 → 패드가 알아서 조절, 학생에게는 표시 없음) ----------------
+  // 무거운 일은 화면 크기(그릴 점 수): 배경은 미리 그려 둔 그림이라 자바스크립트는 가볍고, 큰 캔버스(1920×1200)에 여러 겹을 칠하는 데 시간이 듦.
+  // 최근 약 1.5초의 장면 간격을 보고 느리면 그림 배율을 한 단계 낮추고(효과 알갱이도 줄임), 넉넉한 시간이 쌓이면 천천히 올림.
+  // 낮춰도 나아지지 않으면(30fps로 묶인 기기·자바스크립트가 느린 경우) 되돌리고 그 아래로는 한동안 안 내림 → 새 패드는 높은 화질 그대로.
+  // 기기마다 마지막 단계를 기억(sarang.qlv) → 낡은 패드는 다음부터 처음부터 알맞은 화질. 시험: ?fps=1 표시 · ?q=0~4 고정 · window.__q()
+  const QL = [1, 0.85, 0.72, 0.6, 0.5], QFX = [1, 0.85, 0.7, 0.55, 0.45];
+  const qFixed = (() => { const v = parseInt(new URLSearchParams(location.search).get('q'), 10); return v >= 0 && v < QL.length ? v : -1; })();
+  let qLv = qFixed >= 0 ? qFixed : (() => { try { const v = parseInt(localStorage.getItem('sarang.qlv'), 10); return v >= 0 && v < QL.length ? v : 0; } catch (e) { return 0; } })();
+  let qSW = 0, qSH = 0, qCool = 2.5, qGood = 0, qBack = 8, qFloor = 0, qFloorT = 0, qPrev = null, qWin = [], qWinT = 0, qMean = 0, qSimOn = false, qHold = 0;
+  function applyQ() {
+    if (!qSW) return;
+    const r = Math.max(0.7, DPR * QL[qLv]);   // 아무리 낮춰도 화면 점의 0.7배까지
+    const w = Math.round(qSW * r), h = Math.round(qSH * r);
+    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+    FX.setK(QFX[qLv]);
+  }
+  function qSave() { try { localStorage.setItem('sarang.qlv', String(qLv)); } catch (e) { /* 무시 */ } }
+  function qTick(raw) {
+    if (raw > 1000 || document.hidden) { qWin.length = 0; qWinT = 0; return; }   // 화면을 잠깐 나갔거나 퀴즈 카드가 멈춘 동안은 세지 않음
+    raw = Math.min(raw, 250);   // 아주 느린 패드(1초에 4장 미만)도 셈 — 한 장면이 판단을 혼자 휘두르지 않게 250ms까지만
+    if (qFloorT > 0 && (qFloorT -= raw / 1000) <= 0) qFloor = 0;
+    if (qCool > 0) { qCool -= raw / 1000; return; }   // 막 바꾼 뒤·불러온 뒤는 잠깐 기다림
+    qWin.push(raw); qWinT += raw; if (qWinT < 1200 || qWin.length < 20) return;   // 약 1.2초마다(느린 패드도 빨리 알맞은 단계로)
+    let sum = 0, slow = 0; for (const v of qWin) { sum += v; if (v > 25) slow++; }
+    qWinT = 0;
+    const n = qWin.length, mean = sum / n, sr = slow / n; qWin.length = 0; qMean = mean;
+    if (qFixed >= 0 || performance.now() < qHold) return;   // 게임을 막 시작한 3초는 재기만(첫 장면들이 느려도 괜히 화질을 낮추지 않게)
+    if (qPrev && qPrev.lv === qLv - 1) {   // 바로 앞에서 낮췄는데 나아지지 않았으면 되돌리고 한동안 그 아래로 안 감
+      const helped = mean < qPrev.mean * 0.92 || sr < qPrev.sr * 0.6;
+      qPrev = null;
+      if (!helped) { qLv--; qFloor = qLv; qFloorT = 40; applyQ(); qSave(); qCool = 1.5; return; }
+    }
+    if ((mean > 19.5 || sr > 0.12) && qLv < QL.length - 1 && !(qFloor >= 0 && qFloorT > 0 && qLv >= qFloor)) {
+      qPrev = { lv: qLv, mean, sr }; qLv++; applyQ(); qSave(); qCool = 1.2; qGood = 0; return;
+    }
+    if (mean < 17.6 && sr < 0.03 && qLv > 0) {
+      qGood += sum / 1000;
+      if (qGood > qBack) { qLv--; applyQ(); qSave(); qCool = 1.5; qGood = 0; qBack = Math.min(90, qBack * 2); qPrev = null; }   // 올렸다가 다시 느려지면 다음엔 더 오래 기다림
+    } else qGood = 0;
+  }
+  // 점검용: 진짜 장면 대신 정해 준 장면 간격을 넣어 판단만 시험(그래픽 칩이 없는 점검 크롬에서 '새 패드·30fps 패드'를 흉내)
+  window.__qSim = { on(b) { qSimOn = !!b; qWin.length = 0; qWinT = 0; qCool = 0; qHold = 0; }, feed(ms, n) { for (let i = 0; i < n; i++) qTick(ms); return window.__q(); }, set(lv) { qLv = lv; qPrev = null; qGood = 0; qBack = 8; qFloorT = 0; applyQ(); } };
+  window.__q = () => ({ lv: qLv, scale: QL[qLv], fx: QFX[qLv], w: cv.width, h: cv.height, mean: +qMean.toFixed(1), fixed: qFixed, hold: Math.max(0, Math.round(qHold - performance.now())), scene: scene && scene.n, warm: window.__warmMs });
+  const fpsEl = new URLSearchParams(location.search).get('fps') === '1' ? (() => { const d = document.createElement('div'); d.style.cssText = 'position:fixed;left:4px;bottom:4px;z-index:99999;background:rgba(0,0,0,.6);color:#0f0;font:12px monospace;padding:2px 6px;pointer-events:none'; document.body.appendChild(d); return d; })() : null;
+  let fpsN = 0, fpsT = 0;
 
   // ---------------- 입력 ----------------
   const input = { mx: 0, my: 0, jump: false, shoot: false, act: false, jumpP: false, actP: false, shootP: false, dashP: false, specialP: false, skipP: false,
@@ -276,11 +322,35 @@
   }
 
   // ---------------- 맵 ----------------
+  // 같은 배경(테마·길이·그림 배율)이면 다시 그리지 않음: 처음 화면의 하트 마을 → 「혼자 하기」 하트 마을에서 배경을 통째로 다시 만들어
+  // 그 순간 뚝 끊겼음(2026-11-26 선생님: "처음 들어가서만 렉"). 배경은 장면마다 mood 같은 값만 바뀌어서 같이 써도 됨. 낡은 패드 메모리를 생각해 하나만 기억
+  let sceneN = 0;
+  function buildScene(theme, w) {
+    if (scene && scene.theme === theme && scene.mapW === w && scene.rs === builtRS) return scene;
+    const sc = Scenes.build(theme, w); sc.rs = builtRS; sc.n = ++sceneN; return sc;
+  }
+  // 불러오는 화면 동안 미리 데우기: 그림 파일 풀기 + 처음 쓰는 그림(배경 조각·친구·투덜이·효과·글자)을 한 번씩 그려 둠
+  // (처음 그릴 때 그래픽 칩으로 올리고 글자 모양을 만드는 일이 게임 첫 몇 초에 몰려 끊겼음). 보이지 않게 그리고 지움
+  async function warmUp(imgs) {
+    try { await Promise.race([Promise.all(imgs.map((im) => (im && im.decode ? im.decode().catch(() => {}) : 0))), new Promise((r) => setTimeout(r, 3000))]); } catch (e) { /* 무시 */ }
+    const g = ctx, T0 = performance.now();
+    const step = (fn) => { try { fn(); } catch (e) { /* 미리 데우기는 실패해도 게임에는 상관없음 */ } };
+    g.save(); g.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0);
+    step(() => { for (let x = 0; x < map.w; x += W * 0.8) { scene.back(g, Math.min(x, Math.max(0, map.w - W)), 0, W); scene.front(g, x, 0, W); } if (scene.post) scene.post(g, 0, W, H); });
+    step(() => { for (const k of Object.keys(Art.CH)) Art.drawChar(g, Art.CH[k], 200, 420, { t: 0, facing: 1, scale: 0.6, moving: true, walk: 1, expr: 'joy' }); });
+    step(() => { for (const c of ['red', 'pink', 'blue', 'gold', 'mint']) Art.drawChar(g, Art.hero(c, null), 300, 420, { t: 0, facing: 1, scale: 0.6, moving: true, walk: 1, shoot: 1 }); });
+    step(() => { for (const ty of SIM.TYPES) { Art2.mon(g, { type: ty, st: 'idle', f: 1, z: 0, ph: 0 }, 400, 420, 0.8, 0); Art2.mon(g, { type: ty, st: 'down', f: 1, z: 0, ph: 0, happy: true }, 400, 420, 0.8, 0); } });
+    step(() => { for (const k of ['heart', 'spark', 'star', 'line', 'confetti', 'dust', 'smoke', 'feather', 'petal', 'leaf', 'chip', 'drop', 'bubble', 'note']) FX.burst(480, 420, 40, k, 2); FX.hit(480, 420, 40, true); FX.purify(500, 420, 0); FX.update(0.05); FX.draw(g, 0, dscale, W); FX.drawFloor(g, 0); FX.clear(); });
+    step(() => { for (const px of [12, 14, 15, 16, 17, 18, 20, 22, 24, 26, 30, 34]) { g.font = F(px); g.fillText('사랑둥이 하트 마을 퀘스트 게이지 대시 필살 0123456789 !?', 10, 300); } });
+    g.restore(); g.clearRect(0, 0, cv.width, cv.height);
+    return Math.round(performance.now() - T0);
+  }
   function loadMap(id, x, y) {
+    qCool = Math.max(qCool, 2); qWin.length = 0; qWinT = 0;   // 새 맵 배경을 그리는 동안의 긴 장면은 화질 판단에 넣지 않음
     const old = mapId;
     for (const p of pickups) if (p.kind !== 'heal') collect(p, true);
     mapId = id; map = Object.assign({ id }, SIM.MAPS[id]);
-    scene = Scenes.build(map.theme, map.w);
+    scene = buildScene(map.theme, map.w);
     const def = C.maps[id];
     ents = def.ents();
     pickups = []; shots = []; eshots = []; hazards = []; rings = []; ghosts = []; mons.clear(); remote.clear(); FX.clear();
@@ -985,8 +1055,7 @@
   // ---------------- 그리기 ----------------
   const PARADE = ['sarang', 'princess', 'prince', 'kong', 'sparkle', 'grandma', 'villager1', 'villager4'];
   function render() {
-    const k = viewScale * DPR;
-    ctx.setTransform(k, 0, 0, k, 0, 0);
+    ctx.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0);   // 자동 화질로 캔버스 크기가 바뀌어도 같은 그림
     ctx.imageSmoothingEnabled = true;
     if (Mini.active) { Mini.draw(ctx, W, H); return; }
     if (!scene) { ctx.fillStyle = '#2a1a40'; ctx.fillRect(0, 0, W, H); return; }
@@ -1527,7 +1596,9 @@
     else if (WHO[line.who]) { ch = Art.CH[WHO[line.who][0]]; name = WHO[line.who][1]; }
     const rightGap = touchUI && !portrait ? 150 : 24;
     const x = 24, w = W - x - rightGap, h = 140, y = H - h - 14;
-    ctx.save(); ctx.shadowColor = 'rgba(30,10,50,0.45)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 6;
+    // 그림자: 흐림(shadowBlur)은 큰 상자에서 낡은 패드가 매 장면 무겁게 칠함 → 겹친 반투명 상자 셋으로 비슷하게(2026-11-26 자동 화질)
+    ctx.save();
+    for (const [d, a] of [[10, 0.07], [7, 0.1], [4, 0.13]]) { Art.roundRect(ctx, x - d * 0.5, y + 6 - d * 0.3, w + d, h + d * 0.8, 22 + d * 0.5); ctx.fillStyle = `rgba(30,10,50,${a})`; ctx.fill(); }
     Art.roundRect(ctx, x, y, w, h, 22);
     const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, 'rgba(255,252,255,0.98)'); g.addColorStop(1, 'rgba(255,232,244,0.98)');
     ctx.fillStyle = g; ctx.fill(); ctx.restore();
@@ -1662,6 +1733,7 @@
   window.PLAZA_DIFF_GAME = 'sarang';
   function startGame(o) {
     Sound.init();
+    qHold = performance.now() + 3000; qWin.length = 0; qWinT = 0;
     gameDiff = o.cont && o.cont.df >= 1 && o.cont.df <= 4 ? o.cont.df : U.diff();   // 난이도(처음 화면 단추): 학년 배율 × 난이도 배율. 이어하기는 저장한 판의 난이도 그대로(마지막 보스만 바꿔서 깨지 않게, 검토)
     const gk = U.GRADE_K[U.grade()] || U.GRADE_K[4], dk = U.DIFF_K[gameDiff] || U.DIFF_K[3];
     gradeK = { hp: gk.hp * dk.hp, dmg: gk.dmg * dk.dmg }; SIM.setHpK(gradeK.hp);
@@ -1801,12 +1873,20 @@
       im.src = `assets/${name}.webp`;
     });
   }
-  let last = performance.now();
+  let last = performance.now(), dtAvg = 1 / 60;
   function frame(now) {
-    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    const raw = now - last; last = now;
+    if (!qSimOn) qTick(raw);
+    let dt = Math.min(0.05, raw / 1000);
+    dtAvg += (dt - dtAvg) * 0.1;
+    if (Math.abs(dt - dtAvg) < 0.004) dt = dtAvg;   // 장면 간격의 작은 떨림(±4ms)은 평균으로: 움직임이 고르게
+    if (fpsEl) { fpsN++; fpsT += raw; if (fpsT > 500) { const q = window.__q(); fpsEl.textContent = `${(fpsN * 1000 / fpsT).toFixed(0)}fps · 화질 ${q.lv} (${q.w}×${q.h}) · ${q.mean}ms`; fpsN = 0; fpsT = 0; } }
     try { update(dt); render(); } catch (err) { console.error(err); }
     requestAnimationFrame(frame);
   }
+  // 소리 장치(AudioContext) 만들기가 낡은 패드에서 길어서(점검 크롬 45ms) 「혼자 하기」 순간이 아니라 처음 화면을 처음 누를 때 미리(누름 안에서만 소리가 허락됨)
+  const earlySound = () => { removeEventListener('pointerdown', earlySound, true); removeEventListener('keydown', earlySound, true); if (!Sound.muted) try { Sound.init(); } catch (e) { /* 무시 */ } };
+  addEventListener('pointerdown', earlySound, true); addEventListener('keydown', earlySound, true);
   async function boot() {
     layout();
     addEventListener('resize', () => { clearTimeout(boot.rt); boot.rt = setTimeout(layout, 120); });
@@ -1818,7 +1898,8 @@
     document.querySelectorAll('#colors img').forEach((im) => { const k = { red: 'heart_blank_red', pink: 'heart_pink', blue: 'heart_blue', gold: 'heart_gold', mint: 'heart_mint' }[im.dataset.c]; if (m[k]) im.src = m[k].src; });
     await fontWait.catch(() => {});
     Q = C.newQ();
-    map = Object.assign({ id: 'heart' }, SIM.MAPS.heart); scene = Scenes.build(map.theme, map.w);
+    map = Object.assign({ id: 'heart' }, SIM.MAPS.heart); scene = buildScene(map.theme, map.w);
+    window.__warmMs = await warmUp(Object.values(m));
     $('loading').classList.add('hidden');
     showTitle();
     requestAnimationFrame(frame);

@@ -6,7 +6,7 @@ const FX = (() => {
   const R = (a, b) => a + Math.random() * (b - a);
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
   let parts = [], floor = [], screen = [], afters = [];
-  const MAX = 700;
+  let MAX = 700, K = 1;   // 자동 화질(game.js)이 낮추면 효과 알갱이 수·최대 개수를 줄임(setK)
   const PHYS = {
     heart: [260, 0.6], spark: [180, 1.2], star: [120, 1.0], line: [0, 7], confetti: [90, 1.4, 1], dust: [-20, 3], smoke: [-34, 2.6],
     feather: [36, 2.2, 1], petal: [46, 2, 1], leaf: [56, 2, 1], paper: [64, 2, 1], chip: [560, 0.4], drop: [640, 0.2], bubble: [-60, 1],
@@ -17,6 +17,7 @@ const FX = (() => {
   function add(list, p) { p.t = 0; list.push(p); if (list === parts && parts.length > MAX) parts.splice(0, parts.length - MAX); return p; }
 
   function burst(x, y, z, kind, n, o = {}) {
+    if (K < 1 && n > 1) n = Math.max(1, Math.round(n * K));
     const ph = PHYS[kind] || [200, 1];
     for (let i = 0; i < n; i++) {
       const a = o.dir != null ? o.dir + R(-0.6, 0.6) : Math.random() * TAU, sp = (o.speed || 120) * (0.4 + Math.random() * 0.8);
@@ -143,6 +144,7 @@ const FX = (() => {
     for (const p of screen) { const k = p.t / p.life; c.globalAlpha = p.a * (1 - k); c.fillStyle = p.col; c.fillRect(0, 0, W, H); }
     c.globalAlpha = 1;
   }
-  return { burst, text, word, glow, shock, ring, beam, scorch, dust, poof, trail, after, flash, hit, purify, update, drawFloor, draw, drawScreen,
+  function setK(k) { K = k; MAX = Math.round(700 * k); }
+  return { setK, burst, text, word, glow, shock, ring, beam, scorch, dust, poof, trail, after, flash, hit, purify, update, drawFloor, draw, drawScreen,
     clear() { parts = []; floor = []; afters = []; }, get count() { return parts.length; } };
 })();
