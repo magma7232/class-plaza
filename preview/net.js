@@ -510,6 +510,7 @@
 
   // ---------------------------------------------------------------- 서버에서 온 편지
   NET.onCloud = function (m) {
+    if (window.PLAZA_COIN) { try { PLAZA_COIN.onCloud(m); } catch (e) {} } // 사과 코인(coin.js): hi·coin·coinon·coins
     switch (m.t) {
       case "err":
         NET.cloud.close();

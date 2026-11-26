@@ -327,7 +327,7 @@
     var card = document.getElementById("card");
     if (!card || !card.hidden) return false;
     cAsk = true;
-    G.fns.sa(CASTLE.emoji + " " + CASTLE.name, "들어갈까요?", "<div>" + CASTLE.goal + "</div>" + lockNote(CASTLE), [
+    G.fns.sa(CASTLE.emoji + " " + CASTLE.name, "들어갈까요?", "<div>" + CASTLE.goal + "</div>" + lockNote(CASTLE) + coinNote(CASTLE), [
       {
         label: "아니요",
         fn: function () {
@@ -337,16 +337,19 @@
         },
       },
       {
-        label: "🚪 들어가기",
+        label: coinLabel(CASTLE),
         main: true,
         fn: function () {
           cAsk = false;
+          cSkip = true; // 코인이 없어 못 들어가면 멀어졌다 올 때까지 다시 안 물음
           G.fns.$i();
-          try {
-            G.ht.whoosh();
-          } catch (e) {}
-          warp(CASTLE, function () {
-            window.PLAZA_GAMES.go(CASTLE);
+          payGo(CASTLE, function () {
+            try {
+              G.ht.whoosh();
+            } catch (e) {}
+            warp(CASTLE, function () {
+              window.PLAZA_GAMES.go(CASTLE);
+            });
           });
         },
       },
@@ -386,6 +389,14 @@
   function isTeacher() { try { return window.NET && NET.online ? NET.role === "teacher" : new URLSearchParams(location.search).has("teacher"); } catch (e) { return false; } }
   function wOpen(T) { return !T || !T.wid || !window.PLAZA_WORLDS || isTeacher() || window.PLAZA_WORLDS.isOpen(T.wid); }
   function lockNote(T) { return T && T.wid && window.PLAZA_WORLDS && isTeacher() && !window.PLAZA_WORLDS.isOpen(T.wid) ? "<div style='margin-top:6px;font-size:13px;color:#7048e8;font-weight:800'>🔒 학생에게는 아직 잠긴 월드예요(선생님은 들어갈 수 있어요)</div>" : ""; }
+  // 사과 코인(2026-11-26, coin.js): 들어갈 때 🪙1. 선생님·코인 입장 끔·방금 낸 게임은 그냥(PLAZA_COIN.entry)
+  function coinNote(T) { try { return window.PLAZA_COIN ? PLAZA_COIN.note(T) : ""; } catch (e) { return ""; } }
+  function coinLabel(T) { try { return window.PLAZA_COIN ? PLAZA_COIN.label(T) : "🚪 들어가기"; } catch (e) { return "🚪 들어가기"; } }
+  // 코인을 내면 go(), 코인이 없으면 문제 카드(coin.js가 띄움)
+  function payGo(T, go, no) {
+    if (!window.PLAZA_COIN) return go();
+    try { PLAZA_COIN.pay(T, function (ok) { if (ok) go(); else if (no) no(); }); } catch (e) { go(); }
+  }
   // 잠긴 문 사슬을 붙일 자리: 문 소용돌이 판(m)과 그 안의 가운데·크기(판 좌표)
   function hostOf(T) {
     if (!T) return null;
@@ -491,7 +502,7 @@
     // 소원 우물: 원래 있던 '소원 빌기'와 같은 자리라 두 가지를 한 창에서 고르게(검토: 소원 빌러 온 아이에게 게임 창만 떴다)
     if (best.wish)
       btns.push({
-        label: "🪙 소원 빌기",
+        label: "🌠 소원 빌기",
         fn: function () {
           dSkip = dAsk;
           dAsk = null;
@@ -500,19 +511,22 @@
           if (a) a.click();
         },
       });
-    G.fns.sa(best.emoji + " " + best.name, "들어갈까요?", "<div>" + best.goal + "</div>" + lockNote(best), btns.concat([
+    G.fns.sa(best.emoji + " " + best.name, "들어갈까요?", "<div>" + best.goal + "</div>" + lockNote(best) + coinNote(best), btns.concat([
       {
-        label: "🚪 들어가기",
+        label: coinLabel(best),
         main: true,
         fn: function () {
           var T = dAsk;
           dAsk = null;
+          dSkip = T;
           G.fns.$i();
-          try {
-            G.ht.whoosh();
-          } catch (e) {}
-          warp(T, function () {
-            window.PLAZA_GAMES.go(T);
+          payGo(T, function () {
+            try {
+              G.ht.whoosh();
+            } catch (e) {}
+            warp(T, function () {
+              window.PLAZA_GAMES.go(T);
+            });
           });
         },
       },
@@ -535,6 +549,7 @@
     hostOf: hostOf,
     isOpen: wOpen,
     isTeacher: isTeacher,
+    payGo: payGo, // 사과 코인(coin.js)
     // 선생님 순간이동(2026-11-26, teacher.js 🧭): 문 바로 앞에 서서 "들어갈까요?"가 뜨게. what = 'center' | 'castle' | 문 key(pyramid…) | 'portal:번호'
     teleport: function (what) {
       var N = window.NET, G = N && N.G;
@@ -645,7 +660,7 @@
       ask = best;
       askOpen = best.open;
       best.open = 1;
-      G.fns.sa(best.emoji + " " + best.name, "들어갈까요?", "<div>" + best.goal + "</div>" + lockNote(best), [
+      G.fns.sa(best.emoji + " " + best.name, "들어갈까요?", "<div>" + best.goal + "</div>" + lockNote(best) + coinNote(best), [
         {
           label: "아니요",
           fn: function () {
@@ -654,18 +669,22 @@
           },
         },
         {
-          label: "🚪 들어가기",
+          label: coinLabel(best),
           main: true,
           fn: function () {
             var T = ask;
             ask = null;
+            skip = T;
+            var o0 = askOpen;
             G.fns.$i();
-            try {
-              G.ht.whoosh();
-            } catch (e) {}
-            warp(T, function () {
-              window.PLAZA_GAMES.go(T);
-            });
+            payGo(T, function () {
+              try {
+                G.ht.whoosh();
+              } catch (e) {}
+              warp(T, function () {
+                window.PLAZA_GAMES.go(T);
+              });
+            }, function () { if (T) T.open = o0; }); // 못 들어가면 문 빛을 원래대로
           },
         },
       ]);

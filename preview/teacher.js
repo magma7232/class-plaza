@@ -52,6 +52,8 @@
     var c = document.getElementById("gradeChip"), r = c && c.getClientRects().length ? c.getBoundingClientRect() : null;
     var cnt = document.getElementById("count"), r2 = cnt && cnt.getClientRects().length ? cnt.getBoundingClientRect() : null;
     var x = Math.round(r2 ? r2.left : 10), y = Math.round((r2 ? Math.max(r2.bottom, r ? r.bottom : 0) : r ? r.bottom : 96) + 6);
+    var cb = document.getElementById("coinBar"), r3 = cb && !cb.hidden && cb.getClientRects().length ? cb.getBoundingClientRect() : null; // 사과 코인 줄(coin.js)이 🍎 아래에 있으면 그 아래로
+    if (r3) y = Math.max(y, Math.round(r3.bottom + 6));
     if (bar.style.left !== x + "px") bar.style.left = x + "px";
     if (bar.style.top !== y + "px") bar.style.top = y + "px";
   }
