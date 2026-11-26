@@ -170,7 +170,7 @@ input{font:inherit;outline:none}
 .wd-empty{font-size:15px;color:#5a6a80;background:#fff7e8;border-radius:14px;padding:10px 12px;margin:4px 0 10px;line-height:1.45}
 .wd-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
 .wd-item{border:3px solid #e3ebf5;border-radius:16px;background:#f7faff;padding:6px 4px 7px;display:flex;flex-direction:column;align-items:center;gap:2px;touch-action:manipulation}
-.wd-item .wd-emo{font-size:34px;line-height:1.15}.wd-item .wd-img{width:52px;height:42px;object-fit:contain;display:block;margin:1px 0}.gf-emo img{height:120px;max-width:100%;object-fit:contain}.wd-item .wd-nm{font-size:13px;font-weight:800;color:#2b3a4f;line-height:1.2;text-align:center;word-break:keep-all}
+.wd-item .wd-emo{font-size:34px;line-height:1.15}.wd-item .wd-img{width:52px;height:42px;object-fit:contain;display:block;margin:1px 0}.gf-emo img{height:120px;max-width:100%;object-fit:contain}.wd-item .wd-img.ii{width:64px;height:56px}.gf-emo .ii-live{display:block;margin:0 auto;max-width:100%;height:auto!important;aspect-ratio:1}.gf-emo{min-height:120px}.wd-item .wd-nm{font-size:13px;font-weight:800;color:#2b3a4f;line-height:1.2;text-align:center;word-break:keep-all}
 .wd-item.r2{border-color:#bcd6ff}.wd-item.r3{border-color:#ffd66b;background:#fffaf0}
 .wd-item.on{border-color:#2f8cff;background:#e3efff;box-shadow:0 0 0 3px rgba(47,140,255,.3)}
 .wd-item.lock{opacity:.55;background:#f1f3f6;border-style:dashed}.wd-item.lock .wd-nm{color:#8a96a8}
@@ -2821,8 +2821,105 @@ window.makeChar3D = function (K, D, opt) {
       t.make(m, Dm, S);
       // 손에 드는 것: 쥔 자리를 가운데로 조금 크게(2026-11-25 선생님: "손에 든 것이 좀 작다, 약간씩만 키우면") — 아이템마다 hs로 바꿈
       if (t.slot === 'hand') { var hk = t.hs === undefined ? 1.2 : t.hs, hp = Dm.hand; if (hk !== 1) for (var q = 0; q < m.p.length; q += 3) for (var c3 = 0; c3 < 3; c3++) m.p[q + c3] = hp[c3] + (m.p[q + c3] - hp[c3]) * hk; }
-      if (t.holes) { wrapHead(m, Dm, 0); earHoles(m, Dm, 0, t.holes === true ? null : t.holes); }   // 머리에 덮어쓰는 모자: 머리가 뚫고 나오지 않게 감싸고, 귀가 뚫고 나온 자리에 테두리
+      if (t.holes) { wrapHead(m, Dm, 0); o && o.noHoles || earHoles(m, Dm, 0, t.holes === true ? null : t.holes); }   // noHoles: 아이템만 따로 그릴 때(귀가 없어 고리만 떠 보임)   // 머리에 덮어쓰는 모자: 머리가 뚫고 나오지 않게 감싸고, 귀가 뚫고 나온 자리에 테두리
       return m.out(t.bone, t.slot === 'hand');
+    }
+  };
+})();
+
+/* 아이템 그림(2026-11-26 선생님: "선물 상자를 열었을 때 아이템 화질이 너무 떨어져") — 하트 특공대용 작은 2D 그림을 크게 늘려 보여서
+ * 뭉개지고 계단이 보였다 → 그 자리에서 3D 아이템(items3d.js)을 기기 화소(devicePixelRatio)만큼 크게 그린다. three.js 없이 작은 WebGL1 하나.
+ *  ITEMICON.live(el, id, A, body, px)   el 안에 캔버스를 넣고 천천히 돌림(창이 닫히면 el이 화면에서 빠져 저절로 멈춤) → stop 함수
+ *  ITEMICON.thumb(id, A, body, px, cb)  한 번 그려 dataURL(옷장 칸) — 같은 동물·아이템은 기억
+ * GL 판 하나를 같이 쓰고 2D 캔버스로 옮겨 그린다(낡은 패드에서 WebGL 판을 여러 개 만들지 않게)
+ */
+(function () {
+  var gl = null, cv = null, prog = null, loc = {}, U32 = null, cache = {}, meshes = {}, MAXPX = 520;
+  function init() {
+    if (gl) return gl;
+    try {
+      cv = document.createElement('canvas'); cv.width = cv.height = 256;
+      gl = cv.getContext('webgl', { antialias: true, alpha: true, premultipliedAlpha: false, preserveDrawingBuffer: true }) || cv.getContext('experimental-webgl');
+    } catch (e) { gl = null; }
+    if (!gl) return null;
+    U32 = gl.getExtension('OES_element_index_uint');
+    var vs = 'attribute vec3 p;attribute vec3 c;attribute vec3 n;uniform mat3 R;uniform vec3 C;uniform float S;varying vec3 vc;varying vec3 vn;' +
+      'void main(){vec3 q=R*(p-C)*S;vc=c;vn=R*n;gl_Position=vec4(q.x,q.y,-q.z*0.5,1.0);}';
+    var fs = 'precision mediump float;varying vec3 vc;varying vec3 vn;void main(){vec3 L=normalize(vec3(0.35,0.55,0.75));float d=max(dot(normalize(vn),L),0.0);' +
+      'gl_FragColor=vec4(min(vc*(0.8+0.32*d)+vec3(0.05)*pow(d,8.0),1.0),1.0);}';
+    function sh(t, s) { var o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); return o; }
+    prog = gl.createProgram(); gl.attachShader(prog, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { gl = null; return null; }
+    ['p', 'c', 'n'].forEach(function (k) { loc[k] = gl.getAttribLocation(prog, k); });
+    ['R', 'C', 'S'].forEach(function (k) { loc[k] = gl.getUniformLocation(prog, k); });
+    cv.addEventListener('webglcontextlost', function (e) { e.preventDefault(); gl = null; meshes = {}; });
+    return gl;
+  }
+  // 아이템 모양 → GL 버퍼(동물·아이템마다 기억, 8개까지)
+  var order = [];
+  function mesh(id, A, body, key) {
+    if (meshes[key]) return meshes[key];
+    if (!window.ITEMS3D) return null;
+    var g = null; try { g = window.ITEMS3D.build(id, A || {}, { body: body || null, noHoles: true }); } catch (e) { g = null; }
+    if (!g || !g.verts) return null;
+    if (g.idx instanceof Uint32Array && !U32) return null;
+    var lo = [9, 9, 9], hi = [-9, -9, -9], P = g.pos, n = g.verts;
+    for (var v = 0; v < n; v++) for (var k = 0; k < 3; k++) { var x = P[v * 3 + k]; if (x < lo[k]) lo[k] = x; if (x > hi[k]) hi[k] = x; }
+    var c = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2], r = 1e-4;
+    for (v = 0; v < n; v++) r = Math.max(r, Math.hypot(P[v * 3] - c[0], P[v * 3 + 1] - c[1], P[v * 3 + 2] - c[2]));
+    function buf(T, d) { var b = gl.createBuffer(); gl.bindBuffer(T, b); gl.bufferData(T, d, gl.STATIC_DRAW); return b; }
+    var M = { p: buf(gl.ARRAY_BUFFER, g.pos), c: buf(gl.ARRAY_BUFFER, g.col), n: buf(gl.ARRAY_BUFFER, g.nrm), i: buf(gl.ELEMENT_ARRAY_BUFFER, g.idx), cnt: g.idx.length, u32: g.idx instanceof Uint32Array, C: c, r: r };
+    meshes[key] = M; order.push(key);
+    if (order.length > 8) { var ok = order.shift(), old = meshes[ok]; if (old) ['p', 'c', 'n', 'i'].forEach(function (k) { gl.deleteBuffer(old[k]); }); delete meshes[ok]; }
+    return M;
+  }
+  // 한 장 그리기: yaw(라디안) 방향에서 조금 위(pitch)로 내려다본 모습
+  function render(M, px, yaw, pitch) {
+    if (cv.width !== px) { cv.width = cv.height = px; }
+    gl.viewport(0, 0, px, px); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.enable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE); gl.useProgram(prog);
+    // q = Rx(위에서 내려다보기 0.32) · Ry(yaw) · p (열 우선으로 넘김). +z가 보는 사람 쪽(동물 앞), yaw 0 = 앞모습
+    var cy = Math.cos(yaw), sy = Math.sin(yaw), a = pitch || 0.32, ca = Math.cos(a), sa = Math.sin(a);
+    gl.uniformMatrix3fv(loc.R, false, new Float32Array([cy, sa * sy, -ca * sy, 0, ca, sa, sy, -sa * cy, ca * cy]));
+    gl.uniform3fv(loc.C, M.C); gl.uniform1f(loc.S, 0.9 / M.r);
+    [['p', M.p], ['c', M.c], ['n', M.n]].forEach(function (a) { gl.bindBuffer(gl.ARRAY_BUFFER, a[1]); gl.enableVertexAttribArray(loc[a[0]]); gl.vertexAttribPointer(loc[a[0]], 3, gl.FLOAT, false, 0, 0); });
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, M.i); gl.drawElements(gl.TRIANGLES, M.cnt, M.u32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0);
+  }
+  // GL 그림을 2D 캔버스로(테두리처럼 옅은 그림자)
+  function blit(ctx, px) {
+    ctx.clearRect(0, 0, px, px);
+    ctx.save(); ctx.shadowColor = 'rgba(70,45,30,.55)'; ctx.shadowBlur = Math.max(2, px / 90); ctx.drawImage(cv, 0, 0); ctx.restore();
+  }
+  function dpx(css) { return Math.min(MAXPX, Math.round(css * Math.min(2.5, Math.max(1, window.devicePixelRatio || 1)))); }
+  window.ITEMICON = {
+    ok: function () { return !!init(); },
+    live: function (el, id, A, body, css, key) {
+      if (!init()) return null;
+      var px = dpx(css || 200), M = mesh(id, A, body, key || id);
+      if (!M) return null;
+      var c2 = document.createElement('canvas'); c2.width = c2.height = px; c2.className = 'ii-live';
+      c2.style.width = c2.style.height = (css || 200) + 'px';
+      var ctx = c2.getContext('2d'), t0 = performance.now(), run = true;
+      el.innerHTML = ''; el.appendChild(c2);
+      (function f(now) {
+        if (!run) return;
+        if (!c2.isConnected || !el.getClientRects().length) { run = false; return; }   // 창이 닫히면 멈춤
+        if (!gl || !meshes[key || id]) { run = false; return; }
+        render(M, px, 0.55 + Math.sin(((now || t0) - t0) / 1000 * 0.9) * 0.75); blit(ctx, px);   // 천천히 좌우로 돌아봄(뒤통수까지 돌면 무엇인지 헷갈려서 ±43°)
+        requestAnimationFrame(f);
+      })(t0);
+      return function () { run = false; };
+    },
+    thumb: function (id, A, body, css, key) {
+      var k = (key || id) + '@' + css;
+      if (cache[k]) return cache[k];
+      if (!init()) return null;
+      var px = dpx(css), M = mesh(id, A, body, key || id);
+      if (!M) return null;
+      render(M, px, 0.55, 0.55);   // 옷장 칸은 조금 더 위에서(화관·왕관 같은 고리가 막대처럼 안 보이게)
+      var c2 = document.createElement('canvas'); c2.width = c2.height = px; blit(c2.getContext('2d'), px);
+      try { cache[k] = c2.toDataURL('image/png'); } catch (e) { return null; }
+      return cache[k];
     }
   };
 })();
@@ -7200,6 +7297,19 @@ try {
         let sc = document.createElement('script'); sc.src = 'chars/' + id + '_2d.js' + ver(id);
         sc.onload = () => { wd && !wd.hidden && openWd(); gift && !gift.hidden && giftId && CAT[giftId] && (gift.querySelector(".gf-emo").innerHTML = itemIcon(giftId, CAT[giftId])) };
         document.head.appendChild(sc) },
+      // 3D 아이템 그림(item_icon.js): 내 동물 치수로 만든 모양. 동물을 안 골랐으면 곰 치수 대신 기본값(몸에 입는 옷은 몸이 있어야 해서 2D 그림 그대로)
+      iiArgs = () => { let P = (window.CHAR_PACKS || {})[cur]; return P && window.ITEMS3D ? [P.anchors || {}, ITEMS3D.bodyFromPack(P), cur] : [{}, null, "none"] },
+      // 옷장 칸: 몸에 안 입는 아이템(머리·안경·목·등·손)만 한 장면에 하나씩 3D로 바꿔 그림(몸에 입는 옷은 만들기가 무거워 낡은 패드에서 옷장이 멈칫해서 2D 그림)
+      iiQ = [], iiRun = !1,
+      iiWd = () => {
+        if (!window.ITEMICON || !wd) return;
+        iiQ = [...wd.querySelectorAll(".wd-item[data-id] .wd-img")].map(im => [im, im.closest(".wd-item").dataset.id]).filter(([, i]) => CAT[i] && !CAT[i].skin);
+        if (iiRun) return; iiRun = !0;
+        let step = () => { let q = iiQ.shift(); if (!q) { iiRun = !1; return } let [im, i] = q, a = iiArgs();
+          if (im.isConnected) { let u = ITEMICON.thumb(i, a[0], a[1], 64, a[2] + ":" + i); u && (im.src = u, im.classList.add("ii")) }
+          requestAnimationFrame(step) };
+        requestAnimationFrame(step)
+      },
       itemIcon = (i, c) => { let D = (window.CHAR2D || {})[icon2d], L = D && D.items && D.items[i]; return L ? '<img class="wd-img" alt="" src="' + L.img + '">' : '<span class="wd-emo">' + c.emoji + '</span>' },
       label = id => { let c = info(id); return c ? c.emoji + " " + c.name : id === "orig" ? "🙂 원래" : "🐾 캐릭터" },
       btn = () => { bb && (bb.textContent = lastLoc === "room" ? "👕 옷장" : label(cur)) },
@@ -7278,7 +7388,7 @@ try {
           box.appendChild(b)
         });
         o.length || body.insertAdjacentHTML("afterbegin", '<div class="wd-empty">아직 아이템이 없어요. 포털 게임을 하고 오면 선물 상자를 찾을 수 있어요!</div>');
-        wd.hidden = !1; zoomTo(!0); iconsFor()
+        wd.hidden = !1; zoomTo(!0); iconsFor(); iiWd()
       },
       closeWd = () => { wd && !wd.hidden && (wd.hidden = !0, zoomTo(!1)) },
       // 뽑기: 30%(처음 한 번은 꼭) → 보통 70 · 희귀 25 · 전설 5, 아직 없는 것부터. 옷 아이템과 집 소품이 같이 들어 있다(처음 한 번은 옷)
@@ -7306,7 +7416,9 @@ try {
         b.onclick = () => {
           if (stage === 0) {
             stage = 1; bx.className = "gf-box shake"; snd("whoosh");
-            setTimeout(() => { gift.querySelector(".gf-emo").innerHTML = icon(); bx.hidden = !0; it.hidden = !1; it.className = "gf-item pop"; tip.hidden = !1; b.textContent = "좋아요!"; stage = 2; snd("pop") }, 750)
+            setTimeout(() => { let em = gift.querySelector(".gf-emo"); em.innerHTML = icon(); bx.hidden = !0; it.hidden = !1; it.className = "gf-item pop"; tip.hidden = !1; b.textContent = "좋아요!"; stage = 2; snd("pop");
+              // 2D 그림을 크게 늘리면 뭉개져서(선생님 2026-11-26) 튀어나오는 움직임 뒤에 3D로 크게 그려 천천히 돌림(몸에 입는 옷은 내 동물 몸으로 만듦)
+              !HI[id] && window.ITEMICON && setTimeout(() => { if (gift.hidden || giftId !== id) return; let a = iiArgs(); window.ITEMICON.live(em, id, a[0], a[1], 190, a[2] + ":" + id) }, 480) }, 750)
           } else if (stage === 2) { gift.hidden = !0; giftId = null; then && then() }
         }
       },
