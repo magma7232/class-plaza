@@ -133,3 +133,42 @@
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount);
   else mount();
 })();
+
+/* 전체 화면(2026-11-26, fullscreen.js): 광장도 손가락으로 처음 누를 때 전체 화면 + 오른쪽 위 줄에 ⛶ 켜기·끄기 단추(🎵 옆) */
+(function () {
+  try {
+    var me = document.currentScript;
+    if (!me || !me.src) return;
+    var IN = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="display:block;margin:auto"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
+    var OUT = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="display:block;margin:auto"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>';
+    function button() {
+      var F = window.PLAZA_FS;
+      if (!F || !F.supported || document.getElementById("bFS")) return;
+      var row = document.getElementById("topR");
+      if (!row) { setTimeout(button, 500); return; }
+      var b = document.createElement("button");
+      b.id = "bFS"; b.className = "card plazaFsBtn"; b.type = "button";
+      var ref = document.getElementById("bTeacher");
+      var w = (document.getElementById("bSound") || {}).offsetWidth || 50;
+      b.style.cssText = "width:" + w + "px;padding-left:0;padding-right:0";
+      var ic = function () { var on = F.on(); b.innerHTML = on ? OUT : IN; b.setAttribute("aria-label", on ? "전체 화면 끄기" : "전체 화면"); b.title = b.getAttribute("aria-label"); };
+      ic(); F.sub(ic);
+      b.addEventListener("click", function (e) { e.preventDefault(); e.stopPropagation(); F.toggle(); });
+      ["pointerdown", "touchstart", "mousedown"].forEach(function (t) { b.addEventListener(t, function (e) { e.stopPropagation(); }, { passive: true }); });
+      if (ref && ref.parentNode === row) row.insertBefore(b, ref); else row.appendChild(b);
+      // 좁은 세로 휴대폰에서 줄이 모자라 「캐릭터」「선생님」 글자가 두 줄로 꺾이면 ⛶는 빠짐(첫 터치 전체 화면은 그대로)
+      var tight = function () {
+        b.style.display = "";
+        var r = row.getBoundingClientRect(), bad = r.left < 6;   // 줄이 왼쪽 위 칸(사과·학년)까지 밀려 나오면
+        [].forEach.call(row.children, function (c) { if (c.scrollWidth > c.clientWidth + 1 || c.scrollHeight > c.clientHeight + 1) bad = true; });   // 글자가 넘침(높이 고정 단추)
+        if (bad) b.style.display = "none";
+      };
+      tight(); addEventListener("resize", function () { setTimeout(tight, 80); }); setTimeout(tight, 1500);
+    }
+    if (window.PLAZA_FS) { button(); return; }
+    var s = document.createElement("script");
+    s.src = new URL("fullscreen.js", me.src).href;
+    s.onload = button;
+    (document.head || document.documentElement).appendChild(s);
+  } catch (e) {}
+})();

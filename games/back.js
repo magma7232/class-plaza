@@ -291,18 +291,43 @@
     "z-index:2147483000;font:800 15px/1 system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;" +
     "padding:9px 14px;border-radius:999px;border:2px solid rgba(255,255,255,.9);background:rgba(47,140,255,.92);color:#fff;" +
     "box-shadow:0 3px 10px rgba(0,0,0,.25);cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;white-space:nowrap}" +
-    "#plazaBack.ask{background:rgba(214,51,108,.95)}";
+    "#plazaBack.ask{background:rgba(214,51,108,.95)}" +
+    "#plazaFS{position:fixed;z-index:2147483000;width:38px;height:38px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:50%;" +
+    "border:2px solid rgba(255,255,255,.9);background:rgba(47,140,255,.92);color:#fff;box-shadow:0 3px 10px rgba(0,0,0,.25);cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}";
   document.head.appendChild(css);
   var b = document.createElement("button");
   b.id = "plazaBack";
   b.type = "button";
   b.textContent = "🏠 광장으로";
+  // 전체 화면 켜기·끄기 단추(2026-11-26, fullscreen.js): '광장으로' 단추 바로 옆에 붙어서 함께 비켜 앉음
+  var fsSide = /right/.test(pos) ? "left" : "right", fs = null;
+  var FS_IN = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
+  var FS_OUT = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>';
+  function fsIcon() { if (fs) { var on = window.PLAZA_FS && window.PLAZA_FS.on(); fs.innerHTML = on ? FS_OUT : FS_IN; fs.setAttribute("aria-label", on ? "전체 화면 끄기" : "전체 화면"); } }
+  function makeFs() {
+    if (fs || !window.PLAZA_FS || !window.PLAZA_FS.supported) return;
+    fs = document.createElement("button");
+    fs.id = "plazaFS"; fs.type = "button"; fs.className = "plazaFsBtn";
+    fs.addEventListener("click", function (e) { e.preventDefault(); e.stopPropagation(); window.PLAZA_FS.toggle(); });
+    ["pointerdown", "touchstart", "mousedown"].forEach(function (t) { fs.addEventListener(t, function (e) { e.stopPropagation(); }, { passive: true }); });
+    window.PLAZA_FS.sub(function () { fsIcon(); setTimeout(dodge, 150); });
+    fsIcon();
+    onBody(function () { document.body.appendChild(fs); dodge(); });
+  }
+  function placeFs() {
+    if (!fs || !fs.isConnected) return;
+    var r = b.getBoundingClientRect();
+    fs.style.top = Math.round(r.top + (r.height - 38) / 2) + "px";
+    fs.style.left = Math.round(fsSide === "right" ? r.right + 6 : r.left - 6 - 38) + "px";
+  }
+  window.addEventListener("plaza-fs-ready", makeFs);
   var armed = 0,
     timer = null;
   function disarm() {
     armed = 0;
     b.classList.remove("ask");
     b.textContent = "🏠 광장으로";
+    if (fs) { fs.style.visibility = ""; placeFs(); }
   }
   b.addEventListener("click", function (e) {
     e.preventDefault();
@@ -311,6 +336,7 @@
       armed = 1;
       b.classList.add("ask");
       b.textContent = "한 번 더 누르면 광장으로";
+      if (fs) fs.style.visibility = "hidden";   // 길어진 단추가 ⛶ 자리를 덮음 → 그동안 ⛶는 숨김(검토: 두 번째 누름이 ⛶에 맞을 뻔)
       clearTimeout(timer);
       timer = setTimeout(disarm, 3000);
       return;
@@ -337,26 +363,28 @@
     var x = Math.min(Math.max(q.left + q.width / 2, 0), innerWidth - 1), y = Math.min(Math.max(q.top + q.height / 2, 0), innerHeight - 1);
     var list = document.elementsFromPoint(x, y);
     for (var i = 0; i < list.length; i++) {
-      if (list[i] === b || b.contains(list[i])) continue;   // '광장으로' 단추 자신은 건너뛰고 그 밑에서 가장 위에 있는 것
+      if (list[i] === b || b.contains(list[i]) || (fs && list[i] === fs) || (fs && fs.contains(list[i]))) continue;   // '광장으로' 단추 자신은 건너뛰고 그 밑에서 가장 위에 있는 것
       return list[i] === el || el.contains(list[i]);
     }
     return false;
   }
   function dodge() {
+    placeFs();
     if (!b || !b.isConnected || armed) return;
     var r0 = b.getBoundingClientRect();
+    var fw = fs && fs.isConnected ? 44 : 0;   // ⛶ 단추 자리까지 함께 비킴
     // 퀴즈 카드처럼 이 단추보다 위에 덮인 판이 있으면 그동안은 자리를 그대로 둬요(덮인 동안 게임 단추가 '안 보임'으로 재져서 단추 위로 돌아오던 것)
     if (document.elementFromPoint) {
       var top = document.elementFromPoint(Math.min(Math.max(r0.left + r0.width / 2, 0), innerWidth - 1), Math.min(Math.max(r0.top + r0.height / 2, 0), innerHeight - 1));
       if (top && top !== b && !b.contains(top)) return;
     }
-    var cur = parseFloat(up ? b.style.marginBottom : b.style.marginTop) || 0, base = { l: r0.left, r: r0.right, t: r0.top + (up ? cur : -cur), b: r0.bottom + (up ? cur : -cur) };
+    var cur = parseFloat(up ? b.style.marginBottom : b.style.marginTop) || 0, base = { l: r0.left - (fsSide === "left" ? fw : 0), r: r0.right + (fsSide === "right" ? fw : 0), t: r0.top + (up ? cur : -cur), b: r0.bottom + (up ? cur : -cur) };
     var els = document.querySelectorAll("button,a,[role=button],input,select"), shift = 0;
     for (var tries = 0; tries < 6; tries++) {
       var t = base.t + (up ? -shift : shift), bt = base.b + (up ? -shift : shift), hit = null;
       for (var i = 0; i < els.length; i++) {
         var el = els[i];
-        if (el === b || !el.getClientRects().length) continue;
+        if (el === b || el === fs || !el.getClientRects().length) continue;
         var q = el.getBoundingClientRect();
         if (q.width < 4 || q.height < 4 || q.width > innerWidth * 0.6) continue;   // 화면 전체를 덮는 층은 빼요
         if (q.right > base.l + 2 && q.left < base.r - 2 && q.bottom > t + 2 && q.top < bt - 2 && tappable(el, q)) { hit = q; break; }
@@ -369,6 +397,7 @@
     if (Math.abs(shift - cur) > 1) {
       if (up) b.style.marginBottom = shift ? shift + "px" : "";
       else b.style.marginTop = shift ? shift + "px" : "";
+      placeFs();
       try {
         window.dispatchEvent(new Event("plaza-back-moved"));   // 게임이 알림 글 같은 것을 함께 옮길 수 있게(꿈빛 성)
       } catch (e) {}
@@ -625,4 +654,19 @@
   window.PLAZA_DIFF_ON = function (fn) { try { fn(); } catch (e) { console.error(e); } };
   wait.forEach(function (fn) { window.PLAZA_DIFF_ON(fn); });
   try { window.dispatchEvent(new Event("plaza-diff-ready")); } catch (e) {}
+})();
+
+/* 9) 전체 화면(2026-11-26, ../fullscreen.js): 손가락으로 처음 누를 때 전체 화면(갤럭시탭 크롬의 위 주소창·아래 단추 줄 없애기).
+ * 다 받으면 'plaza-fs-ready' → 4)의 '광장으로' 단추 옆에 ⛶ 켜기·끄기 단추 */
+(function () {
+  try {
+    var me = document.currentScript;
+    if (!me || !me.src) return;
+    var go = function () { try { window.dispatchEvent(new Event("plaza-fs-ready")); } catch (e) {} };
+    if (window.PLAZA_FS) { setTimeout(go, 0); return; }
+    var s = document.createElement("script");
+    s.src = new URL("../fullscreen.js", me.src).href;
+    s.onload = go;
+    (document.head || document.documentElement).appendChild(s);
+  } catch (e) {}
 })();
