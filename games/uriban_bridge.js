@@ -2,7 +2,7 @@
  * 이 게임들은 광장을 모르고 만들어져서 자기 신호('uriban:game')만 보낸다. 이 파일이 그것을 광장 약속으로 바꾼다.
  * 선생님이 고른 규칙: "다른 게임과 똑같이"
  *   - 장을 깨면(chapter-clear) 선물 상자(gift.js 'plaza-gift', 장마다 하루 한 번, 한 게임 하루 3개)
- *   - 끝까지 깨면(game-clear) 반 별 +1(back.js 'minigame-clear', 둘이서 한 방은 방장 기기만) + 선물 상자(장 선물 개수와 상관없이)
+ *   - 끝까지 깨면(game-clear) 반 별 +1 · 난이도(diff)가 있으면 그 난이도 첫 클리어 선물(2026-11-26)(back.js 'minigame-clear', 둘이서 한 방은 방장 기기만) + 선물 상자(장 선물 개수와 상관없이)
  *   - 피라미드 상자에서 꾸미기를 얻으면(item) 광장 옷장에 같은(비슷한) 옷을 넣는다. 피라미드 동전은 게임 안에서만(이어 달리기)
  * 붙이는 곳: 캐릭터3D/pipeline/uriban_inject.py가 games/원본_<게임>.html 끝에 back.js와 이 파일을 붙여 games/<게임>.html을 만든다.
  * 게임이 쌓는 우편함(localStorage 'uriban-inbox')은 여기서 바로 처리했으니 비운다.
@@ -43,7 +43,7 @@
       if (d.type === "chapter-clear") {
         window.dispatchEvent(new CustomEvent("plaza-gift", { detail: { game: g, place: "ch" + (d.chapter || 0) } }));
       } else if (d.type === "game-clear") {
-        window.dispatchEvent(new CustomEvent("minigame-clear", { detail: { game: g, team: COOP[g] ? 2 : 1, guest: COOP[g] ? isGuest() : false, final: true } }));
+        window.dispatchEvent(new CustomEvent("minigame-clear", { detail: { game: g, team: COOP[g] ? 2 : 1, guest: COOP[g] ? isGuest() : false, final: true, diff: (d.diff | 0) >= 1 && (d.diff | 0) <= 4 ? d.diff | 0 : undefined } }));   // diff: 난이도(하1~최상4) → 난이도별 첫 클리어 선물(back.js 8번 · gift.js)
       } else if (d.type === "item" && g === "pyramid" && d.item) {
         giveWear(PYR[d.item.id]);
       }
