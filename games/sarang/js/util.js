@@ -29,5 +29,12 @@ const U = {
   },
   // 학년별 싸움 난이도: 적 체력(hp)·받는 피해(dmg). 4학년 = 예전 그대로
   GRADE_K: { 1: { hp: 0.6, dmg: 0.55 }, 2: { hp: 0.75, dmg: 0.7 }, 3: { hp: 0.9, dmg: 0.85 }, 4: { hp: 1, dmg: 1 }, 5: { hp: 1.2, dmg: 1.15 }, 6: { hp: 1.38, dmg: 1.3 } },
+  // 난이도 4단계(2026-11-26, 광장 공통 back.js PLAZA_DIFF: 1 하 · 2 중 · 3 상 = 예전 그대로 · 4 최상). 학년 배율에 곱함
+  diff() {
+    try { if (window.PLAZA_DIFF) { const d = +window.PLAZA_DIFF('sarang'); if (d >= 1 && d <= 4) return d; } } catch (e) { /* 아래로 */ }
+    try { const d = parseInt(new URLSearchParams(location.search).get('diff'), 10); if (d >= 1 && d <= 4) return d; } catch (e) { /* 아래로 */ }
+    return 3;
+  },
+  DIFF_K: { 1: { hp: 0.6, dmg: 0.5 }, 2: { hp: 0.8, dmg: 0.75 }, 3: { hp: 1, dmg: 1 }, 4: { hp: 1.3, dmg: 1.3 } },
   hex(h) { h = h.replace('#', ''); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; },
 };

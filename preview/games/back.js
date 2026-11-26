@@ -484,3 +484,145 @@
     (document.head || document.documentElement).appendChild(s);
   } catch (e) {}
 })();
+
+/* 8) 난이도 4단계 · 난이도별 첫 클리어 선물(2026-11-26 선생님: "하·중·상·최상, 기본은 상. 하·중·상·최상 모드를 깰 때마다
+ *  선물 상자 하나씩 → 애들이 다양하게 깨게. 최상을 깨면 좋은 아이템 상자. 모든 게임에 일괄 적용").
+ *  게임이 쓰는 약속:
+ *   - window.PLAZA_DIFF_GAME = '게임이름'  (없으면 파일 이름: castle·heart·island·escape·sarang·jelly…, 3번 WKEY와 같음)
+ *   - PLAZA_DIFF(game) → 1 하 · 2 중 · 3 상 · 4 최상(기본 3). 이 기기에 localStorage 'plaza.diff.<게임>'로 기억. 주소 ?diff=N이 먼저(시험용)
+ *   - PLAZA_SET_DIFF(game, d) · PLAZA_DIFF_NAMES {1:'하',…} · PLAZA_DIFF_CLEARED(game) → {1:'날짜',…}
+ *   - PLAZA_DIFF_BUTTON(game, 부모요소, onChange) → 처음 화면 공통 단추(누를 때마다 상→최상→하→중→상, 깬 난이도 ✔, 최상은 🌟좋은 선물).
+ *     돌려받은 단추에 .refresh() · .set(d). back.js는 게임 파일보다 늦게 읽히므로 게임은 DOMContentLoaded 뒤에 부르거나
+ *     window.PLAZA_DIFF_ON(fn)(back.js가 오면 fn 실행)을 쓴다.
+ *   - 친구 판은 방장 난이도: 게임이 시작 소식에 실어 보내고, 친구 기기는 그 값으로 놀고 깼을 때 같은 diff를 보낸다(자기 기억은 안 바꿈).
+ *   - 끝까지 깼을 때 'minigame-clear' detail에 diff: 1~4. gift.js가 그 게임을 그 난이도로 '처음' 깼으면 상자 하나(최상은 금빛 좋은 상자),
+ *     이미 깬 난이도면 예전 규칙(하루 깬 선물)대로 — 같은 깸에 상자 두 개가 뜨지 않게 gift.js가 하나만 준다.
+ *   - 깼을 때 화면 아래 작은 띠 '하 ✔ 중 ✔ 상 ☐ 최상 ☐'. 점검용 window.__diffReset() */
+(function () {
+  if (window.PLAZA_DIFF) return;
+  var NAMES = { 1: "하", 2: "중", 3: "상", 4: "최상" };
+  var COL = { 1: "#2f9e44", 2: "#1c7ed6", 3: "#e8590c", 4: "#9c36b5" };
+  var parts = location.pathname.split("/").filter(Boolean);
+  var WK = (parts[parts.length - 1] || "").replace(/\.html?$/i, "");
+  if (!WK || WK === "index") WK = parts[parts.length - 2] || "game";
+  function G(g) { return String(g || window.PLAZA_DIFF_GAME || WK); }
+  function ok(d) { d = d | 0; return d >= 1 && d <= 4 ? d : 0; }
+  function jget(k, d) { try { var v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } }
+  var mem = {}, memClr = {};   // 저장소가 막힌 기기(사생활 모드)에서도 이 판 동안은 기억
+  window.PLAZA_DIFF_NAMES = NAMES;
+  window.PLAZA_DIFF = function (g) {
+    g = G(g);
+    var d = 0;
+    try { d = ok(parseInt(new URLSearchParams(location.search).get("diff"), 10)); } catch (e) {}
+    if (d) return d;   // 시험용 주소 값은 기억하지 않음(검토)
+    if (mem[g]) return mem[g];
+    try { d = ok(parseInt(localStorage.getItem("plaza.diff." + g), 10)); } catch (e) {}
+    return d || 3;
+  };
+  window.PLAZA_SET_DIFF = function (g, d) {
+    g = G(g); d = ok(d) || 3; mem[g] = d;
+    try { localStorage.setItem("plaza.diff." + g, String(d)); } catch (e) {}
+    return d;
+  };
+  window.PLAZA_DIFF_CLEARED = function (g) {
+    g = G(g);
+    var all = jget("plaza.diffClear", {}), c = (all && typeof all === "object" && all[g]) || {}, o = {};
+    for (var k = 1; k <= 4; k++) if (c[k] || (memClr[g] && memClr[g][k])) o[k] = c[k] || memClr[g][k];
+    return o;
+  };
+  // 그 게임을 그 난이도로 처음 깼으면 적고 true(gift.js가 부름). 이미 깼으면 false
+  window.PLAZA_DIFF_CLAIM = function (g, d) {
+    g = G(g); d = ok(d); if (!d) return false;
+    if (window.PLAZA_DIFF_CLEARED(g)[d]) return false;
+    var day = new Date().toISOString().slice(0, 10);
+    (memClr[g] = memClr[g] || {})[d] = day;
+    try {
+      var all = jget("plaza.diffClear", {}); if (!all || typeof all !== "object") all = {};
+      (all[g] = all[g] || {})[d] = day;
+      localStorage.setItem("plaza.diffClear", JSON.stringify(all));
+    } catch (e) {}
+    return true;
+  };
+  window.__diffReset = function () {
+    mem = {}; memClr = {};
+    try {
+      localStorage.removeItem("plaza.diffClear");
+      for (var i = localStorage.length - 1; i >= 0; i--) { var k = localStorage.key(i); if (k && k.indexOf("plaza.diff.") === 0) localStorage.removeItem(k); }
+    } catch (e) {}
+    btns.forEach(function (b) { b.refresh(); });
+  };
+  // ---- 공통 단추 ----
+  var CSS = ".pdBtn{all:unset;box-sizing:border-box;display:inline-flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;" +
+    "min-width:150px;padding:7px 14px 8px;border-radius:16px;background:#fff;color:#2b3a4f;border:3px solid var(--pd,#e8590c);box-shadow:0 4px 0 var(--pd,#e8590c),0 6px 14px rgba(0,0,0,.18);" +
+    "font-family:inherit;line-height:1.15;text-align:center;user-select:none;-webkit-user-select:none;transition:transform .08s}" +
+    ".pdBtn:active{transform:translateY(3px);box-shadow:0 1px 0 var(--pd,#e8590c),0 3px 8px rgba(0,0,0,.18)}" +
+    ".pdBtn .pdV{font-size:19px;font-weight:900;color:var(--pd,#e8590c);white-space:nowrap}.pdBtn .pdV small{font-size:12px;color:#7a8799;font-weight:700;margin-left:4px}" +
+    ".pdBtn .pdP{display:flex;gap:4px;font-size:12px;font-weight:800;white-space:nowrap}" +
+    ".pdBtn .pdP i{font-style:normal;padding:1px 6px;border-radius:999px;background:#eef1f5;color:#8a96a8}" +
+    ".pdBtn .pdP i.on{background:var(--pd,#e8590c);color:#fff}.pdBtn .pdP i.ok{box-shadow:inset 0 0 0 2px #40c057}" +
+    ".pdBtn .pdS{font-size:12px;font-weight:800;color:#5a6a80;white-space:nowrap}.pdBtn.d4 .pdS{color:#b8860b}" +
+    ".pdBtn.d4{background:linear-gradient(180deg,#fffaf0,#fff3c4)}" +
+    "#pdStrip{position:fixed;left:50%;bottom:calc(66px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:2147483350;pointer-events:none;" +
+    "display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:999px;background:rgba(255,255,255,.96);box-shadow:0 6px 18px rgba(30,60,100,.28);" +
+    "font:900 15px/1.1 system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#2b3a4f;transition:opacity .5s;white-space:nowrap;max-width:94vw}" +
+    "#pdStrip i{font-style:normal;padding:3px 8px;border-radius:999px;background:#eef1f5;color:#8a96a8}#pdStrip i.ok{background:#d3f9d8;color:#2b8a3e}#pdStrip i.now{box-shadow:inset 0 0 0 2px #e8590c}";
+  function style() {
+    if (document.getElementById("pdCss")) return;
+    var s = document.createElement("style"); s.id = "pdCss"; s.textContent = CSS;
+    (document.head || document.documentElement).appendChild(s);
+  }
+  var btns = [];
+  window.PLAZA_DIFF_BUTTON = function (g, parent, onChange) {
+    g = G(g); style();
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "pdBtn"; b.setAttribute("data-diff-btn", g);
+    b.refresh = function () {
+      var d = window.PLAZA_DIFF(g), c = window.PLAZA_DIFF_CLEARED(g), p = "";
+      for (var k = 1; k <= 4; k++) p += '<i class="' + (k === d ? "on " : "") + (c[k] ? "ok" : "") + '">' + NAMES[k] + (c[k] ? "✔" : "") + "</i>";
+      b.className = "pdBtn d" + d;
+      b.style.setProperty("--pd", COL[d]);
+      b.innerHTML = '<span class="pdV">난이도 ' + NAMES[d] + "<small>바꾸기 ▶</small></span>" +
+        '<span class="pdP">' + p + "</span>" +
+        '<span class="pdS">' + (c[d] ? "✔ 깼어요! 다른 난이도도 선물 있어요" : d === 4 ? "🌟 깨면 좋은 선물 상자!" : "🎁 깨면 선물 상자") + "</span>";
+      b.setAttribute("aria-label", "난이도 " + NAMES[d]);
+    };
+    b.set = function (d) { window.PLAZA_SET_DIFF(g, d); b.refresh(); };
+    b.addEventListener("click", function (e) {
+      e.preventDefault(); e.stopPropagation();
+      var d = window.PLAZA_SET_DIFF(g, (window.PLAZA_DIFF(g) % 4) + 1);   // 상→최상→하→중→상
+      btns.forEach(function (x) { x.getAttribute("data-diff-btn") === g && x.refresh(); });
+      try { onChange && onChange(d); } catch (er) {}
+    });
+    ["pointerdown", "touchstart", "mousedown"].forEach(function (k) { b.addEventListener(k, function (e) { e.stopPropagation(); }, { passive: true }); });   // 처음 화면 '누르면 시작' 같은 데에 안 새게
+    b.refresh();
+    btns = btns.filter(function (x) { return x.isConnected; }); btns.push(b);
+    if (parent) parent.appendChild(b);
+    return b;
+  };
+  // ---- 깼을 때 작은 띠 ----
+  var strip = null, stripT = 0;
+  function showStrip(g, now) {
+    if (!document.body) return;
+    style();
+    if (!strip) { strip = document.createElement("div"); strip.id = "pdStrip"; document.body.appendChild(strip); }
+    var c = window.PLAZA_DIFF_CLEARED(g), h = "🏅";
+    for (var k = 1; k <= 4; k++) h += '<i class="' + (c[k] ? "ok" : "") + (k === now ? " now" : "") + '">' + NAMES[k] + " " + (c[k] ? "✔" : "☐") + "</i>";
+    strip.innerHTML = h;
+    strip.style.opacity = "1";
+    clearTimeout(stripT);
+    stripT = setTimeout(function () { strip.style.opacity = "0"; }, 7000);
+  }
+  window.PLAZA_DIFF_STRIP = showStrip;
+  window.addEventListener("minigame-clear", function (e) {
+    var d = (e && e.detail) || {};
+    if (!ok(d.diff)) return;
+    if (window.PLAZA_IS_FINAL && !window.PLAZA_IS_FINAL(d)) return;
+    var g = G(d.diffGame);
+    setTimeout(function () { showStrip(g, ok(d.diff)); btns.forEach(function (b) { b.refresh(); }); }, 60);   // gift.js가 먼저 적게
+  });
+  // 게임이 back.js보다 먼저 읽혀도 단추를 붙일 수 있게
+  var wait = window.__plazaDiffWait || [];
+  window.PLAZA_DIFF_ON = function (fn) { try { fn(); } catch (e) { console.error(e); } };
+  wait.forEach(function (fn) { window.PLAZA_DIFF_ON(fn); });
+  try { window.dispatchEvent(new Event("plaza-diff-ready")); } catch (e) {}
+})();

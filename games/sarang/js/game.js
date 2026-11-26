@@ -204,7 +204,7 @@
 
   function save() {
     if (!Q || state !== 'play' || !player) return;
-    try { localStorage.setItem(saveKey, JSON.stringify({ v: 2, Q, map: mapId, x: Math.round(player.x), y: Math.round(player.y), color: myColor, name: myName, ts: Date.now() })); } catch (e) { /* 저장 못 함 */ }
+    try { localStorage.setItem(saveKey, JSON.stringify({ v: 2, Q, map: mapId, x: Math.round(player.x), y: Math.round(player.y), color: myColor, name: myName, df: gameDiff, ts: Date.now() })); } catch (e) { /* 저장 못 함 */ }
   }
   function readSave(key) { try { const s = JSON.parse(localStorage.getItem(key) || 'null'); return s && s.v === 2 && s.Q && SIM.MAPS[s.map] ? s : null; } catch (e) { return null; } }
 
@@ -451,7 +451,7 @@
       Q.stats.grades = Q.stats.grades || {};
       if (!Q.stats.grades[type] || 'SAB'.indexOf(grade) < 'SAB'.indexOf(Q.stats.grades[type])) Q.stats.grades[type] = grade;
       outro = { t: 0, type, e, time, hits, grade, x: e.x, y: e.y, stamped: false };
-      try { window.dispatchEvent(new CustomEvent('minigame-clear', { detail: { game: 'sarang', boss: type, grade } })); } catch (err) { /* 광장 반 별 */ }
+      try { window.dispatchEvent(new CustomEvent('minigame-clear', { detail: { game: 'sarang', boss: type, grade, diff: gameDiff } })); } catch (err) { /* 광장 반 별 */ }
       slowT = 1.3; zoomTarget = 1.16; camCenter = e.x; hitStop = 0.15; shake = 16;
       Sound.play('bossdown'); FX.flash('#ffffff', 0.85, 0.6);
       FX.burst(e.x, e.y, 90, 'heart', 40, { speed: 340, size: 10, life: 1.6 }); FX.burst(e.x, e.y, 120, 'star', 26, { speed: 300, size: 9, life: 1.4 });
@@ -1658,10 +1658,13 @@
   $('snd').addEventListener('click', (e) => { e.stopPropagation(); Sound.init(); toggleSound(); });
   if (Sound.muted) $('snd').classList.add('off');
 
-  let gradeK = U.GRADE_K[4];
+  let gradeK = U.GRADE_K[4], gameDiff = 3;
+  window.PLAZA_DIFF_GAME = 'sarang';
   function startGame(o) {
     Sound.init();
-    gradeK = U.GRADE_K[U.grade()] || U.GRADE_K[4]; SIM.setHpK(gradeK.hp);
+    gameDiff = o.cont && o.cont.df >= 1 && o.cont.df <= 4 ? o.cont.df : U.diff();   // 난이도(처음 화면 단추): 학년 배율 × 난이도 배율. 이어하기는 저장한 판의 난이도 그대로(마지막 보스만 바꿔서 깨지 않게, 검토)
+    const gk = U.GRADE_K[U.grade()] || U.GRADE_K[4], dk = U.DIFF_K[gameDiff] || U.DIFF_K[3];
+    gradeK = { hp: gk.hp * dk.hp, dmg: gk.dmg * dk.dmg }; SIM.setHpK(gradeK.hp);
     mode = o.mode; myName = o.name || '사랑둥이'; myColor = o.color || 'red';
     saveKey = mode === 'multi' ? 'sarang2:multi:' + myName : 'sarang2:solo';
     const sv = o.cont;
@@ -1681,6 +1684,14 @@
     if (!sv) C.intro();
     else toast('이어서 모험을 떠나요!', '#fff36a');
   }
+  // 처음 화면 난이도 단추(광장 공통: 하·중·상·최상, 마지막 악마둥이를 깨면 난이도마다 선물 상자). back.js가 늦게 읽혀도 붙게
+  function diffBtn() {
+    if (!window.PLAZA_DIFF_BUTTON) return;
+    const old = $('diffBtn'); if (old) { old.refresh(); return; }
+    const b = window.PLAZA_DIFF_BUTTON('sarang', null, () => { try { Sound.play('click'); } catch (e) { /* 무시 */ } }); b.id = 'diffBtn';
+    $('gradeTag').insertAdjacentElement('afterend', b);
+  }
+  window.addEventListener('plaza-diff-ready', diffBtn);
   const soloSave = () => readSave('sarang2:solo');
   let newArm = 0;
   function showTitle() {
@@ -1688,9 +1699,10 @@
     for (const id of ['join', 'teacher', 'ending']) $(id).classList.add('hidden');
     $('title').classList.remove('hidden'); document.body.classList.add('menu');
     $('gradeTag').textContent = `${U.grade()}학년 맞춤 모험 · 미니게임 문제와 싸움 난이도가 학년에 맞아요`;
+    diffBtn();
     const sv = soloSave();
     $('contBtn').classList.toggle('hidden', !sv);
-    if (sv) $('contBtn').textContent = `이어하기 · ${SIM.MAPS[sv.map].name}`;
+    if (sv) $('contBtn').textContent = `이어하기 · ${SIM.MAPS[sv.map].name}` + (sv.df ? ` · ${['', '하', '중', '상', '최상'][sv.df] || ''}` : '');
     $('newBtn').textContent = sv ? '처음부터' : '혼자 하기'; newArm = 0;
     $('multiRow').classList.toggle('hidden', !Net.canMulti);
   }
@@ -1776,6 +1788,7 @@
     dash() { startDash(); },
     skipCine() { if (intro) intro.t = 9; if (outro) outro.t = 9; },
     get Q() { return Q; },
+    get gradeK() { return gradeK; }, get diff() { return gameDiff; },   // 점검: 학년 × 난이도 배율
   };
 
   // ---------------- 로딩 ----------------
