@@ -2092,7 +2092,7 @@
       a.fillText("🏡 우리 반 광장", l / 2, 92);
       a.fillStyle = "#cfe3f5";
       a.font = "700 24px " + font;
-      a.fillText(NET.online ? (NET.role === "teacher" ? "패널의 📝 칠판에 쓰기로 글을 써요" : "선생님 말씀이 여기에 나와요") : "OX 퀴즈와 선생님 말씀이 여기에 나와요", l / 2, 160);
+      a.fillText(NET.online ? (NET.role === "teacher" ? "패널의 📝 칠판에 쓰기로 글을 써요" : "선생님 말씀이 여기에 나와요") : "선생님 말씀이 여기에 나와요", l / 2, 160);
       return;
     }
     var sizes = [52, 44, 38, 33, 28, 24],
