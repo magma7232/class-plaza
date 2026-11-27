@@ -328,14 +328,15 @@
     var seen = jget("plaza.quizSeen", {}); // 게임 속 퀴즈와 같은 기록: 최근에 낸 문제는 다시 안 냄
     if (!seen || typeof seen !== "object") seen = {};
     var recent = Array.isArray(seen[g]) ? seen[g] : [];
-    var keep = Math.min(60, Math.floor(list.length * 0.7));
+    // 한 바퀴 다 돌기 전에는 같은 문제를 다시 안 냄(2026-11-27 선생님: "같은 문제가 자주 나와" — 예전엔 최근 60개만 기억했음). 끝 8문제만 섞어 다음 바퀴 첫 문제가 방금 문제와 겹치지 않게
+    var keep = Math.max(0, list.length - 8);
     recent = recent.slice(-keep);
     var pool = [];
     for (var k = 0; k < list.length; k++) if (recent.indexOf(k) < 0) pool.push(k);
     if (!pool.length) { pool = list.map(function (_, k2) { return k2; }); recent = []; }
     var i = pool[Math.floor(Math.random() * pool.length)];
     recent.push(i);
-    seen[g] = recent.slice(-60);
+    seen[g] = recent.slice(-Math.max(60, list.length));
     jput("plaza.quizSeen", seen);
     var it = list[i], ch = it.c.map(function (t, j) { return { t: t, ok: j === 0 }; });
     for (var a = ch.length - 1; a > 0; a--) { var b = Math.floor(Math.random() * (a + 1)), tmp = ch[a]; ch[a] = ch[b]; ch[b] = tmp; }

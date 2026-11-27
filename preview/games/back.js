@@ -541,7 +541,7 @@
  *  선물 상자 하나씩 → 애들이 다양하게 깨게. 최상을 깨면 좋은 아이템 상자. 모든 게임에 일괄 적용").
  *  게임이 쓰는 약속:
  *   - window.PLAZA_DIFF_GAME = '게임이름'  (없으면 파일 이름: castle·heart·island·escape·sarang·jelly…, 3번 WKEY와 같음)
- *   - PLAZA_DIFF(game) → 1 하 · 2 중 · 3 상 · 4 최상(기본 3). 이 기기에 localStorage 'plaza.diff.<게임>'로 기억. 주소 ?diff=N이 먼저(시험용)
+ *   - PLAZA_DIFF(game) → 1 하 · 2 중 · 3 상 · 4 최상(기본 1 하, 2026-11-27부터 들어올 때마다 하에서 시작 — 기기에 기억 안 함). 주소 ?diff=N이 먼저(시험용)
  *   - PLAZA_SET_DIFF(game, d) · PLAZA_DIFF_NAMES {1:'하',…} · PLAZA_DIFF_CLEARED(game) → {1:'날짜',…}
  *   - PLAZA_DIFF_BUTTON(game, 부모요소, onChange) → 처음 화면 공통 단추(누를 때마다 상→최상→하→중→상, 깬 난이도 ✔, 최상은 🌟좋은 선물).
  *     돌려받은 단추에 .refresh() · .set(d). back.js는 게임 파일보다 늦게 읽히므로 게임은 DOMContentLoaded 뒤에 부르거나
@@ -562,18 +562,17 @@
   function jget(k, d) { try { var v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } }
   var mem = {}, memClr = {};   // 저장소가 막힌 기기(사생활 모드)에서도 이 판 동안은 기억
   window.PLAZA_DIFF_NAMES = NAMES;
+  try { localStorage.removeItem("plaza.diff." + G()); } catch (e) {}   // 예전에 기억해 둔 난이도(상 등)를 지움: back.js보다 먼저 저장소를 직접 읽는 게임도 하부터
   window.PLAZA_DIFF = function (g) {
     g = G(g);
     var d = 0;
     try { d = ok(parseInt(new URLSearchParams(location.search).get("diff"), 10)); } catch (e) {}
     if (d) return d;   // 시험용 주소 값은 기억하지 않음(검토)
     if (mem[g]) return mem[g];
-    try { d = ok(parseInt(localStorage.getItem("plaza.diff." + g), 10)); } catch (e) {}
-    return d || 3;
+    return 1;   // 2026-11-27 선생님: "기본은 상이 아니라 하로, 항상 하부터" → 게임에 들어올 때마다 하에서 시작(기기에 기억하지 않음)
   };
   window.PLAZA_SET_DIFF = function (g, d) {
-    g = G(g); d = ok(d) || 3; mem[g] = d;
-    try { localStorage.setItem("plaza.diff." + g, String(d)); } catch (e) {}
+    g = G(g); d = ok(d) || 1; mem[g] = d;   // 이 판(페이지) 동안만 기억 — 다시 들어오면 하부터
     return d;
   };
   window.PLAZA_DIFF_CLEARED = function (g) {
@@ -642,7 +641,7 @@
     b.set = function (d) { window.PLAZA_SET_DIFF(g, d); b.refresh(); };
     b.addEventListener("click", function (e) {
       e.preventDefault(); e.stopPropagation();
-      var d = window.PLAZA_SET_DIFF(g, (window.PLAZA_DIFF(g) % 4) + 1);   // 상→최상→하→중→상
+      var d = window.PLAZA_SET_DIFF(g, (window.PLAZA_DIFF(g) % 4) + 1);   // 하→중→상→최상→하
       btns.forEach(function (x) { x.getAttribute("data-diff-btn") === g && x.refresh(); });
       try { onChange && onChange(d); } catch (er) {}
     });

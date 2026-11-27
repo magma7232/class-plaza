@@ -458,7 +458,7 @@ window.PLAZA_QUIZ_GATES = true;   // 꼭 푸는 문제만(LEVEL UP·보물 상�
     if (d >= 1 && d <= 4) return d;
     if (window.PLAZA_DIFF) { mig(); return window.PLAZA_DIFF('heart'); }
     try { d = parseInt(localStorage.getItem('plaza.diff.heart') || localStorage.getItem('heart-diff'), 10); } catch (e) {}
-    return d >= 1 && d <= 4 ? d : 3;
+    return d >= 1 && d <= 4 ? d : 1;
   }
   // 친구랑 하면 방장 난이도(__heartHostD)
   window.HEART_D = function () { var h = window.__heartHostD; return h >= 1 && h <= 4 ? h : own(); };

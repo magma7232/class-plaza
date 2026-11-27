@@ -418,6 +418,7 @@
       "#netLogin button{display:block;width:100%;border-radius:999px;padding:15px;font-size:19px;font-weight:900;margin-top:14px;background:#2f8cff;color:#fff}" +
       "#netLogin .sub{background:none;color:#5a6b80;font-size:14px;padding:8px;margin-top:6px;text-decoration:underline}" +
       "#netLogin .err{color:#d6336c;font-weight:800;font-size:15px;min-height:20px;margin-top:10px}" +
+      "#netLogin .back{display:none;font-size:22px;font-weight:900;color:#3d4d61}#netLogin.auto .box{display:none}#netLogin.auto .back{display:block}" +
       "#netChip{position:fixed;left:calc(10px + env(safe-area-inset-left));bottom:calc(10px + env(safe-area-inset-bottom));z-index:5;padding:5px 11px;border-radius:999px;background:rgba(255,255,255,.88);font-size:13px;font-weight:800;color:#3d4d61;pointer-events:none;box-shadow:0 2px 8px rgba(30,60,100,.15)}" +
       "#netPanel .pb{font-size:14px}#netLink{font-size:12px;word-break:break-all;color:#3d4d61;background:#f3f6fa;border-radius:10px;padding:8px;margin:6px 0;font-weight:700;-webkit-user-select:text;user-select:text}";
     document.head.appendChild(css);
@@ -429,7 +430,8 @@
       '<div id="nlNameBox"><label for="nlName">내 이름</label><input id="nlName" maxlength="10" autocomplete="off" placeholder="예: 김하늘"></div>' +
       '<div id="nlPwBox" hidden><label for="nlPw">선생님 비밀번호</label><input id="nlPw" type="password" maxlength="40" placeholder="처음이면 새로 정해요(4글자 이상)"></div>' +
       '<button id="nlGo">들어가기</button><div class="err" id="nlErr"></div>' +
-      '<button class="sub" id="nlTeacher">선생님으로 들어가기</button></div>';
+      '<button class="sub" id="nlTeacher">선생님으로 들어가기</button></div>' +
+      '<div class="back">🏡 광장으로 돌아가는 중…</div>';
     document.body.appendChild(d);
     $("nlRoom").value = room;
     $("nlName").value = name;
@@ -460,8 +462,10 @@
       NET.connect(r, teacherMode ? "teacher" : "student", n, pw);
     };
     $("nlGo").onclick = go;
-    // 미니게임에서 돌아오면 같은 이름으로 바로 들어가요
-    if (q.get("back") === "1" && !teacherMode && room && name) setTimeout(go, 50);
+    // 미니게임에서 돌아오면 같은 이름으로 바로 들어가요(2026-11-27 선생님: "광장으로 갈 때 자동 로그인 화면 없이 바로" →
+    // 입력 칸은 숨기고 '광장으로 돌아가는 중…'만, 들어가지 못하면(오류) 그때 입력 칸을 다시 보여 줌 — NET.loginError가 auto를 뗌)
+    var autoBack = function () { d.classList.add("auto"); setTimeout(go, 50); };
+    if (q.get("back") === "1" && !teacherMode && room && name) autoBack();
     else if (q.get("back") === "1" && teacherMode && room) {
       var tpw = null;
       try {
@@ -470,7 +474,7 @@
       } catch (e) {}
       if (tpw) {
         $("nlPw").value = tpw;
-        setTimeout(go, 50);
+        autoBack();
       }
     }
     ["nlRoom", "nlName", "nlPw"].forEach(function (k) {
@@ -487,6 +491,8 @@
       b.textContent = "들어가기";
     }
     if ($("nlErr")) $("nlErr").textContent = msg;
+    var L = document.getElementById("netLogin");
+    if (L) L.classList.remove("auto");   // 바로 들어가기가 안 됐으면 입력 칸을 다시 보여 줌
   };
 
   NET.connect = function (room, role, name, pw) {
