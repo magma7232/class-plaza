@@ -274,6 +274,7 @@
     lock(v) { locked = !!v; if (v) padEl.classList.add('talking'); else if (!dialog) padEl.classList.remove('talking'); },
     camTo(x) { camCenter = x; },
     addFollower(k) { if (!Q.followers.includes(k)) Q.followers.push(k); spawnFollowers(true); save(); },
+    quiz(o) { return gateQuiz(o); },   // 학년에 맞는 문제 카드(광장 PLAZA_QUIZ.ask) — 같이 하기(서버) 판은 통과
     giveHat(h, name) { if (!Q.hats.includes(h)) Q.hats.push(h); Q.hat = h; player.ch = Art.hero(myColor, h); Net.setHat(h); Sound.play('hat'); FX.burst(player.x, player.y, 120, 'star', 12, { speed: 160 }); toast(`${name}를 얻었어요! (모양만 바뀌어요)`, '#fff36a'); save(); },
     mini(name, cb) {
       document.body.classList.add('mini'); Mini.heroCh = player.ch;
@@ -1744,7 +1745,7 @@
     qHold = performance.now() + 3000; qWin.length = 0; qWinT = 0;
     gameDiff = o.cont && o.cont.df >= 1 && o.cont.df <= 4 ? o.cont.df : U.diff();   // 난이도(처음 화면 단추): 학년 배율 × 난이도 배율. 이어하기는 저장한 판의 난이도 그대로(마지막 보스만 바꿔서 깨지 않게, 검토)
     const gk = U.GRADE_K[U.grade()] || U.GRADE_K[4], dk = U.DIFF_K[gameDiff] || U.DIFF_K[3];
-    gradeK = { hp: gk.hp * dk.hp, dmg: gk.dmg * dk.dmg }; SIM.setHpK(gradeK.hp);
+    gradeK = { hp: gk.hp * dk.hp, dmg: gk.dmg * dk.dmg }; SIM.setHpK(gradeK.hp); window.__sarangDiff = gameDiff;   // 미니게임 빠르기·눈금도 난이도로(minigames.js)
     mode = o.mode; myName = o.name || '사랑둥이'; myColor = o.color || 'red';
     saveKey = mode === 'multi' ? 'sarang2:multi:' + myName : o.teach ? 'sarang2:teacher' : 'sarang2:solo';   // 선생님 바로 가기 판은 따로 저장(이어하기를 덮지 않게)
     const sv = o.cont;
@@ -1779,7 +1780,7 @@
     state = 'title';
     for (const id of ['join', 'teacher', 'ending']) $(id).classList.add('hidden');
     $('title').classList.remove('hidden'); document.body.classList.add('menu');
-    $('gradeTag').textContent = `${U.grade()}학년 맞춤 모험 · 미니게임 문제와 싸움 난이도가 학년에 맞아요`;
+    $('gradeTag').textContent = ''; $('gradeTag').style.display = 'none';   // '○학년 맞춤 모험…' 글은 없앰(2026-11-27 선생님)
     diffBtn();
     const sv = soloSave();
     $('contBtn').classList.toggle('hidden', !sv);
@@ -1852,7 +1853,7 @@
     ['pencil', 'toPencil', '연필 마을', '2 학용품 나라'], ['notebook', 'numbers', '공책 평원', '2 학용품 나라'], ['tower', 'toTower', '보스 · 심술 지우개 대장', '2 학용품 나라'],
     ['gloom', 'toGloom', '심술 마을', '3 심술 나라'], ['thorn', 'keys', '가시 정원', '3 심술 나라'], ['mirror', 'mirror', '거울 미로', '3 심술 나라'], ['throne', 'toThrone', '최종 보스 · 악마둥이', '3 심술 나라'],
   ];
-  const T_MINI = [['sheep', '양 세기 (분홍둥이)'], ['rhythm', '기상 나팔 (리듬)'], ['measure', '길이 재기'], ['ruler', '눈금 붙이기 (자 왕자)'], ['simon', '거울 문 (순서 기억)']];
+  const T_MINI = [['rhythm', '기상 나팔 (리듬)'], ['measure', '길이 재기'], ['ruler', '눈금 붙이기 (자 왕자)'], ['simon', '거울 문 (순서 기억)']];
   function teachPrep(st) {   // 이 단계에 오기 전에 끝냈어야 할 것을 채움
     const at = (s) => C.idx(st) >= C.idx(s), q = Q;
     q.step = st;
@@ -1911,7 +1912,7 @@
     }
     out.push({ label: '하트 축제 (마지막 이야기)', group: '끝 장면', icon: '🎉', hint: '하트 조각 3개를 모은 뒤 → 엔딩', fn: () => teachGo('heart', 'done', () => { Q.flags.festival = false; }) });
     out.push({ label: '엔딩 화면만', group: '끝 장면', icon: '🏁', hint: '다 깼을 때 기록 화면', fn: () => { teachStart(); teachReset(); saveKey = 'sarang2:teacher'; teachPrep('done'); Q.flags.festival = true; showEnding(); } });
-    for (const [n, label] of T_MINI) out.push({ label, group: '미니게임', icon: '🎮', hint: U.grade() + '학년 문제', fn: () => { teachStart(); teachReset(); G.mini(n, () => {}); } });
+    for (const [n, label] of T_MINI) out.push({ label, group: '미니게임', icon: '🎮', hint: '모든 학년 같은 놀이', fn: () => { teachStart(); teachReset(); G.mini(n, () => {}); } });
     return out;
   };
 

@@ -87,20 +87,20 @@ function makeContent(G) {
     if (is('clouds')) { G.say([L('mayor', `투덜 구름이 아직 ${8 - (Q().kills.cloud || 0)}마리 남았구나. 구름이 비를 뿌리는 자리를 잘 보렴.`)]); return; }
     G.say([L('mayor', '고맙다! 졸음이 싹 가시는구나. 공주님을 꼭 깨워 다오.', 'joy')]);
   }
-  function talkPink() {
+  function talkPink() {   // 예전 '양 세기' 미니게임은 없앰(2026-11-27 선생님) → 학년에 맞는 문제 카드 하나
     if (!flag('sheepDone')) {
-      G.say([L('v4', '으앙… 잠이 안 와서 양을 세는데 자꾸 헷갈려. 구름까지 섞여서 넘어오지 뭐야!', 'worried')], () =>
-        G.ask('분홍둥이와 양을 같이 셀까요?', ['같이 세자!', '나중에'], (i) => {
+      G.say([L('v4', '으앙… 잠이 안 와서 양을 세는데 자꾸 헷갈려. 머리를 쓰는 문제를 하나 풀면 잠이 솔솔 올 것 같아!', 'worried')], () =>
+        G.ask('분홍둥이와 문제를 같이 풀까요?', ['같이 풀자!', '나중에'], (i) => {
           if (i !== 0) return;
-          G.mini('sheep', (win) => {
-            if (!win) return;
+          G.quiz({ why: '분홍둥이와 같이 푸는 문제! 풀면 수면 모자를 받아요', icon: '🌙' }).then((r) => {
+            if (!r || !(r.correct || r.skipped)) { G.say([L('v4', '아깝다! 다음에 또 같이 풀자~', 'worried')]); return; }
             setFlag('sheepDone'); G.giveHat('nightcap', '수면 모자');
             G.say([L('v4', '고마워! 이제 꿀잠 잘 수 있겠다. 이건 내 수면 모자야. 선물!', 'joy')]);
           });
         }));
       return;
     }
-    G.say([L('v4', '수면 모자 잘 어울린다! 또 양 세러 와~', 'joy')], () => G.ask('양 세기를 또 할까요?', ['또 하자!', '괜찮아'], (i) => { if (i === 0) G.mini('sheep', () => {}); }));
+    G.say([L('v4', '수면 모자 잘 어울린다! 덕분에 꿀잠 잤어~', 'joy')]);
   }
 
   // ================= 뒤척이 숲 =================
@@ -368,7 +368,7 @@ function makeContent(G) {
         G.npc('mayor', 820, 440, { talk: talkMayor, mark: () => (is('toCotton') ? '!' : null), chat: ['으아암~', '졸려… 쿨…', '구름 좀 걷어 다오~'] }),
         G.pad('pad_c1', 1300, 482, 'cloud', 1040), ...G.starArc(1300, 482, 5, 200),
         G.breakable('pil_c1', 260, 420, 'pillow'), G.breakable('pil_c2', 1000, 488, 'pillow'),
-        G.npc('villager4', 430, 462, { facing: 1, chat: ['양이 한 마리, 양이 두 마리…', '아, 또 헷갈렸다!'], talk: talkPink, mark: () => (!flag('sheepDone') && at('toCotton') ? '?' : null) }),
+        G.npc('villager4', 430, 462, { facing: 1, chat: ['양이 한 마리, 양이 두 마리…', '아, 또 헷갈렸다! 잠이 안 와~'], talk: talkPink, mark: () => (!flag('sheepDone') && at('toCotton') ? '?' : null) }),
         G.npc('villager2', 1150, 470, { chat: ['솜사탕 먹고 싶다~', '구름 위에서 통통!'], talk: () => G.say([L('v2', '뒤척이 숲에는 부엉 장인이 살아. 망가진 건 뭐든 고쳐 준대!')]) }),
         G.portal(90, 'heart', { toX: 1500 }),
         G.portal(1510, 'drowsy', { toX: 170, locked: () => !at('clouds'), lockMsg: '양 촌장 뭉게에게 먼저 이야기를 들어요!' }),
